@@ -25,6 +25,7 @@ namespace CraftOrigin.CraftLive
         private const string FrameRootName = "ForgeFrame";
         private const int ReferenceFontSize = 64;
         private const int CrispFontSize = 128;
+        private static Material runtimeForgeMaterial;
 
         public static Color RefineSurfaceColor(Color source)
         {
@@ -66,6 +67,13 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            Material forgeMaterial = GetRuntimeForgeMaterial();
+            if (forgeMaterial != null &&
+                target.sharedMaterial != forgeMaterial)
+            {
+                target.sharedMaterial = forgeMaterial;
+            }
+
             Color color = RefineSurfaceColor(source);
             MaterialPropertyBlock block = new MaterialPropertyBlock();
             target.GetPropertyBlock(block);
@@ -76,6 +84,35 @@ namespace CraftOrigin.CraftLive
             block.SetFloat("_Smoothness", smoothness);
             block.SetFloat("_Glossiness", smoothness);
             target.SetPropertyBlock(block);
+        }
+
+        private static Material GetRuntimeForgeMaterial()
+        {
+            if (runtimeForgeMaterial != null)
+            {
+                return runtimeForgeMaterial;
+            }
+
+            Shader shader =
+                Shader.Find("Universal Render Pipeline/Lit") ??
+                Shader.Find("Universal Render Pipeline/Unlit") ??
+                Shader.Find("Unlit/Color");
+            if (shader == null)
+            {
+                return null;
+            }
+
+            runtimeForgeMaterial = new Material(shader)
+            {
+                name = "Generated_CraftLiveForgeSurface",
+                hideFlags = HideFlags.HideAndDontSave
+            };
+            if (runtimeForgeMaterial.HasProperty("_Surface"))
+            {
+                runtimeForgeMaterial.SetFloat("_Surface", 0f);
+            }
+
+            return runtimeForgeMaterial;
         }
 
         public static void ApplyInteractiveSurface(
