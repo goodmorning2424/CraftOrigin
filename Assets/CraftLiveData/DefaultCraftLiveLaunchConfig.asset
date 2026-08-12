@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a4bec6054364b074d834738381edc905, type: 3}
+  m_Name: DefaultCraftLiveLaunchConfig
+  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveLaunchConfig
+  editorRole: 1
+  editorRoomId: 001
+  pad1SceneName: Pad1_MaterialGallery
+  pad2SceneName: Pad2_Workbench
+  pad3SceneName: Pad3_StatusQr
+  pad4SceneName: Pad4_Hologram
+  useFirebaseInEditor: 0
+  useFirebaseInWebGl: 1
+  firebaseDatabaseUrl: https://craft-live-default-rtdb.firebaseio.com
+  pollIntervalSeconds: 0.5
+  requestTimeoutSeconds: 10
+  initialRetryDelaySeconds: 0.75
+  maximumRetryDelaySeconds: 8
+  cachePendingState: 1

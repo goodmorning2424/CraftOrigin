@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8d1918e273102c148bc27c1459240488, type: 3}
+  m_Name: DefaultCraftLiveCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveCatalog
+  materials:
+  - {fileID: 11400000, guid: 175f114f26a367b469640c0d04df132d, type: 2}
+  - {fileID: 11400000, guid: a4a198f7f7288154a9c2ca7f69eb6699, type: 2}
+  - {fileID: 11400000, guid: ae9bdfdef26ff36459a9d1a5855a7afd, type: 2}
+  - {fileID: 11400000, guid: 5ca1cd1441953a5478410a3aaced8cd6, type: 2}
+  - {fileID: 11400000, guid: 7e16edee06732b241a9869e22a6535f3, type: 2}
+  - {fileID: 11400000, guid: bca5a7267a61faf448fe4ae9ac81134c, type: 2}
+  - {fileID: 11400000, guid: 69dc9ba76b106d0468b4f43af3cf7d4f, type: 2}
+  - {fileID: 11400000, guid: 371fa03d38156b44c8a2e92597bafa1c, type: 2}
+  - {fileID: 11400000, guid: f58bca53ee6f46048b954685b4c745f8, type: 2}
+  - {fileID: 11400000, guid: 59285d10b0597cd40af990d3f9c330ac, type: 2}
+  weapons:
+  - {fileID: 11400000, guid: a46b900e50914c64da0692428ff6c11d, type: 2}
+  - {fileID: 11400000, guid: 94974b15f8859be4c85044c36d62657e, type: 2}
+  - {fileID: 11400000, guid: ee6037ca461941f4b9aac626e063b9ff, type: 2}
+  - {fileID: 11400000, guid: 73b243c5e50706645856bd91c9583ec3, type: 2}
+  - {fileID: 11400000, guid: e28c9bbec441dc548a5f6222fcbc8a2a, type: 2}
+  - {fileID: 11400000, guid: ac5619ac0bc6ab045b33ab2e932b8e88, type: 2}
+  - {fileID: 11400000, guid: 2233a78e4e4f95e44b1b5cc50f7fcd85, type: 2}
+  - {fileID: 11400000, guid: 2a4fffedec936c040b12a9aa8cb2502e, type: 2}

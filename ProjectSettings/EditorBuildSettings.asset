@@ -6,7 +6,26 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/Scenes/CraftLive/CraftLiveBootstrap.unity
+    guid: 9a120b4fb123505478b4fbb48af5e65b
+  - enabled: 1
+    path: Assets/Scenes/CraftLive/Pad1_MaterialGallery.unity
+    guid: 6a3838ac269e0fc4fab82612cca5a469
+  - enabled: 1
+    path: Assets/Scenes/CraftLive/Pad2_Workbench.unity
+    guid: fb9ab9820a2d1ab4b9ae866595078840
+  - enabled: 1
+    path: Assets/Scenes/CraftLive/Pad3_StatusQr.unity
+    guid: 2f2ce23f9d9aa2a4db0a36f8f4103cbc
+  - enabled: 1
+    path: Assets/Scenes/CraftLive/Pad4_Hologram.unity
+    guid: 42221cd6110ced5468f9fe026fc2974b
+  - enabled: 0
     path: Assets/Scenes/SampleScene.unity
     guid: 99c9720ab356a0642a771bea13969a05
+  - enabled: 0
+    path: Assets/Scenes/Craft.unity
+    guid: e81b3617dca025848b2babda92b8e799
   m_configObjects:
+    com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

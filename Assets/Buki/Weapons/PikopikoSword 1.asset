@@ -1,0 +1,26 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: cb441c96f57bd72479f67ebb9f5c0529, type: 3}
+  m_Name: PikopikoSword 1
+  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveWeaponDefinition
+  weaponId: weapon_pikopiko_sword
+  displayName: "\u30D4\u30B3\u30D4\u30B3\u30CF\u30F3\u30DE\u30FC"
+  weaponType: 0
+  baseStats:
+    attackRate: 10
+    defenseRate: 10
+    evasionRate: 100
+    elementBoost: 0
+  icon: {fileID: 21300000, guid: 2563ced709e67564a8e08a51e33e7df4, type: 3}
+  workbenchPrefab: {fileID: 6731374313249787165, guid: 96c459983107c4645ac0043be14c7107, type: 3}
+  hologramPrefab: {fileID: 0}
+  previewScale: {x: 1, y: 1, z: 1}

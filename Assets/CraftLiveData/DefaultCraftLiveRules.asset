@@ -1,0 +1,31 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 00b79f5983fe27d4d97f8d9aa77fd8d3, type: 3}
+  m_Name: DefaultCraftLiveRules
+  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveRules
+  sessionDurationSeconds: 300
+  requireAttributeSlot: 0
+  requireSkillSlot: 0
+  requireAllFourBaseSlots: 0
+  mixingDurationSeconds: 5
+  powerPerRadian: 7.5
+  requiredHammerPasses: 6
+  hammerStrokePixels: 120
+  maximumCompletedWeapons: 12
+  weaponCodePrefix: CL
+  successThreshold: 31
+  greatSuccessThreshold: 61
+  superSuccessThreshold: 91
+  successBonus: 5
+  greatSuccessBonus: 10
+  superSuccessBonus: 15
+  maximumStat: 100

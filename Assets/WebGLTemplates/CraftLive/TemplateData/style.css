@@ -1,0 +1,115 @@
+:root {
+  color-scheme: dark;
+  background: #050505;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#unity-container,
+#unity-canvas {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: #050505;
+}
+
+#unity-container {
+  position: fixed;
+  inset: 0;
+  padding:
+    env(safe-area-inset-top)
+    env(safe-area-inset-right)
+    env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+#unity-canvas {
+  display: block;
+  background: {{{ BACKGROUND_COLOR }}};
+  outline: none;
+  touch-action: none;
+}
+
+#unity-loading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: min(72vw, 360px);
+  transform: translate(-50%, -50%);
+  color: #f5f5f5;
+  text-align: center;
+}
+
+#unity-title {
+  margin-bottom: 16px;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+#unity-progress-track {
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 1px solid #6d7478;
+  border-radius: 4px;
+  background: #16191b;
+}
+
+#unity-progress {
+  width: 0;
+  height: 100%;
+  background: #63c8d4;
+  transition: width 120ms linear;
+}
+
+#unity-loading-label {
+  margin-top: 10px;
+  color: #b9c2c6;
+  font-size: 14px;
+}
+
+#unity-status {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 10px);
+  left: 50%;
+  z-index: 1000;
+  width: min(92vw, 620px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.status-item {
+  margin-bottom: 6px;
+  padding: 10px 12px;
+  border-left: 4px solid #63c8d4;
+  background: rgba(10, 13, 14, 0.94);
+  color: #f4f4f4;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.status-item.warning {
+  border-left-color: #e3b341;
+}
+
+.status-item.error {
+  border-left-color: #e45b5b;
+}
+
+.status-item.success {
+  border-left-color: #68c77b;
+}
