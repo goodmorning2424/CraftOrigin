@@ -401,19 +401,11 @@ namespace CraftOrigin.CraftLive
 
             ParticleSystemRenderer particleRenderer =
                 effect.GetComponent<ParticleSystemRenderer>();
-            Shader shader = Shader.Find(
-                "Universal Render Pipeline/Particles/Unlit");
-            if (shader == null)
+            generatedParticleMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleParticleMaterial(
+                    "Generated_Pad4ParticleMaterial");
+            if (generatedParticleMaterial != null)
             {
-                shader = Shader.Find("Particles/Standard Unlit");
-            }
-
-            if (shader != null)
-            {
-                generatedParticleMaterial = new Material(shader)
-                {
-                    name = "Generated_Pad4ParticleMaterial"
-                };
                 particleRenderer.sharedMaterial = generatedParticleMaterial;
             }
 

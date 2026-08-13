@@ -375,6 +375,42 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(session.State.selectedWeaponId, Is.EqualTo("sword"));
         }
 
+        [Test]
+        public void ExpiredEmptyRemoteRoom_RestartsWithoutBlockingPad2()
+        {
+            CraftLiveWeaponDefinition weapon = CreateWeapon("sword");
+            CraftLiveMaterialDefinition registered = CreateMaterial(
+                "registered",
+                CraftLiveMaterialCategory.Attribute);
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition> { registered },
+                new List<CraftLiveWeaponDefinition> { weapon });
+            CraftLiveSession session = CreateSession(catalog);
+            CraftLiveRoomState expired = CraftLiveRoomState.Create(catalog);
+            expired.RegisterMaterial("registered");
+            expired.sessionStartedAtUnixMs = 1;
+            expired.sessionEndsAtUnixMs = 2;
+            expired.sessionPhase = CraftLiveSessionPhase.FinalSelection;
+            expired.weaponSelectionConfirmed = false;
+            expired.revision = 12;
+
+            session.ApplyRemoteState(expired);
+
+            Assert.That(
+                session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.Playing));
+            Assert.That(
+                session.State.sessionEndsAtUnixMs,
+                Is.GreaterThan(CraftLiveSession.UnixNowMs()));
+            Assert.That(session.State.revision, Is.EqualTo(13));
+            Assert.That(
+                session.State.HasMaterialRegistered("registered"),
+                Is.True);
+            Assert.That(
+                CraftLivePad2WeaponCarousel.CanChangeWeapon(session.State),
+                Is.True);
+        }
+
         private CraftLiveMaterialDefinition CreateMaterial(
             string id,
             CraftLiveMaterialCategory category)

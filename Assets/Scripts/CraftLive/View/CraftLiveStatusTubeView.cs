@@ -435,6 +435,8 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            CraftLiveForgeUITheme.EnsureCompatibleSurface(renderer);
+
             MaterialPropertyBlock block =
                 new MaterialPropertyBlock();
             renderer.GetPropertyBlock(block);
@@ -453,21 +455,13 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
-
-            if (shader == null)
+            generatedLiquidMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Generated_StatusLiquidGlow");
+            if (generatedLiquidMaterial == null)
             {
                 return;
             }
-
-            generatedLiquidMaterial = new Material(shader)
-            {
-                name = "Generated_StatusLiquidGlow"
-            };
             generatedLiquidMaterial.EnableKeyword("_EMISSION");
             Color coreColor = ResolveCoreColor();
             generatedLiquidMaterial.SetColor("_BaseColor", coreColor);
@@ -516,23 +510,19 @@ namespace CraftOrigin.CraftLive
 
         private void ConfigureGlowMaterial()
         {
-            Shader shader = Shader.Find(
-                "Universal Render Pipeline/Unlit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Unlit/Color");
-            }
-
-            if (shader == null || liquidGlowRenderer == null)
+            if (liquidGlowRenderer == null)
             {
                 return;
             }
 
-            generatedGlowMaterial = new Material(shader)
+            generatedGlowMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Generated_StatusLiquidOuterGlow");
+            if (generatedGlowMaterial == null)
             {
-                name = "Generated_StatusLiquidOuterGlow",
-                renderQueue = 3000
-            };
+                return;
+            }
+            generatedGlowMaterial.renderQueue = 3000;
             generatedGlowMaterial.SetFloat("_Surface", 1f);
             generatedGlowMaterial.SetFloat("_ZWrite", 0f);
             generatedGlowMaterial.SetFloat(

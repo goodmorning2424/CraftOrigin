@@ -664,14 +664,11 @@ namespace CraftOrigin.CraftLive
 
             ParticleSystemRenderer particleRenderer =
                 sparkObject.GetComponent<ParticleSystemRenderer>();
-            Shader shader = Shader.Find(
-                                "Universal Render Pipeline/Particles/Unlit") ??
-                            Shader.Find("Particles/Standard Unlit") ??
-                            Shader.Find("Sprites/Default");
-            if (shader != null)
+            generatedSparkMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleParticleMaterial(
+                    "Generated_ForgeSparkMaterial");
+            if (generatedSparkMaterial != null)
             {
-                generatedSparkMaterial = new Material(shader);
-                generatedSparkMaterial.name = "Generated_ForgeSparkMaterial";
                 generatedSparkMaterial.SetColor(
                     "_BaseColor",
                     new Color(1f, 0.42f, 0.045f, 1f));

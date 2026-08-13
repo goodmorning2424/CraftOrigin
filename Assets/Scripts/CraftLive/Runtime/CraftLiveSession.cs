@@ -101,8 +101,45 @@ namespace CraftOrigin.CraftLive
 
             remoteState.Normalize(catalog);
             state = remoteState;
+            if (ShouldRestartExpiredEmptySession(state))
+            {
+                RestartExpiredEmptySession();
+                return;
+            }
+
             StateChanged?.Invoke(state);
             onMessageChanged?.Invoke(state.message);
+        }
+
+        private bool ShouldRestartExpiredEmptySession(
+            CraftLiveRoomState candidate)
+        {
+            return candidate != null &&
+                   candidate.sessionEndsAtUnixMs > 0 &&
+                   candidate.sessionEndsAtUnixMs <= UnixNowMs() &&
+                   candidate.completedWeapons.Count == 0 &&
+                   candidate.craft.status != CraftLiveCraftStatus.Complete;
+        }
+
+        private void RestartExpiredEmptySession()
+        {
+            List<string> registered =
+                new List<string>(state.registeredMaterialIds);
+            long previousRevision = state.revision;
+            long now = UnixNowMs();
+            long durationMs = Mathf.RoundToInt(
+                (rules != null ? rules.SessionDurationSeconds : 300f) *
+                1000f);
+            CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
+            next.registeredMaterialIds = registered;
+            next.sessionStartedAtUnixMs = now;
+            next.sessionEndsAtUnixMs = now + durationMs;
+            next.sessionPhase = CraftLiveSessionPhase.Playing;
+            next.revision = previousRevision + 1;
+            next.updatedAtUnixMs = now;
+            next.message = "新しい制作を開始しました。";
+            state = next;
+            PublishLocal();
         }
 
         public bool IsMaterialUnlocked(CraftLiveMaterialDefinition material)

@@ -26,6 +26,8 @@ namespace CraftOrigin.CraftLive
         private const int ReferenceFontSize = 64;
         private const int CrispFontSize = 128;
         private static Material runtimeForgeMaterial;
+        private static Material runtimeUnlitMaterial;
+        private static Material runtimeParticleMaterial;
 
         public static Color RefineSurfaceColor(Color source)
         {
@@ -93,10 +95,16 @@ namespace CraftOrigin.CraftLive
                 return runtimeForgeMaterial;
             }
 
-            Shader shader =
-                Shader.Find("Universal Render Pipeline/Lit") ??
-                Shader.Find("Universal Render Pipeline/Unlit") ??
-                Shader.Find("Unlit/Color");
+            Material includedMaterial =
+                Resources.Load<Material>("CraftLiveRuntimeLit");
+            if (includedMaterial != null)
+            {
+                runtimeForgeMaterial = includedMaterial;
+                return runtimeForgeMaterial;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ??
+                            Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null)
             {
                 return null;
@@ -113,6 +121,137 @@ namespace CraftOrigin.CraftLive
             }
 
             return runtimeForgeMaterial;
+        }
+
+        public static void EnsureCompatibleSurfaces(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            foreach (Renderer renderer in
+                     target.GetComponentsInChildren<Renderer>(true))
+            {
+                EnsureCompatibleSurface(renderer);
+            }
+        }
+
+        public static void EnsureCompatibleSurface(Renderer renderer)
+        {
+            if (renderer == null || !NeedsUrpReplacement(renderer.sharedMaterial))
+            {
+                return;
+            }
+
+            Material source = renderer.sharedMaterial;
+            Texture texture = ResolveMainTexture(source);
+            Color color = ResolveMainColor(source);
+            Material replacement = renderer is ParticleSystemRenderer
+                ? GetRuntimeParticleMaterial()
+                : GetRuntimeForgeMaterial();
+            if (replacement == null)
+            {
+                return;
+            }
+
+            renderer.sharedMaterial = replacement;
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block);
+            block.SetColor("_BaseColor", color);
+            block.SetColor("_Color", color);
+            if (texture != null)
+            {
+                block.SetTexture("_BaseMap", texture);
+                block.SetTexture("_MainTex", texture);
+            }
+
+            renderer.SetPropertyBlock(block);
+        }
+
+        public static Material CreateCompatibleUnlitMaterial(string name)
+        {
+            Material source = GetRuntimeUnlitMaterial();
+            return source != null
+                ? new Material(source) { name = name }
+                : null;
+        }
+
+        public static Material CreateCompatibleParticleMaterial(string name)
+        {
+            Material source = GetRuntimeParticleMaterial();
+            return source != null
+                ? new Material(source) { name = name }
+                : null;
+        }
+
+        private static Material GetRuntimeUnlitMaterial()
+        {
+            if (runtimeUnlitMaterial == null)
+            {
+                runtimeUnlitMaterial =
+                    Resources.Load<Material>("CraftLiveRuntimeUnlit");
+            }
+
+            return runtimeUnlitMaterial ?? GetRuntimeForgeMaterial();
+        }
+
+        private static Material GetRuntimeParticleMaterial()
+        {
+            if (runtimeParticleMaterial == null)
+            {
+                runtimeParticleMaterial =
+                    Resources.Load<Material>("CraftLiveRuntimeParticle");
+            }
+
+            return runtimeParticleMaterial ?? GetRuntimeUnlitMaterial();
+        }
+
+        private static bool NeedsUrpReplacement(Material material)
+        {
+            if (material == null || material.shader == null)
+            {
+                return true;
+            }
+
+            string shaderName = material.shader.name ?? string.Empty;
+            return shaderName == "Standard" ||
+                   shaderName.StartsWith("Legacy Shaders/") ||
+                   shaderName.Contains("InternalErrorShader");
+        }
+
+        private static Texture ResolveMainTexture(Material material)
+        {
+            if (material == null)
+            {
+                return null;
+            }
+
+            if (material.HasProperty("_BaseMap"))
+            {
+                return material.GetTexture("_BaseMap");
+            }
+
+            return material.HasProperty("_MainTex")
+                ? material.GetTexture("_MainTex")
+                : null;
+        }
+
+        private static Color ResolveMainColor(Material material)
+        {
+            if (material == null)
+            {
+                return Color.white;
+            }
+
+            if (material.HasProperty("_BaseColor"))
+            {
+                return material.GetColor("_BaseColor");
+            }
+
+            return material.HasProperty("_Color")
+                ? material.GetColor("_Color")
+                : Color.white;
         }
 
         public static void ApplyInteractiveSurface(

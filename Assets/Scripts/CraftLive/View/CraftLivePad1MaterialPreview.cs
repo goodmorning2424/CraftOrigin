@@ -1649,23 +1649,14 @@ namespace CraftOrigin.CraftLive
 
         private Material CreateHologramMaterial()
         {
-            Shader shader = Shader.Find(
-                "Universal Render Pipeline/Unlit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Unlit/Color");
-            }
-
-            if (shader == null)
+            Material material =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Generated_HologramMaterial");
+            if (material == null)
             {
                 return null;
             }
-
-            Material material = new Material(shader)
-            {
-                name = "Generated_HologramMaterial",
-                renderQueue = (int)RenderQueue.Transparent
-            };
+            material.renderQueue = (int)RenderQueue.Transparent;
             material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 0f);
             material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);

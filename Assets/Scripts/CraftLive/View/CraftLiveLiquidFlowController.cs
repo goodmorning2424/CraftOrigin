@@ -568,14 +568,13 @@ namespace CraftOrigin.CraftLive
 
         private static Material CreateGlowMaterial(Color color)
         {
-            Shader shader = Shader.Find(
-                                "Universal Render Pipeline/Unlit") ??
-                            Shader.Find("Unlit/Color") ??
-                            Shader.Find("Standard");
-            Material material = new Material(shader)
+            Material material =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Pad2RimGlowMaterial");
+            if (material == null)
             {
-                name = "Pad2RimGlowMaterial"
-            };
+                return null;
+            }
             Color hdrColor = color * 2.5f;
             hdrColor.a = color.a;
             if (material.HasProperty("_BaseColor"))
