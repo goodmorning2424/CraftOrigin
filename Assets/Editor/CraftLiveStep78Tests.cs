@@ -229,6 +229,21 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(result.z, Is.EqualTo(-0.45f));
         }
 
+        [Test]
+        public void PlacedMaterialGuide_DefinesExactPositionAndDepth()
+        {
+            Vector3 guidePosition =
+                new Vector3(-1.47f, -2.12f, 0.37f);
+            Vector3 result =
+                CraftLivePad2TransferReceiver
+                    .ResolveDisplayLocalPosition(
+                        guidePosition,
+                        0.45f,
+                        true);
+
+            Assert.That(result, Is.EqualTo(guidePosition));
+        }
+
         [TestCase(0, 6, 6)]
         [TestCase(3, 6, 3)]
         [TestCase(7, 6, 0)]

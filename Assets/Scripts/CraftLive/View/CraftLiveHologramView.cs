@@ -224,6 +224,11 @@ namespace CraftOrigin.CraftLive
                   weaponSizeMultiplier
                 : weaponScale * weaponSizeMultiplier;
 
+            // Imported Standard/legacy materials can lose their texture or
+            // tint in a WebGL URP build. Replace only incompatible surfaces
+            // while preserving their original texture and base color.
+            CraftLiveForgeUITheme.EnsureCompatibleSurfaces(currentWeapon);
+
             CraftLiveMaterialDefinition attribute =
                 FindAttribute(result.attributeId);
             if (applyAttributeColor && attribute != null)

@@ -18,7 +18,11 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private Sprite icon;
         [SerializeField] private GameObject workbenchPrefab;
         [SerializeField] private GameObject hologramPrefab;
+        [Tooltip("作業台・完成表示で使用するモデルのXYZ倍率です。")]
         [SerializeField] private Vector3 previewScale = Vector3.one;
+        [SerializeField, Range(0.1f, 3f)]
+        [Tooltip("武器選択カードと中央プレビューだけに使用する、武器ごとの大きさ倍率です。")]
+        private float selectionPreviewScale = 1f;
 
         public string WeaponId => weaponId;
         public string DisplayName => displayName;
@@ -28,6 +32,8 @@ namespace CraftOrigin.CraftLive
         public GameObject WorkbenchPrefab => workbenchPrefab;
         public GameObject HologramPrefab => hologramPrefab != null ? hologramPrefab : workbenchPrefab;
         public Vector3 PreviewScale => previewScale;
+        public float SelectionPreviewScale =>
+            selectionPreviewScale > 0f ? selectionPreviewScale : 1f;
 
         private void OnValidate()
         {
@@ -42,6 +48,10 @@ namespace CraftOrigin.CraftLive
             }
 
             baseStats = baseStats.Sanitize();
+            selectionPreviewScale = Mathf.Clamp(
+                selectionPreviewScale,
+                0.1f,
+                3f);
         }
     }
 }

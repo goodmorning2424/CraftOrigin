@@ -24,10 +24,16 @@ namespace CraftOrigin.CraftLive
 
         private const string FrameRootName = "ForgeFrame";
         private const int ReferenceFontSize = 64;
-        private const int CrispFontSize = 128;
+        // A larger generated atlas keeps thin Japanese strokes intact after
+        // WebGL/iPad down-sampling. ScaleCharacterSize preserves world size.
+        private const int CrispFontSize = 256;
         private static Material runtimeForgeMaterial;
         private static Material runtimeUnlitMaterial;
         private static Material runtimeParticleMaterial;
+        private static Font runtimeTextFont;
+        private static Font runtimeHeadingFont;
+        private static Font runtimeWeaponFont;
+        private static Font runtimeBoardFont;
 
         public static Color RefineSurfaceColor(Color source)
         {
@@ -279,7 +285,13 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            CraftLivePadSceneRoot.TryApplyConfiguredFont(text);
+            if (!CraftLivePadSceneRoot.TryApplyConfiguredFont(text))
+            {
+                ApplyBundledRuntimeFont(
+                    text,
+                    characterSize >= 0.07f);
+            }
+            ConfigureFontTexture(text.font);
             text.fontSize = CrispFontSize;
             text.characterSize = ScaleCharacterSize(characterSize);
             text.fontStyle = FontStyle.Bold;
@@ -295,18 +307,186 @@ namespace CraftOrigin.CraftLive
                 renderer.receiveShadows = false;
             }
 
-            if (createUnderlay)
+            // The former offset duplicate looked like a second, blurred glyph
+            // at tablet resolutions. Text now relies on its bold face and
+            // high-resolution font atlas without any artificial shadow.
+            CraftLiveTextUnderlay oldUnderlay =
+                text.GetComponent<CraftLiveTextUnderlay>();
+            if (oldUnderlay != null)
             {
-                CraftLiveTextUnderlay underlay =
-                    text.GetComponent<CraftLiveTextUnderlay>();
-                if (underlay == null)
+                oldUnderlay.DisableUnderlay();
+            }
+
+            Transform underlayTransform =
+                text.transform.Find("ForgeUnderlay");
+            if (underlayTransform != null)
+            {
+                underlayTransform.gameObject.SetActive(false);
+            }
+        }
+
+        public static void ApplyBundledFont(TextMesh text)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            string currentFontName = text.font != null
+                ? text.font.name
+                : string.Empty;
+            if (currentFontName == "YujiSyuku-Regular")
+            {
+                ApplyWeaponFont(text);
+                return;
+            }
+
+            if (currentFontName == "ShipporiMincho-ExtraBold" ||
+                currentFontName == "KaiseiDecol-Bold")
+            {
+                ApplyBundledRuntimeFont(text, true);
+                return;
+            }
+
+            if (currentFontName == "BIZUDPGothic-Bold")
+            {
+                ApplyBoardFont(text);
+                return;
+            }
+
+            if (currentFontName == "ShipporiMincho-Bold")
+            {
+                ApplyBundledRuntimeFont(text, false);
+                return;
+            }
+
+            float intendedSize = text.characterSize *
+                Mathf.Max(1, text.fontSize) / ReferenceFontSize;
+            ApplyBundledRuntimeFont(text, intendedSize >= 0.07f);
+        }
+
+        public static void ApplyHeadingFont(TextMesh text)
+        {
+            ApplyBundledRuntimeFont(text, true);
+            if (text != null)
+            {
+                text.fontStyle = FontStyle.Bold;
+            }
+        }
+
+        public static void ApplyWeaponFont(TextMesh text)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            if (runtimeWeaponFont == null)
+            {
+                runtimeWeaponFont = Resources.Load<Font>(
+                    "Fonts/YujiSyuku-Regular");
+            }
+
+            if (runtimeWeaponFont == null)
+            {
+                ApplyBundledRuntimeFont(text, true);
+                return;
+            }
+
+            AssignFont(text, runtimeWeaponFont);
+            text.fontStyle = FontStyle.Bold;
+        }
+
+        public static void ApplyBoardFont(TextMesh text)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            if (runtimeBoardFont == null)
+            {
+                runtimeBoardFont = Resources.Load<Font>(
+                    "Fonts/BIZUDPGothic-Bold");
+            }
+
+            if (runtimeBoardFont == null)
+            {
+                ApplyBundledRuntimeFont(text, false);
+                return;
+            }
+
+            AssignFont(text, runtimeBoardFont);
+            text.fontStyle = FontStyle.Bold;
+        }
+
+        private static void ApplyBundledRuntimeFont(
+            TextMesh text,
+            bool heading)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            Font selectedFont = null;
+            if (heading)
+            {
+                if (runtimeHeadingFont == null)
                 {
-                    underlay = text.gameObject.AddComponent<
-                        CraftLiveTextUnderlay>();
+                    runtimeHeadingFont = Resources.Load<Font>(
+                        "Fonts/ShipporiMincho-ExtraBold");
                 }
 
-                underlay.Configure(text);
+                selectedFont = runtimeHeadingFont;
             }
+
+            if (runtimeTextFont == null)
+            {
+                runtimeTextFont = Resources.Load<Font>(
+                    "Fonts/ShipporiMincho-Bold");
+                if (runtimeTextFont == null)
+                {
+                    runtimeTextFont = Resources.GetBuiltinResource<Font>(
+                        "LegacyRuntime.ttf");
+                }
+            }
+
+            selectedFont = selectedFont != null
+                ? selectedFont
+                : runtimeTextFont;
+
+            if (selectedFont == null)
+            {
+                return;
+            }
+
+            AssignFont(text, selectedFont);
+        }
+
+        private static void AssignFont(TextMesh text, Font selectedFont)
+        {
+            text.font = selectedFont;
+            ConfigureFontTexture(selectedFont);
+            Renderer renderer = text.GetComponent<Renderer>();
+            if (renderer != null && selectedFont.material != null)
+            {
+                renderer.sharedMaterial = selectedFont.material;
+            }
+        }
+
+        private static void ConfigureFontTexture(Font font)
+        {
+            Texture fontTexture = font != null && font.material != null
+                ? font.material.mainTexture
+                : null;
+            if (fontTexture == null)
+            {
+                return;
+            }
+
+            fontTexture.filterMode = FilterMode.Bilinear;
+            fontTexture.anisoLevel = 8;
         }
 
         public static float ScaleCharacterSize(float intendedCharacterSize)
@@ -358,7 +538,11 @@ namespace CraftOrigin.CraftLive
             Color resolved = saturation < 0.16f || value > 0.88f
                 ? ParchmentText
                 : Color.Lerp(source, ParchmentText, 0.28f);
-            resolved.a = source.a;
+            // World-space text is viewed over dark, textured surfaces. Keep it
+            // close to white and fully opaque so mobile post-processing and
+            // texture filtering cannot wash out the glyphs.
+            resolved = Color.Lerp(resolved, Color.white, 0.42f);
+            resolved.a = 1f;
             return resolved;
         }
 
@@ -450,6 +634,19 @@ namespace CraftOrigin.CraftLive
             source = target;
             EnsureUnderlay();
             Synchronize();
+        }
+
+        public void DisableUnderlay()
+        {
+            enabled = false;
+            Transform existing = transform.Find(UnderlayName);
+            if (existing != null)
+            {
+                existing.gameObject.SetActive(false);
+            }
+
+            underlay = null;
+            source = null;
         }
 
         private void LateUpdate()

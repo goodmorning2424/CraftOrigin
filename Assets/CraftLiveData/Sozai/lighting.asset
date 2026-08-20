@@ -16,9 +16,9 @@ MonoBehaviour:
   displayName: "\u96F7"
   description: "\u4E00\u5B9A\u78BA\u7387\u3067\u5168\u4F53\u653B\u6483\u306B\u306A\u308A\u307E\u3059\u3002"
   category: 0
-  requiresQrUnlock: 0
+  requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: dd14360dc1f5aa447b0dad3064e3804f, type: 3}
-  worldPrefab: {fileID: 6417632151078121769, guid: 04a85f70882e55742b2a27e000839c98, type: 3}
+  worldPrefab: {fileID: 6223391183801069314, guid: 736acda86ef34f448ac643bb6328b892, type: 3}
   pad2PreviewRollDegrees: 0
   pad1PreviewOffset: {x: 0, y: 0, z: 0}
   pad1PreviewScale: 1

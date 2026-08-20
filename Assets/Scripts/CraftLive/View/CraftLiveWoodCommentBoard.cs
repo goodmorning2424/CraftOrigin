@@ -621,6 +621,10 @@ namespace CraftOrigin.CraftLive
             {
                 renderer.sharedMaterial = material;
             }
+            else
+            {
+                CraftLiveForgeUITheme.EnsureCompatibleSurface(renderer);
+            }
 
             return part.transform;
         }
@@ -631,6 +635,8 @@ namespace CraftOrigin.CraftLive
             part.name = name;
             part.transform.SetParent(generatedRoot.transform, false);
             RemoveGeneratedCollider(part.GetComponent<Collider>());
+            CraftLiveForgeUITheme.EnsureCompatibleSurface(
+                part.GetComponent<Renderer>());
             return part.transform;
         }
 
@@ -1027,6 +1033,10 @@ namespace CraftOrigin.CraftLive
                 height * 0.023f,
                 displayTextColor,
                 true);
+            // Keep the board on the original high-legibility gothic face;
+            // weapon names and forge headings continue using the newer fonts.
+            CraftLiveForgeUITheme.ApplyBoardFont(headingText);
+            CraftLiveForgeUITheme.ApplyBoardFont(commentText);
             SetTextUnderlayOffset(headingText, height * 0.004f);
             SetTextUnderlayOffset(commentText, height * 0.004f);
         }
@@ -1139,6 +1149,11 @@ namespace CraftOrigin.CraftLive
             {
                 return;
             }
+
+            // Runtime primitives use Unity's built-in material by default.
+            // That shader is not available in URP WebGL builds and renders
+            // magenta, so replace it before applying display colours.
+            CraftLiveForgeUITheme.EnsureCompatibleSurface(target);
 
             MaterialPropertyBlock block = new MaterialPropertyBlock();
             target.GetPropertyBlock(block);

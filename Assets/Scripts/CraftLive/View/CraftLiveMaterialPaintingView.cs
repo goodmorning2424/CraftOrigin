@@ -98,10 +98,21 @@ namespace CraftOrigin.CraftLive
             restingScale = movingRoot.localScale;
         }
 
+        public void UseFixedGalleryPosition()
+        {
+            movePaintingOnSelection = false;
+            RestoreRestingTransform();
+        }
+
         public void Bind(
             CraftLivePad1GalleryController owner,
             CraftLiveMaterialDefinition definition)
         {
+            // A painting is the gallery's selection anchor. Moving that same
+            // object toward the camera puts the frame in front of the detail
+            // model/hologram, especially for pre-placed scene paintings that
+            // do not pass through the runtime creation path.
+            UseFixedGalleryPosition();
             gameObject.SetActive(true);
             controller = owner;
             material = definition;

@@ -18,7 +18,12 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0.1f)] private float arrivalDelay = 0.35f;
         [SerializeField, Min(0.1f)] private float arrivalDuration = 0.75f;
         [SerializeField, Min(0f)] private float arrivalArcHeight = 1.2f;
-        [SerializeField, Min(0f)] private float materialSurfaceOffset = 0.45f;
+        [SerializeField, Min(0f)]
+        [Tooltip("素材ガイドがない旧配置アンカーだけに適用する、盤面からカメラ側への距離です。ガイド使用時はガイドTransformのZがそのまま奥行になります。")]
+        private float materialSurfaceOffset = 0.45f;
+        [SerializeField, Min(0f), Tooltip(
+            "WebGLで素材が盤面へ埋まることを防ぐ、カメラ方向への追加距離です。")]
+        private float webGlSurfaceSafetyOffset = 0.12f;
         [SerializeField, Min(0f)] private float completionHoldSeconds = 0.55f;
         [SerializeField] private bool publishStatsAfterArrival = true;
         [SerializeField, Min(0f)] private float statusPublishDelay = 0.2f;
@@ -332,14 +337,9 @@ namespace CraftOrigin.CraftLive
                 Destroy(effect, 5f);
             }
 
-            AudioSource audioSource =
-                GetComponent<AudioSource>();
-            if (audioSource != null &&
-                material.LandingAudioClip != null)
-            {
-                audioSource.PlayOneShot(
-                    material.LandingAudioClip);
-            }
+            CraftLiveAudio.PlayMaterialLanding(
+                material,
+                GetComponent<AudioSource>());
 
             DestroySafely(materialVisual);
             activeTransferVisual = null;
@@ -583,9 +583,14 @@ namespace CraftOrigin.CraftLive
 
         public static Vector3 ResolveDisplayLocalPosition(
             Vector3 targetLocal,
-            float surfaceOffset)
+            float surfaceOffset,
+            bool guideDefinesFinalPosition = false)
         {
-            targetLocal.z -= Mathf.Max(0f, surfaceOffset);
+            if (!guideDefinesFinalPosition)
+            {
+                targetLocal.z -= Mathf.Max(0f, surfaceOffset);
+            }
+
             return targetLocal;
         }
 
@@ -593,33 +598,39 @@ namespace CraftOrigin.CraftLive
             CraftLiveSlotId slot,
             Transform target)
         {
-            if (bindings != null &&
-                CraftLivePad2AlignmentGuide.TryResolveLocalPose(
-                    bindings.transform,
-                    CraftLivePad2AlignmentGuideKind.Material,
+            Vector3 resolved;
+            if (TryResolvePlacementPose(
                     slot,
                     out CraftLivePad2GuidePose pose))
             {
-                return bindings.transform.TransformPoint(
-                    pose.LocalPosition);
+                resolved = bindings.transform.TransformPoint(
+                    ResolveDisplayLocalPosition(
+                        pose.LocalPosition,
+                        materialSurfaceOffset,
+                        true));
             }
-
-            return target != null
-                ? target.TransformPoint(
+            else
+            {
+                resolved = target != null
+                    ? target.TransformPoint(
                     ResolveDisplayLocalPosition(
                         Vector3.zero,
                         materialSurfaceOffset))
-                : transform.position;
+                    : transform.position;
+            }
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+            resolved += ResolveSurfaceNormal() *
+                        ResolveWorldVisualSize(webGlSurfaceSafetyOffset);
+#endif
+            return resolved;
         }
 
         private Quaternion ResolveDisplayRotation(
             CraftLiveSlotId slot,
             Transform target)
         {
-            if (bindings != null &&
-                CraftLivePad2AlignmentGuide.TryResolveLocalPose(
-                    bindings.transform,
-                    CraftLivePad2AlignmentGuideKind.Material,
+            if (TryResolvePlacementPose(
                     slot,
                     out CraftLivePad2GuidePose pose))
             {
@@ -630,6 +641,31 @@ namespace CraftOrigin.CraftLive
             return target != null
                 ? target.rotation
                 : transform.rotation;
+        }
+
+        private bool TryResolvePlacementPose(
+            CraftLiveSlotId slot,
+            out CraftLivePad2GuidePose pose)
+        {
+            pose = default;
+            if (bindings == null)
+            {
+                return false;
+            }
+
+            // Dedicated material guides take priority. Slots from the older
+            // scene that do not have one use their visible pool guide, keeping
+            // the Scene-view guide and final placement at exactly one pose.
+            return CraftLivePad2AlignmentGuide.TryResolveLocalPose(
+                       bindings.transform,
+                       CraftLivePad2AlignmentGuideKind.Material,
+                       slot,
+                       out pose) ||
+                   CraftLivePad2AlignmentGuide.TryResolveLocalPose(
+                       bindings.transform,
+                       CraftLivePad2AlignmentGuideKind.Pool,
+                       slot,
+                       out pose);
         }
 
         private float ResolveMaterialSize(

@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a4bec6054364b074d834738381edc905, type: 3}
   m_Name: DefaultCraftLiveLaunchConfig
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveLaunchConfig
-  editorRole: 1
+  editorRole: 2
   editorRoomId: 001
   pad1SceneName: Pad1_MaterialGallery
   pad2SceneName: Pad2_Workbench

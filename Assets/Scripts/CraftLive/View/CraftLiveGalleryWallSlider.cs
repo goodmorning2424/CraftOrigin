@@ -132,6 +132,7 @@ namespace CraftOrigin.CraftLive
             }
 
             dragging = true;
+            CraftLiveAudio.Play(CraftLiveSound.WallSlide, 0.58f);
         }
 
         public void Drag(float screenDeltaX)

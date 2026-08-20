@@ -51,7 +51,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(0.005f, 0.08f)]
         private float hologramBorderThickness = 0.025f;
         [SerializeField]
-        [Tooltip("自動計算したホログラム板の幅・高さへ掛ける倍率です。")]
+        [Tooltip("自動計算したホログラム板の幅・高さへ掛ける倍率です。各軸10倍まで指定できます。")]
         private Vector2 hologramPanelSizeMultiplier = Vector2.one;
         [SerializeField, Min(0f)]
         [Tooltip("絵画より手前へ配置するため、アンカーからカメラ方向へ寄せる距離です。")]
@@ -312,32 +312,55 @@ namespace CraftOrigin.CraftLive
             if (useMaterialWorldPrefab &&
                 material.WorldPrefab != null)
             {
-                spawnedModel = Instantiate(
-                    material.WorldPrefab,
-                    bindings.MaterialPreviewRoot);
-            }
-            else if (createPlaceholderWhenMissing)
-            {
-                spawnedModel = GameObject.CreatePrimitive(
-                    CraftLivePad1Presentation.GetPlaceholderPrimitive(
-                        material));
+                spawnedModel = new GameObject(
+                    $"Preview_{material.MaterialId}");
                 spawnedModel.transform.SetParent(
                     bindings.MaterialPreviewRoot,
                     false);
+                GameObject content = Instantiate(
+                    material.WorldPrefab,
+                    spawnedModel.transform);
+                CraftLiveRuntimeVisualUtility.FitAndCenter(
+                    content.transform,
+                    targetModelSize * material.Pad1PreviewScale,
+                    false);
+            }
+            else if (createPlaceholderWhenMissing)
+            {
+                spawnedModel = new GameObject(
+                    $"Preview_{material.MaterialId}");
+                spawnedModel.transform.SetParent(
+                    bindings.MaterialPreviewRoot,
+                    false);
+                GameObject content = GameObject.CreatePrimitive(
+                    CraftLivePad1Presentation.GetPlaceholderPrimitive(
+                        material));
+                content.transform.SetParent(
+                    spawnedModel.transform,
+                    false);
                 Collider collider =
-                    spawnedModel.GetComponent<Collider>();
+                    content.GetComponent<Collider>();
                 if (collider != null)
                 {
                     Destroy(collider);
                 }
 
                 ApplyColor(
-                    spawnedModel.GetComponent<Renderer>(),
+                    content.GetComponent<Renderer>(),
                     material.EffectColor,
                     true);
+                CraftLiveRuntimeVisualUtility.FitAndCenter(
+                    content.transform,
+                    targetModelSize * material.Pad1PreviewScale,
+                    false);
             }
 
             displayedMaterialId = material.MaterialId;
+            CraftLiveAudio.Play(
+                material.RequiresQrUnlock
+                    ? CraftLiveSound.RareReveal
+                    : CraftLiveSound.Description,
+                0.68f);
             if (spawnedModel == null)
             {
                 return;
@@ -349,9 +372,6 @@ namespace CraftOrigin.CraftLive
                 modelPositionOffset + material.Pad1PreviewOffset;
             spawnedModel.transform.localRotation =
                 Quaternion.Euler(modelRotation);
-            FitModel(
-                spawnedModel.transform,
-                targetModelSize * material.Pad1PreviewScale);
 
             CraftLivePreviewSpin spin =
                 spawnedModel.GetComponent<CraftLivePreviewSpin>();
@@ -380,6 +400,13 @@ namespace CraftOrigin.CraftLive
             CraftLiveMaterialDefinition material,
             bool visible)
         {
+            CraftLivePad1GalleryController gallery =
+                GetComponent<CraftLivePad1GalleryController>();
+            if (gallery != null)
+            {
+                gallery.SetSpecialHeadersVisible(!visible);
+            }
+
             onDetailsVisible?.Invoke(visible);
             if (material == null)
             {
@@ -444,7 +471,8 @@ namespace CraftOrigin.CraftLive
                 ConfigureHologramRenderer(
                     fallbackPanelRenderer,
                     hologramSortingOrder);
-                fallbackPanelMaterial = CreateHologramMaterial();
+                fallbackPanelMaterial =
+                    CreateHologramPanelMaterial();
                 if (fallbackPanelRenderer != null &&
                     fallbackPanelMaterial != null)
                 {
@@ -474,8 +502,8 @@ namespace CraftOrigin.CraftLive
                     hologramTextColor);
                 fallbackText.fontSize = Mathf.Clamp(
                     hologramGeneratedFontSize,
-                    8,
-                    256);
+                    256,
+                    512);
                 SetRendererSortingOrder(
                     fallbackText.GetComponent<Renderer>(),
                     hologramSortingOrder + 2);
@@ -719,12 +747,12 @@ namespace CraftOrigin.CraftLive
                 worldWidth * 0.34f *
                 Mathf.Max(0.1f, hologramPanelSizeMultiplier.x),
                 0.25f,
-                3.3f);
+                10f);
             float panelHeight = Mathf.Clamp(
                 worldHeight * 0.62f *
                 Mathf.Max(0.1f, hologramPanelSizeMultiplier.y),
                 0.25f,
-                2.8f);
+                10f);
             fallbackPanel.localScale =
                 new Vector3(panelWidth, panelHeight, 0.06f);
             fallbackPanelWidth = panelWidth;
@@ -1481,8 +1509,8 @@ namespace CraftOrigin.CraftLive
                 hologramTextColor);
             fallbackTransferButtonText.fontSize = Mathf.Clamp(
                 buttonFontSize,
-                8,
-                256);
+                256,
+                512);
             SetRendererSortingOrder(
                 fallbackTransferButtonText.GetComponent<Renderer>(),
                 hologramSortingOrder + 4);
@@ -1538,8 +1566,8 @@ namespace CraftOrigin.CraftLive
                 hologramTextColor);
             fallbackReturnButtonText.fontSize = Mathf.Clamp(
                 buttonFontSize,
-                8,
-                256);
+                256,
+                512);
             fallbackReturnButtonText.text = "戻る";
             SetRendererSortingOrder(
                 fallbackReturnButtonText.GetComponent<Renderer>(),
@@ -1657,6 +1685,7 @@ namespace CraftOrigin.CraftLive
                 return null;
             }
             material.renderQueue = (int)RenderQueue.Transparent;
+            material.SetOverrideTag("RenderType", "Transparent");
             material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 0f);
             material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
@@ -1665,6 +1694,31 @@ namespace CraftOrigin.CraftLive
                 (float)BlendMode.OneMinusSrcAlpha);
             material.SetFloat("_ZWrite", 0f);
             material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+            material.SetShaderPassEnabled("ShadowCaster", false);
+            return material;
+        }
+
+        private static Material CreateHologramPanelMaterial()
+        {
+            Material material =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Generated_HologramPanelMaterial");
+            if (material == null)
+            {
+                return null;
+            }
+
+            // Do not switch this large panel to a transparent shader variant
+            // at runtime. WebGL can strip that variant and render the panel as
+            // an opaque white rectangle. A dark opaque face is reliable while
+            // the transparent border still provides the hologram glow.
+            material.renderQueue = (int)RenderQueue.Geometry;
+            material.SetOverrideTag("RenderType", "Opaque");
+            material.SetFloat("_Surface", 0f);
+            material.SetFloat("_Blend", 0f);
+            material.SetFloat("_ZWrite", 1f);
+            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             material.SetShaderPassEnabled("ShadowCaster", false);
             return material;
@@ -1696,8 +1750,11 @@ namespace CraftOrigin.CraftLive
 
         private void UpdateHologramColors(Color themeColor)
         {
-            Color panelColor = themeColor;
-            panelColor.a = hologramPanelOpacity;
+            Color panelColor = Color.Lerp(
+                new Color(0.008f, 0.014f, 0.022f, 1f),
+                themeColor,
+                Mathf.Clamp01(hologramPanelOpacity) * 0.32f);
+            panelColor.a = 1f;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
 
             Color borderColor = themeColor;
@@ -2021,6 +2078,10 @@ namespace CraftOrigin.CraftLive
 
             material.SetColor("_BaseColor", color);
             material.SetColor("_Color", color);
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.SetColor("_EmissionColor", color);
+            }
         }
 
         private void UpdateHologramText(string details)
@@ -2053,8 +2114,8 @@ namespace CraftOrigin.CraftLive
             ApplyFont(fallbackText);
             fallbackText.fontSize = Mathf.Clamp(
                 hologramGeneratedFontSize,
-                8,
-                256);
+                256,
+                512);
             fallbackText.color = hologramTextColor;
             fallbackText.characterSize =
                 CraftLiveForgeUITheme.ScaleCharacterSize(
@@ -2072,8 +2133,22 @@ namespace CraftOrigin.CraftLive
 
         private void ApplyFont(TextMesh textMesh)
         {
-            if (textMesh == null || hologramFont == null)
+            if (textMesh == null)
             {
+                return;
+            }
+
+            textMesh.fontStyle = FontStyle.Bold;
+            if (hologramFont == null)
+            {
+                if (textMesh == fallbackText)
+                {
+                    CraftLiveForgeUITheme.ApplyWeaponFont(textMesh);
+                }
+                else
+                {
+                    CraftLiveForgeUITheme.ApplyHeadingFont(textMesh);
+                }
                 return;
             }
 
@@ -2131,6 +2206,7 @@ namespace CraftOrigin.CraftLive
             {
                 target.localPosition = finalPosition;
                 target.localScale = finalScale;
+                CraftLiveAudio.Play(CraftLiveSound.PaintingImpact, 0.55f);
             }
 
             if (spin != null)
@@ -2472,11 +2548,11 @@ namespace CraftOrigin.CraftLive
             hologramPanelSizeMultiplier.x = Mathf.Clamp(
                 hologramPanelSizeMultiplier.x,
                 0.25f,
-                3f);
+                10f);
             hologramPanelSizeMultiplier.y = Mathf.Clamp(
                 hologramPanelSizeMultiplier.y,
                 0.25f,
-                3f);
+                10f);
             hologramCameraApproach = Mathf.Max(
                 0f,
                 hologramCameraApproach);
@@ -2498,8 +2574,8 @@ namespace CraftOrigin.CraftLive
                 3f);
             hologramGeneratedFontSize = Mathf.Clamp(
                 hologramGeneratedFontSize,
-                8,
-                256);
+                256,
+                512);
             hologramMaxCharacterSize = Mathf.Clamp(
                 hologramMaxCharacterSize,
                 0.008f,
@@ -2519,8 +2595,8 @@ namespace CraftOrigin.CraftLive
                 0.8f);
             buttonFontSize = Mathf.Clamp(
                 buttonFontSize,
-                8,
-                256);
+                256,
+                512);
             buttonTextSize = Mathf.Clamp(
                 buttonTextSize,
                 0.1f,

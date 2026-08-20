@@ -1,0 +1,26 @@
+fileFormatVersion: 2
+guid: 5f4a8022c4114ff397eaa00100000001
+ModelImporter:
+  serializedVersion: 24200
+  internalIDToNameTable: []
+  externalObjects: {}
+  materials:
+    materialImportMode: 2
+    materialName: 0
+    materialSearch: 1
+    materialLocation: 1
+  isReadable: 0
+  meshes:
+    meshCompression: 1
+    addColliders: 0
+    importBlendShapes: 0
+    importCameras: 0
+    importLights: 0
+    keepQuads: 0
+    weldVertices: 1
+    generateSecondaryUV: 0
+    indexFormat: 0
+  importAnimation: 0
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

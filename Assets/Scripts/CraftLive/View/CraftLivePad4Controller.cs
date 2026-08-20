@@ -134,7 +134,7 @@ namespace CraftOrigin.CraftLive
             label.alignment = TextAlignment.Center;
             CraftLiveForgeUITheme.StyleText(
                 label,
-                0.052f,
+                0.072f,
                 CraftLiveForgeUITheme.ParchmentText);
         }
     }

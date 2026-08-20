@@ -157,10 +157,7 @@ namespace CraftOrigin.CraftLive
                 Destroy(effect, 5f);
             }
 
-            if (audioSource != null && material.LandingAudioClip != null)
-            {
-                audioSource.PlayOneShot(material.LandingAudioClip);
-            }
+            CraftLiveAudio.PlayMaterialLanding(material, audioSource);
 
             Destroy(materialVisual);
             activeTransferObject = null;

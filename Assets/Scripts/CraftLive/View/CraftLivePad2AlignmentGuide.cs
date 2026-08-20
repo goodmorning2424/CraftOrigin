@@ -254,4 +254,66 @@ namespace CraftOrigin.CraftLive
                 new Vector3(0.7f, 0.7f, 0.12f));
         }
     }
+
+#if UNITY_EDITOR
+    [CustomEditor(typeof(CraftLivePad2AlignmentGuide))]
+    internal sealed class CraftLivePad2AlignmentGuideEditor : Editor
+    {
+        public override void OnInspectorGUI()
+        {
+            DrawDefaultInspector();
+            CraftLivePad2AlignmentGuide guide =
+                (CraftLivePad2AlignmentGuide)target;
+            if (IsPlacementGuide(guide))
+            {
+                EditorGUILayout.HelpBox(
+                    guide.Kind == CraftLivePad2AlignmentGuideKind.Material
+                        ? "Sceneビューでハンドルを動かすと、素材の設置位置を直接調整できます。青いZハンドルがカメラから見た奥行です。ガイドの大きさは素材プレビューの大きさになります。"
+                        : "この枠に専用Materialガイドがない場合、このPoolガイドが素材の設置位置にもなります。青いZハンドルでカメラから見た奥行を調整できます。",
+                    MessageType.Info);
+            }
+        }
+
+        private void OnSceneGUI()
+        {
+            CraftLivePad2AlignmentGuide guide =
+                (CraftLivePad2AlignmentGuide)target;
+            if (guide == null || !IsPlacementGuide(guide))
+            {
+                return;
+            }
+
+            Transform guideTransform = guide.transform;
+            EditorGUI.BeginChangeCheck();
+            Vector3 position = Handles.PositionHandle(
+                guideTransform.position,
+                guideTransform.rotation);
+            if (EditorGUI.EndChangeCheck())
+            {
+                Undo.RecordObject(
+                    guideTransform,
+                    "Move Pad2 material guide");
+                guideTransform.position = position;
+                EditorUtility.SetDirty(guideTransform);
+            }
+
+            Handles.Label(
+                guideTransform.position -
+                guideTransform.forward *
+                HandleUtility.GetHandleSize(
+                    guideTransform.position) * 0.45f,
+                "Z = カメラ奥行");
+        }
+
+        private static bool IsPlacementGuide(
+            CraftLivePad2AlignmentGuide guide)
+        {
+            return guide != null &&
+                   (guide.Kind ==
+                        CraftLivePad2AlignmentGuideKind.Material ||
+                    guide.Kind ==
+                        CraftLivePad2AlignmentGuideKind.Pool);
+        }
+    }
+#endif
 }

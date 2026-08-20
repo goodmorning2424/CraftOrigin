@@ -19,6 +19,7 @@ namespace CraftOrigin.CraftLive
         private float nextRefreshTime;
         private CraftLiveSessionPhase observedPhase =
             (CraftLiveSessionPhase)(-1);
+        private int lastWarningSecond = -1;
 
         private void Awake()
         {
@@ -86,6 +87,14 @@ namespace CraftOrigin.CraftLive
             CraftLiveRoomState state = session.State;
             float remaining =
                 session.GetRemainingSessionSeconds();
+            int warningSecond = Mathf.CeilToInt(remaining);
+            if (state.sessionPhase == CraftLiveSessionPhase.Playing &&
+                warningSecond > 0 && warningSecond <= 10 &&
+                warningSecond != lastWarningSecond)
+            {
+                lastWarningSecond = warningSecond;
+                CraftLiveAudio.Play(CraftLiveSound.HeartbeatWarning, 0.45f);
+            }
             if (state.sessionPhase ==
                     CraftLiveSessionPhase.Playing &&
                 remaining <= 0f)

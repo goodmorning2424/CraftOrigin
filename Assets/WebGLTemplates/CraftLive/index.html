@@ -72,6 +72,8 @@
         companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
         productName: {{{ JSON.stringify(PRODUCT_NAME) }}},
         productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
+        // Avoid allocating oversized color/depth buffers on Retina tablets.
+        // Text clarity is handled by the larger generated font atlas instead.
         devicePixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
         autoSyncPersistentDataPath: true,
         showBanner: (message, type) => {

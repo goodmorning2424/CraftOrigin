@@ -334,7 +334,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 150579547}
-  m_Mesh: {fileID: -2432090755550338912, guid: 3fba758373aad3846a8e936d07196ba4, type: 3}
+  m_Mesh: {fileID: -2432090755550338912, guid: 5f4a8022c4114ff397eaa00100000007, type: 3}
 --- !u!4 &150579550
 Transform:
   m_ObjectHideFlags: 0
@@ -481,7 +481,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 449604767}
-  m_Mesh: {fileID: -2432090755550338912, guid: a4bf7c80b648b14409c9203c9d09f3be, type: 3}
+  m_Mesh: {fileID: -2432090755550338912, guid: 5f4a8022c4114ff397eaa00100000004, type: 3}
 --- !u!1 &459894625
 GameObject:
   m_ObjectHideFlags: 0
@@ -1186,7 +1186,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1566212531}
-  m_Mesh: {fileID: -2432090755550338912, guid: a4bf7c80b648b14409c9203c9d09f3be, type: 3}
+  m_Mesh: {fileID: -2432090755550338912, guid: 5f4a8022c4114ff397eaa00100000004, type: 3}
 --- !u!1 &1597678930
 GameObject:
   m_ObjectHideFlags: 0
@@ -1681,6 +1681,7 @@ MonoBehaviour:
   evasionColor: {r: 0.86119753, g: 0.8805031, b: 0.102448314, a: 0.7529412}
   overrideTubeColors: 0
   tubeLabelLocalPosition: {x: -2.85, y: 0, z: -0.5}
+  tubeLabelCharacterSize: 0.065
   qrButtonColor: {r: 0.9, g: 0.27, b: 0.075, a: 1}
   qrButtonSize: {x: 4, y: 2, z: 0.3}
   qrButtonPanelPosition: {x: 0, y: -0.3}
@@ -1806,7 +1807,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 6338203708909339032}
-  m_Mesh: {fileID: -2432090755550338912, guid: a4bf7c80b648b14409c9203c9d09f3be, type: 3}
+  m_Mesh: {fileID: -2432090755550338912, guid: 5f4a8022c4114ff397eaa00100000004, type: 3}
 --- !u!4 &2973499245606523555
 Transform:
   m_ObjectHideFlags: 0

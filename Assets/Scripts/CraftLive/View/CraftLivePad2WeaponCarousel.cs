@@ -700,13 +700,17 @@ namespace CraftOrigin.CraftLive
             result.transform.localPosition = Vector3.zero;
             CraftLiveRuntimeVisualUtility.FitAndCenter(
                 content,
-                targetSize,
+                targetSize * weapon.SelectionPreviewScale,
                 true,
                 -18f);
             content.localScale =
                 Vector3.Scale(
                     content.localScale,
                     weapon.PreviewScale);
+            // Imported prefabs often have an authored pivot away from their
+            // visible bounds. PreviewScale must be applied before the final
+            // centering pass or changing size also moves the weapon onscreen.
+            CraftLiveRuntimeVisualUtility.CenterInParent(content);
             DisableColliders(result);
             return result;
         }
@@ -998,14 +1002,23 @@ namespace CraftOrigin.CraftLive
             contentRoot.localScale *=
                 Mathf.Max(0.0001f, targetProjectedSize) /
                 projectedSize;
-            if (TryGetBounds(
+            CenterInParent(contentRoot);
+
+            return true;
+        }
+
+        public static bool CenterInParent(Transform contentRoot)
+        {
+            if (contentRoot == null || contentRoot.parent == null ||
+                !TryGetBounds(
                     contentRoot,
                     contentRoot.parent,
-                    out bounds))
+                    out Bounds bounds))
             {
-                contentRoot.localPosition -= bounds.center;
+                return false;
             }
 
+            contentRoot.localPosition -= bounds.center;
             return true;
         }
 

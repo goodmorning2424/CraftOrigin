@@ -272,6 +272,7 @@ namespace CraftOrigin.CraftLive
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
                 next.message = "Pad2で配置場所を選んでください。";
             });
+            CraftLiveAudio.Play(CraftLiveSound.MaterialSelect, 0.78f);
         }
 
         public void ChoosePlacementSlot(CraftLiveSlotId slot)
@@ -312,6 +313,7 @@ namespace CraftOrigin.CraftLive
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
                 next.message = "この場所に置きますか？";
             });
+            CraftLiveAudio.Play(CraftLiveSound.Select, 0.72f);
         }
 
         public void ClearPlacementChoice()
@@ -344,6 +346,7 @@ namespace CraftOrigin.CraftLive
                 next.placement.Clear();
                 next.message = "素材をタップしてください。";
             });
+            CraftLiveAudio.Play(CraftLiveSound.Cancel, 0.82f);
         }
 
         public void ConfirmPlacement()
@@ -385,6 +388,7 @@ namespace CraftOrigin.CraftLive
                 next.message =
                     $"転送待ちに追加しました（{next.transferQueue.Count}個）";
             });
+            CraftLiveAudio.Play(CraftLiveSound.Confirm, 0.86f);
         }
 
         public bool BeginSingleTransfer()
@@ -629,6 +633,7 @@ namespace CraftOrigin.CraftLive
                 next.weaponSelectionConfirmed = false;
                 next.message = $"{weapon.DisplayName}を選択しました。";
             });
+            CraftLiveAudio.Play(CraftLiveSound.Select, 0.76f);
         }
 
         public void ConfirmWeapon(CraftLiveWeaponDefinition weapon)
@@ -647,6 +652,7 @@ namespace CraftOrigin.CraftLive
                 PublishStatsToPad3(next);
                 next.message = $"{weapon.DisplayName}を合成対象に確定しました。";
             });
+            CraftLiveAudio.Play(CraftLiveSound.Confirm, 0.88f);
         }
 
         public void PublishCurrentStatsToPad3()
@@ -686,6 +692,7 @@ namespace CraftOrigin.CraftLive
                 next.craft.startedAtUnixMs = UnixNowMs();
                 next.message = "ぐるぐる合成を開始しました。";
             });
+            CraftLiveAudio.StartSynthesisLoop();
             return true;
         }
 
@@ -723,6 +730,7 @@ namespace CraftOrigin.CraftLive
                 next.message =
                     $"鍛錬 {next.craft.hammerPassCount}/{required}";
             });
+            CraftLiveAudio.Play(CraftLiveSound.HammerStrike, 0.94f);
 
             if (state.craft.hammerPassCount >= required)
             {
@@ -796,6 +804,8 @@ namespace CraftOrigin.CraftLive
 
                 next.message = $"合成{next.result.rank}！ {next.result.weaponName}が完成しました。";
             });
+            CraftLiveAudio.StopSynthesisLoop();
+            CraftLiveAudio.PlayForgeComplete();
         }
 
         public void BeginNextWeapon()
@@ -868,7 +878,8 @@ namespace CraftOrigin.CraftLive
                 next.result = selected.Clone();
                 next.sessionPhase =
                     CraftLiveSessionPhase.Finished;
-                next.message = $"武器コード {code}";
+                next.message =
+                    $"完成しました。次の部屋に進んでください。武器コード: {code}";
             });
             return true;
         }
@@ -904,6 +915,8 @@ namespace CraftOrigin.CraftLive
 
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
             next.registeredMaterialIds = registeredMaterialIds;
+            next.message =
+                "次のグループを開始します。武器を選んでください。";
             next.revision = state.revision + 1;
             next.updatedAtUnixMs = UnixNowMs();
             state = next;

@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -9,6 +10,14 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private CraftLiveSession session;
         [SerializeField] private CraftLivePad2Bindings bindings;
         [SerializeField] private bool createFallbackVisuals = true;
+        [SerializeField, Min(0f)] private float staffRestartDelaySeconds = 12f;
+        [Header("Text Readability")]
+        [SerializeField, Range(0.026f, 0.08f)]
+        [Tooltip("完成結果に表示する攻撃・防御・回避ラベルの文字サイズです。")]
+        private float resultStatLabelSize = 0.04f;
+        [SerializeField, Range(0.035f, 0.09f)]
+        [Tooltip("完成結果に表示する属性・技能行の文字サイズです。")]
+        private float resultTraitTextSize = 0.05f;
         [SerializeField] private UnityEvent<bool> onResultVisible;
         [SerializeField] private UnityEvent<string> onWeaponNameChanged;
         [SerializeField] private UnityEvent<string> onRankChanged;
@@ -25,6 +34,7 @@ namespace CraftOrigin.CraftLive
         private int displayedHistoryCount = -1;
         private CraftLiveSessionPhase displayedPhase =
             (CraftLiveSessionPhase)(-1);
+        private Coroutine staffRestartRoutine;
 
         private void Awake()
         {
@@ -48,6 +58,12 @@ namespace CraftOrigin.CraftLive
             {
                 session.StateChanged -= Refresh;
             }
+
+            if (staffRestartRoutine != null)
+            {
+                StopCoroutine(staffRestartRoutine);
+                staffRestartRoutine = null;
+            }
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -64,6 +80,11 @@ namespace CraftOrigin.CraftLive
         public void SelectFinalWeapon(int resultSerial)
         {
             session?.SelectFinalWeapon(resultSerial);
+        }
+
+        public void RestartForNextGroup()
+        {
+            session?.ResetRoomPreservingUnlocks();
         }
 
         private void ResolveReferences()
@@ -133,6 +154,12 @@ namespace CraftOrigin.CraftLive
 
         private void RebuildFallback(CraftLiveRoomState state)
         {
+            if (staffRestartRoutine != null)
+            {
+                StopCoroutine(staffRestartRoutine);
+                staffRestartRoutine = null;
+            }
+
             DestroySafely(generatedPanel);
             generatedPanel = null;
             if (bindings == null ||
@@ -179,12 +206,13 @@ namespace CraftOrigin.CraftLive
                 "鍛造完了",
                 new Vector3(0f, 2.53f, -0.72f),
                 0.069f);
-            CreateText(
+            TextMesh completedWeaponName = CreateText(
                 generatedPanel.transform,
                 "WeaponName",
                 EmptyFallback(result.weaponName),
                 new Vector3(-0.25f, 1.65f, -0.72f),
                 0.058f);
+            CraftLiveForgeUITheme.ApplyWeaponFont(completedWeaponName);
 
             CreateRankBadge(
                 generatedPanel.transform,
@@ -225,7 +253,7 @@ namespace CraftOrigin.CraftLive
                 $"属性  {EmptyFallback(result.attributeName)}     ◆     " +
                 $"技能  {EmptyFallback(result.skillName)}",
                 new Vector3(0f, 0f, -0.14f),
-                0.035f);
+                resultTraitTextSize);
             GameObject next = CreateButton(
                 generatedPanel.transform,
                 "NextWeapon",
@@ -296,21 +324,60 @@ namespace CraftOrigin.CraftLive
             CreateText(
                 generatedPanel.transform,
                 "Title",
-                "完成武器コード",
-                new Vector3(0f, 1.6f, -0.7f),
-                0.06f);
-            CreateText(
+                "次の部屋に進んでください",
+                new Vector3(0f, 2.35f, -0.7f),
+                0.052f);
+            TextMesh finalWeaponName = CreateText(
                 generatedPanel.transform,
                 "Weapon",
                 state.result.weaponName,
-                new Vector3(0f, 0.5f, -0.7f),
+                new Vector3(0f, 1.3f, -0.7f),
                 0.055f);
+            CraftLiveForgeUITheme.ApplyWeaponFont(finalWeaponName);
             CreateText(
                 generatedPanel.transform,
                 "Code",
                 state.finalWeaponCode,
-                new Vector3(0f, -0.8f, -0.7f),
+                new Vector3(0f, 0.15f, -0.7f),
                 0.085f);
+
+            GameObject restart = CreateButton(
+                generatedPanel.transform,
+                "StaffRestart",
+                "スタッフ専用\n次のグループを開始",
+                new Vector3(0f, -2.25f, -0.68f),
+                new Color(0.48f, 0.16f, 0.12f),
+                new Vector3(4.45f, 1.02f, 0.24f));
+            restart.GetComponent<CraftLiveWorldButton>()
+                .AddListener(RestartForNextGroup);
+
+            double elapsedSeconds = System.Math.Max(
+                0d,
+                (System.DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() -
+                 state.updatedAtUnixMs) / 1000d);
+            float remaining = Mathf.Max(
+                0f,
+                staffRestartDelaySeconds - (float)elapsedSeconds);
+            restart.SetActive(remaining <= 0f);
+            if (remaining > 0f)
+            {
+                staffRestartRoutine = StartCoroutine(
+                    RevealStaffRestart(restart, remaining));
+            }
+        }
+
+        private IEnumerator RevealStaffRestart(
+            GameObject restart,
+            float delaySeconds)
+        {
+            yield return new WaitForSecondsRealtime(delaySeconds);
+            if (restart != null &&
+                displayedPhase == CraftLiveSessionPhase.Finished)
+            {
+                restart.SetActive(true);
+            }
+
+            staffRestartRoutine = null;
         }
 
         private GameObject CreatePanel(string name)
@@ -475,7 +542,7 @@ namespace CraftOrigin.CraftLive
             return text;
         }
 
-        private static void CreateStatPlate(
+        private void CreateStatPlate(
             Transform parent,
             string name,
             string label,
@@ -495,7 +562,7 @@ namespace CraftOrigin.CraftLive
                 "Label",
                 label,
                 new Vector3(0f, 0.2f, -0.14f),
-                0.026f,
+                resultStatLabelSize,
                 CraftLiveForgeUITheme.MutedText);
             CreateText(
                 plate.transform,

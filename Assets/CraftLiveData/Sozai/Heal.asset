@@ -17,8 +17,9 @@ MonoBehaviour:
   description: "\u6BCE\u30BF\u30FC\u30F3\u4E00\u5B9A\u91CF\u3092\u81EA\u52D5\u3067\u56DE\u5FA9\u3057\u307E\u3059\u3002"
   category: 1
   requiresQrUnlock: 1
-  icon: {fileID: 21300000, guid: 6a149de17f18c374fb9f6bb6f6659611, type: 3}
-  worldPrefab: {fileID: 6417632151078121769, guid: 04a85f70882e55742b2a27e000839c98, type: 3}
+  icon: {fileID: 21300000, guid: caaee4a41c9e7374989897e310ceadd0, type: 3}
+  worldPrefab: {fileID: 6665158657117566682, guid: a5b0fafd0ef7852468fd6ac2c0ae7858, type: 3}
+  pad2PreviewRollDegrees: 0
   pad1PreviewOffset: {x: 0, y: 0, z: 0}
   pad1PreviewScale: 1
   pad1HologramColor: {r: 0.3509963, g: 0.9748427, b: 0.11342492, a: 1}
@@ -29,6 +30,11 @@ MonoBehaviour:
   landingAudioClip: {fileID: 0}
   abilitySummary: 
   usageSummary: 
+  pad4ParticlePrefab: {fileID: 0}
+  pad4ParticleLocalPosition: {x: 0, y: 0, z: 0}
+  pad4ParticleLocalEulerAngles: {x: 0, y: 0, z: 0}
+  pad4ParticleLocalScale: {x: 1, y: 1, z: 1}
+  tintPad4Particles: 1
   statModifiers:
     attackRate: 30
     defenseRate: 0

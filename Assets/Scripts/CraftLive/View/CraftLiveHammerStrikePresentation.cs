@@ -440,6 +440,8 @@ namespace CraftOrigin.CraftLive
                     Quaternion.Euler(hammerModelLocalEuler);
                 generatedHammer.transform.localScale =
                     hammerModelLocalScale;
+                CraftLiveForgeUITheme.EnsureCompatibleSurfaces(
+                    generatedHammer);
                 runtimeImpactPoint = FindChildRecursive(
                     generatedHammer.transform,
                     impactPointChildName);

@@ -17,18 +17,24 @@ MonoBehaviour:
   description: "\u5E78\u904B\u304C\u8A2A\u308C\u307E\u3059"
   category: 1
   requiresQrUnlock: 1
-  icon: {fileID: 21300000, guid: f27911b471f07f04b88ac1f4a25168e0, type: 3}
-  worldPrefab: {fileID: 6417632151078121769, guid: 04a85f70882e55742b2a27e000839c98, type: 3}
+  icon: {fileID: 21300000, guid: 83694caa8c595554cb540c5b1fa52853, type: 3}
+  worldPrefab: {fileID: 4345381393737786970, guid: 49502397822bba544a6fa0eab123b98f, type: 3}
+  pad2PreviewRollDegrees: 0
   pad1PreviewOffset: {x: 0, y: 0, z: 0}
   pad1PreviewScale: 1
-  pad1HologramColor: {r: 0.020904869, g: 0.9496855, b: 0.32700533, a: 1}
+  pad1HologramColor: {r: 0.9433962, g: 0.40643165, b: 0.7304373, a: 1}
   transferTicketPrefab: {fileID: 4572564761272917874, guid: 0a3bd35eb995e8f46a58c98cc3691c23, type: 3}
-  effectColor: {r: 0.020904869, g: 0.9496855, b: 0.32700533, a: 1}
+  effectColor: {r: 0.9559748, g: 0.4238755, b: 0.82431227, a: 1}
   placementEffectPrefab: {fileID: 0}
   materialForm: 1
   landingAudioClip: {fileID: 0}
   abilitySummary: 
   usageSummary: 
+  pad4ParticlePrefab: {fileID: 0}
+  pad4ParticleLocalPosition: {x: 0, y: 0, z: 0}
+  pad4ParticleLocalEulerAngles: {x: 0, y: 0, z: 0}
+  pad4ParticleLocalScale: {x: 1, y: 1, z: 1}
+  tintPad4Particles: 1
   statModifiers:
     attackRate: 0
     defenseRate: 0

@@ -795,7 +795,11 @@ namespace CraftOrigin.CraftLive
             foreach (Renderer renderer in
                      target.GetComponentsInChildren<Renderer>())
             {
-                foreach (Material material in renderer.materials)
+                // WebGL displays an unsupported/stripped shader as magenta.
+                // Repair the renderer before applying the per-material tint so
+                // every drop and persistent groove segment uses a URP shader.
+                CraftLiveForgeUITheme.EnsureCompatibleSurface(renderer);
+                foreach (Material material in renderer.sharedMaterials)
                 {
                     if (material != null &&
                         material.HasProperty("_EmissionColor"))

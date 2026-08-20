@@ -22,6 +22,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private bool overrideTubeColors;
         [SerializeField] private Vector3 tubeLabelLocalPosition =
             new Vector3(-2.85f, 0f, -0.5f);
+        [SerializeField, Range(0.03f, 0.12f)]
+        [Tooltip("攻撃力・防御力・回避率ラベルの文字サイズです。")]
+        private float tubeLabelCharacterSize = 0.065f;
         [Header("QR Button Layout")]
         [SerializeField] private Color qrButtonColor =
             new Color(0.9f, 0.27f, 0.075f, 1f);
@@ -386,7 +389,7 @@ namespace CraftOrigin.CraftLive
                     "Generated_TubeLabel",
                     label,
                     Vector3.zero,
-                    0.045f);
+                    tubeLabelCharacterSize);
                 PositionTubeLabel(tubeLabel, root);
             }
         }
@@ -555,6 +558,7 @@ namespace CraftOrigin.CraftLive
             bool newlyRegistered)
         {
             onScanningChanged?.Invoke(false);
+            CraftLiveAudio.Play(CraftLiveSound.RareReveal, 0.52f);
             if (session == null)
             {
                 return;
@@ -587,6 +591,7 @@ namespace CraftOrigin.CraftLive
         private void HandleScanFailed(string message)
         {
             onScanningChanged?.Invoke(false);
+            CraftLiveAudio.Play(CraftLiveSound.Cancel, 0.72f);
             SetFeedback(message);
         }
 

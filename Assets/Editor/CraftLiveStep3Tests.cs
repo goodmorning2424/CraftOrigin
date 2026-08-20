@@ -630,6 +630,7 @@ namespace CraftOrigin.CraftLiveTests
             paintingObject.transform.localScale =
                 new Vector3(0.8f, 0.9f, 1f);
             painting.CaptureRestingTransform();
+            SetField(painting, "movePaintingOnSelection", true);
             painting.Bind(null, material);
 
             CraftLiveRoomState state = new CraftLiveRoomState

@@ -97,6 +97,20 @@ namespace CraftOrigin.CraftLive
                 fixedHeaderWorldRotation);
         }
 
+        public void SetHeaderVisible(bool visible)
+        {
+            if (headerText == null)
+            {
+                return;
+            }
+
+            Renderer renderer = headerText.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                renderer.enabled = visible;
+            }
+        }
+
         public bool TryBind(
             CraftLivePad1GalleryController owner,
             CraftLiveMaterialCategory expectedCategory,

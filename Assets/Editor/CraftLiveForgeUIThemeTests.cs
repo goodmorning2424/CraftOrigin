@@ -18,7 +18,7 @@ namespace CraftOrigin.CraftLive.EditorTests
         }
 
         [Test]
-        public void StyleText_AddsOneSynchronizedUnderlay()
+        public void StyleText_UsesBoldTextWithoutOffsetUnderlay()
         {
             GameObject target = new GameObject("ThemeTextTest");
             try
@@ -37,11 +37,15 @@ namespace CraftOrigin.CraftLive.EditorTests
 
                 Assert.That(text.fontSize, Is.GreaterThanOrEqualTo(128));
                 Assert.That(text.fontStyle, Is.EqualTo(FontStyle.Bold));
-                Assert.That(text.characterSize, Is.EqualTo(0.04f));
-                Assert.That(target.transform.Find("ForgeUnderlay"), Is.Not.Null);
+                Assert.That(
+                    text.characterSize,
+                    Is.EqualTo(
+                        CraftLiveForgeUITheme.ScaleCharacterSize(
+                            0.08f)));
+                Assert.That(target.transform.Find("ForgeUnderlay"), Is.Null);
                 Assert.That(
                     target.GetComponentsInChildren<TextMesh>(true).Length,
-                    Is.EqualTo(2));
+                    Is.EqualTo(1));
             }
             finally
             {

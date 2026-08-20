@@ -2,6 +2,7 @@ using UnityEngine;
 
 namespace CraftOrigin.CraftLive
 {
+    [ExecuteAlways]
     public sealed class CraftLivePadSceneRoot : MonoBehaviour
     {
         [SerializeField] private CraftLiveRole role;
@@ -37,11 +38,12 @@ namespace CraftOrigin.CraftLive
         private void Start()
         {
             ApplySceneFont();
+            CraftLiveAudio.StartBackground(role);
         }
 
         private void LateUpdate()
         {
-            if (!applyFontToAllTextMeshes || sceneFont == null ||
+            if (!applyFontToAllTextMeshes ||
                 Time.unscaledTime < nextFontRefreshTime)
             {
                 return;
@@ -75,7 +77,7 @@ namespace CraftOrigin.CraftLive
         [ContextMenu("Apply Scene Font Now")]
         public void ApplySceneFont()
         {
-            if (!applyFontToAllTextMeshes || sceneFont == null ||
+            if (!applyFontToAllTextMeshes ||
                 !gameObject.scene.IsValid() || !gameObject.scene.isLoaded)
             {
                 return;
@@ -126,13 +128,27 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            if (text.font != sceneFont)
+            text.fontStyle = FontStyle.Bold;
+
+            if (sceneFont != null && text.font != sceneFont)
             {
                 text.font = sceneFont;
             }
+            else if (sceneFont == null)
+            {
+                CraftLiveForgeUITheme.ApplyBundledFont(text);
+            }
 
             Renderer textRenderer = text.GetComponent<Renderer>();
-            if (textRenderer != null && sceneFont.material != null &&
+            if (textRenderer != null)
+            {
+                textRenderer.shadowCastingMode =
+                    UnityEngine.Rendering.ShadowCastingMode.Off;
+                textRenderer.receiveShadows = false;
+            }
+
+            if (textRenderer != null && sceneFont != null &&
+                sceneFont.material != null &&
                 textRenderer.sharedMaterial != sceneFont.material)
             {
                 textRenderer.sharedMaterial = sceneFont.material;

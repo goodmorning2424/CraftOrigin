@@ -73,6 +73,24 @@ namespace CraftOrigin.CraftLive
         public CraftLiveGalleryWallSlider WallSlider => wallSlider;
         public Camera TargetCamera => targetCamera;
 
+        public void SetSpecialHeadersVisible(bool visible)
+        {
+            CraftLiveGalleryWallView[] walls =
+                FindObjectsByType<CraftLiveGalleryWallView>(
+                    FindObjectsInactive.Include);
+            foreach (CraftLiveGalleryWallView wall in walls)
+            {
+                if (wall == null ||
+                    (wall.Category != CraftLiveMaterialCategory.Skill &&
+                     wall.Category != CraftLiveMaterialCategory.Attribute))
+                {
+                    continue;
+                }
+
+                wall.SetHeaderVisible(visible);
+            }
+        }
+
         private void Awake()
         {
             ResolveReferences();
@@ -104,6 +122,8 @@ namespace CraftOrigin.CraftLive
             {
                 session.StateChanged -= HandleStateChanged;
             }
+
+            SetSpecialHeadersVisible(true);
         }
 
         public void Rebuild()
@@ -614,6 +634,10 @@ namespace CraftOrigin.CraftLive
                     0f);
             painting.transform.localRotation = Quaternion.identity;
             painting.CaptureRestingTransform();
+            // QR-unlocked paintings can come from differently configured
+            // prefabs. Keep every painting on the authored wall plane, just
+            // like the base materials, instead of moving it toward the camera.
+            painting.UseFixedGalleryPosition();
             painting.Bind(this, material);
             return painting;
         }

@@ -686,6 +686,7 @@ namespace CraftOrigin.CraftLive
             if (usingPhysicalLauncher)
             {
                 yield return AnimatePhysicalImpact();
+                PlayLaunchSound();
                 onLaunched?.Invoke();
                 yield return AnimateGrooveLaunch(
                     activeTicket.transform,
@@ -720,6 +721,7 @@ namespace CraftOrigin.CraftLive
             }
             else
             {
+                PlayLaunchSound();
                 onLaunched?.Invoke();
                 yield return AnimateCamera(true);
                 yield return AnimateLaunch(
@@ -811,6 +813,7 @@ namespace CraftOrigin.CraftLive
             yield return AnimateBatchLoad(tickets, starts, seats);
             session.MarkTransferLaunching();
             yield return AnimatePhysicalImpact();
+            PlayLaunchSound();
             onLaunched?.Invoke();
             yield return AnimateBatchLinear(
                 tickets,
@@ -880,6 +883,13 @@ namespace CraftOrigin.CraftLive
             {
                 Refresh(session.State);
             }
+        }
+
+        private static void PlayLaunchSound()
+        {
+            CraftLiveAudio.Play(
+                CraftLiveSound.TransferWhoosh,
+                0.95f);
         }
 
         private List<GameObject> CollectPhysicalBatchTickets(

@@ -113,12 +113,18 @@ namespace CraftOrigin.CraftLive
             GameObject ticket = CreateTicket(material, start);
             activeTicket = ticket;
             onLoadingStarted?.Invoke();
-            PlayOneShot(loadingClip);
+            if (!PlayOneShot(loadingClip))
+            {
+                CraftLiveAudio.Play(CraftLiveSound.SpringCompress, 0.72f);
+            }
             yield return AnimateLoading(ticket.transform, start, seat);
 
             session.MarkTransferLaunching();
             onLaunched?.Invoke();
             PlayOneShot(launchClip);
+            // Always play the bundled launch cue. Scene AudioSource fields
+            // are optional and were absent in the WebGL-generated launcher.
+            CraftLiveAudio.Play(CraftLiveSound.TransferWhoosh, 0.95f);
             yield return AnimateLaunch(ticket.transform, seat, end);
 
             Destroy(ticket);
@@ -229,12 +235,15 @@ namespace CraftOrigin.CraftLive
             return null;
         }
 
-        private void PlayOneShot(AudioClip clip)
+        private bool PlayOneShot(AudioClip clip)
         {
             if (audioSource != null && clip != null)
             {
                 audioSource.PlayOneShot(clip);
+                return true;
             }
+
+            return false;
         }
 
         private void RestoreMechanism()
