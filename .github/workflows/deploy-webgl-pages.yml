@@ -24,6 +24,17 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Free disk space for Unity WebGL
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /usr/local/.ghcup
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          docker system prune --all --force
+          df -h /
+
       - name: Restore Unity Library cache
         uses: actions/cache@v4
         with:
