@@ -33,7 +33,7 @@ namespace CraftOrigin.CraftLive
 
         public void ResetRoom()
         {
-            session?.ResetRoomPreservingUnlocks();
+            session?.ResetRoomForNextGroup();
         }
     }
 }

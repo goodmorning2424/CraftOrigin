@@ -123,15 +123,12 @@ namespace CraftOrigin.CraftLive
 
         private void RestartExpiredEmptySession()
         {
-            List<string> registered =
-                new List<string>(state.registeredMaterialIds);
             long previousRevision = state.revision;
             long now = UnixNowMs();
             long durationMs = Mathf.RoundToInt(
                 (rules != null ? rules.SessionDurationSeconds : 300f) *
                 1000f);
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
-            next.registeredMaterialIds = registered;
             next.sessionStartedAtUnixMs = now;
             next.sessionEndsAtUnixMs = now + durationMs;
             next.sessionPhase = CraftLiveSessionPhase.Playing;
@@ -908,13 +905,13 @@ namespace CraftOrigin.CraftLive
             });
         }
 
-        public void ResetRoomPreservingUnlocks()
+        /// <summary>
+        /// Starts a fresh group. QR registrations are intentionally scoped to
+        /// the current group and must not unlock materials for the next one.
+        /// </summary>
+        public void ResetRoomForNextGroup()
         {
-            List<string> registeredMaterialIds =
-                new List<string>(state.registeredMaterialIds);
-
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
-            next.registeredMaterialIds = registeredMaterialIds;
             next.message =
                 "次のグループを開始します。武器を選んでください。";
             next.revision = state.revision + 1;

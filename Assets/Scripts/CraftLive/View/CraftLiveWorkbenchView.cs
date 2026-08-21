@@ -83,7 +83,7 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            RefreshWeapon(state.selectedWeaponId);
+            RefreshWeapon(state);
             RefreshSlot(state, CraftLiveSlotId.Attribute);
             RefreshSlot(state, CraftLiveSlotId.Skill);
             RefreshSlot(state, CraftLiveSlotId.Top);
@@ -246,8 +246,16 @@ namespace CraftOrigin.CraftLive
             materialVisual.localScale = originalScale;
         }
 
-        private void RefreshWeapon(string weaponId)
+        private void RefreshWeapon(CraftLiveRoomState state)
         {
+            // The selected workpiece belongs to the forging phase. Leaving it
+            // active under the result board makes it appear to pierce the
+            // completion UI, so remove it before presenting the result.
+            bool shouldShowWeapon = state.craft.status !=
+                CraftLiveCraftStatus.Complete;
+            string weaponId = shouldShowWeapon
+                ? state.selectedWeaponId
+                : string.Empty;
             if (displayedWeaponId == weaponId)
             {
                 return;
@@ -259,6 +267,12 @@ namespace CraftOrigin.CraftLive
             }
 
             displayedWeaponId = weaponId;
+            weaponObject = null;
+            if (!shouldShowWeapon || string.IsNullOrWhiteSpace(weaponId))
+            {
+                return;
+            }
+
             CraftLiveWeaponDefinition weapon =
                 session.Catalog != null ? session.Catalog.FindWeapon(weaponId) : null;
             if (weaponAnchor == null)

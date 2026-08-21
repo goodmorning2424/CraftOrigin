@@ -1555,7 +1555,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1597,7 +1597,7 @@ TextMesh:
   m_FontSize: 64
   m_FontStyle: 1
   m_RichText: 1
-  m_Font: {fileID: 0}
+  m_Font: {fileID: 12800000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_Color:
     serializedVersion: 2
     rgba: 4294967295
@@ -1637,7 +1637,7 @@ TextMesh:
   m_FontSize: 64
   m_FontStyle: 1
   m_RichText: 1
-  m_Font: {fileID: 0}
+  m_Font: {fileID: 12800000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_Color:
     serializedVersion: 2
     rgba: 4294967295
@@ -1666,7 +1666,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -1980,7 +1980,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -2022,7 +2022,7 @@ TextMesh:
   m_FontSize: 40
   m_FontStyle: 1
   m_RichText: 1
-  m_Font: {fileID: 0}
+  m_Font: {fileID: 12800000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_Color:
     serializedVersion: 2
     rgba: 4294967295
@@ -3347,7 +3347,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -3389,7 +3389,7 @@ TextMesh:
   m_FontSize: 64
   m_FontStyle: 1
   m_RichText: 1
-  m_Font: {fileID: 0}
+  m_Font: {fileID: 12800000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_Color:
     serializedVersion: 2
     rgba: 4294967295
@@ -3486,7 +3486,7 @@ TextMesh:
   m_FontSize: 64
   m_FontStyle: 1
   m_RichText: 1
-  m_Font: {fileID: 0}
+  m_Font: {fileID: 12800000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_Color:
     serializedVersion: 2
     rgba: 4294967295
@@ -3515,7 +3515,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 10100, guid: 0000000000000000e000000000000000, type: 0}
+  - {fileID: 2100000, guid: 42bafd3c5e6f7081a2b3c4d5e6f71829, type: 3}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -4092,23 +4092,24 @@ MonoBehaviour:
   bindings: {fileID: 1760931043}
   useMaterialWorldPrefab: 1
   createPlaceholderWhenMissing: 1
-  targetModelSize: 0.5
+  targetModelSize: 0.33
   modelPositionOffset: {x: 0, y: 0, z: 0}
+  modelViewportPosition: {x: 0.5, y: 0.82}
   modelRotation: {x: 10, y: -20, z: 0}
   modelCameraApproach: 0.55
   spinDegreesPerSecond: 60
   revealDuration: 0.28
   createFallbackHologram: 1
   hologramColor: {r: 1, g: 0.22478205, b: 0, a: 1}
-  hologramPanelOpacity: 0.51
-  hologramBorderGlow: 1.84
-  hologramBorderThickness: 0.0286
-  hologramPanelSizeMultiplier: {x: 10, y: 6}
+  hologramPanelOpacity: 0.22
+  hologramBorderGlow: 1.09
+  hologramBorderThickness: 0.014
+  hologramPanelSizeMultiplier: {x: 3, y: 1}
   hologramCameraApproach: 0.85
   hologramSortingOrder: 20
-  hologramGroupScale: 2
+  hologramGroupScale: 0.9
   hologramGroupPositionOffset: {x: 0, y: 0, z: 0}
-  hologramScreenMargin: 0.199
+  hologramScreenMargin: 0.05
   displayAreaTopLeft: {fileID: 616100962}
   displayAreaTopRight: {fileID: 1983318098}
   displayAreaBottomRight: {fileID: 585368001}
@@ -4117,14 +4118,16 @@ MonoBehaviour:
   displayAreaDepthOffset: 0.76
   displayAreaGizmoColor: {r: 0.1, g: 0.9, b: 1, a: 0.8}
   hologramFont: {fileID: 0}
-  hologramGeneratedFontSize: 256
-  hologramMaxCharacterSize: 0.0409
+  hologramGeneratedFontSize: 125
+  hologramMaxCharacterSize: 0.028
   hologramTextColor: {r: 1, g: 0.99056596, b: 0.99056596, a: 1}
   createTransferButton: 0
   allowTransferWithoutPlacementForPlayTest: 1
   transferButtonHeight: 0.32
   createReturnButton: 1
   hologramButtonOpacity: 0.3
+  returnButtonSize: {x: 0.55, y: 0.18}
+  returnButtonPositionOffset: {x: 0, y: 0, z: 0}
   buttonFontSize: 256
   buttonTextSize: 0.37
   dismissOnOutsideTap: 0
@@ -4182,7 +4185,7 @@ MonoBehaviour:
   paintingSpacing: 2.35
   visiblePaintings: 2
   dragSensitivity: 0.012
-  mouseWheelStep: 0.5
+  mouseWheelStep: 0.1
   paintingSize: {x: 2.15, y: 1.72}
   fitToWallBounds: 1
   wallHorizontalPadding: 0.15

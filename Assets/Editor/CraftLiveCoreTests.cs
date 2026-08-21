@@ -301,7 +301,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void ResetRoom_PreservesPermanentRegistrations()
+        public void ResetRoomForNextGroup_ClearsQrRegistrations()
         {
             CraftLiveMaterialDefinition material = CreateMaterial(
                 "fire",
@@ -312,9 +312,10 @@ namespace CraftOrigin.CraftLiveTests
             CraftLiveSession session = CreateSession(catalog);
             session.UnlockMaterialId("fire");
 
-            session.ResetRoomPreservingUnlocks();
+            session.ResetRoomForNextGroup();
 
-            Assert.That(session.State.HasMaterialRegistered("fire"), Is.True);
+            Assert.That(session.State.HasMaterialRegistered("fire"), Is.False);
+            Assert.That(session.State.registeredMaterialIds, Is.Empty);
             Assert.That(
                 session.State.schemaVersion,
                 Is.EqualTo(CraftLiveRoomState.CurrentSchemaVersion));

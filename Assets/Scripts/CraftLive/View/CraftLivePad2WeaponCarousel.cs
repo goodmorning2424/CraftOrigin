@@ -407,8 +407,7 @@ namespace CraftOrigin.CraftLive
 
             if (centerWeapon != null)
             {
-                centerWeapon.SetActive(
-                    state.weaponSelectionConfirmed);
+                centerWeapon.SetActive(ShouldShowCenterWeapon(state));
             }
 
             if (changeWeaponButton != null)
@@ -618,8 +617,16 @@ namespace CraftOrigin.CraftLive
             centerWeapon.transform.localPosition = Vector3.zero;
             centerWeapon.SetActive(
                 session != null &&
-                session.State != null &&
-                session.State.weaponSelectionConfirmed);
+                ShouldShowCenterWeapon(session.State));
+        }
+
+        private static bool ShouldShowCenterWeapon(
+            CraftLiveRoomState state)
+        {
+            return state != null &&
+                   state.sessionPhase == CraftLiveSessionPhase.Playing &&
+                   state.craft.status != CraftLiveCraftStatus.Complete &&
+                   state.weaponSelectionConfirmed;
         }
 
         private void EnsureChangeWeaponButton()

@@ -516,7 +516,7 @@ MonoBehaviour:
   targetCamera: {fileID: 1263749525}
   targetFrameRate: 30
   targetAspect: {x: 3, y: 4}
-  letterboxCamera: 1
+  letterboxCamera: 0
   respectSafeArea: 1
   onPortraitChanged:
     m_PersistentCalls:

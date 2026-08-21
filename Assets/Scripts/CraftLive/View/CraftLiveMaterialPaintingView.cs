@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.Events;
@@ -49,6 +50,8 @@ namespace CraftOrigin.CraftLive
         private Vector3 iconBaseScale;
         private CraftLiveGalleryColumn owningColumn;
         private float nextAllowedSelectTime;
+        private readonly Dictionary<Renderer, int> restingSortingOrders =
+            new Dictionary<Renderer, int>();
 
         public CraftLiveMaterialDefinition Material => material;
         public bool Interactable => interactable;
@@ -66,6 +69,7 @@ namespace CraftOrigin.CraftLive
             restingPosition = movingRoot.localPosition;
             restingScale = movingRoot.localScale;
             CaptureIconLayout();
+            CaptureSortingOrders();
             owningColumn = GetComponentInParent<CraftLiveGalleryColumn>();
         }
 
@@ -85,6 +89,7 @@ namespace CraftOrigin.CraftLive
             fallbackStateText = stateText;
             restingPosition = movingRoot.localPosition;
             restingScale = movingRoot.localScale;
+            CaptureSortingOrders();
         }
 
         public void CaptureRestingTransform()
@@ -212,6 +217,7 @@ namespace CraftOrigin.CraftLive
             }
 
             ApplyColor(color, selected);
+            ApplyPreviewSorting(selected);
             RefreshColliders();
         }
 
@@ -321,6 +327,44 @@ namespace CraftOrigin.CraftLive
                     "_EmissionColor",
                     selected ? color * 0.45f : Color.black);
                 targetRenderer.SetPropertyBlock(block);
+            }
+        }
+
+        private void CaptureSortingOrders()
+        {
+            Renderer[] renderers = tintRenderers != null &&
+                tintRenderers.Length > 0
+                ? tintRenderers
+                : GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer != null &&
+                    (renderer.transform == transform ||
+                     renderer.transform.IsChildOf(transform)) &&
+                    !restingSortingOrders.ContainsKey(renderer))
+                {
+                    restingSortingOrders.Add(renderer, renderer.sortingOrder);
+                }
+            }
+        }
+
+        private void ApplyPreviewSorting(bool selected)
+        {
+            foreach (KeyValuePair<Renderer, int> entry in
+                     restingSortingOrders)
+            {
+                Renderer renderer = entry.Key;
+                if (renderer == null)
+                {
+                    continue;
+                }
+
+                int restingOrder = entry.Value;
+                // Sprite-based paintings can otherwise be drawn after the
+                // generated 3D preview even when they are physically behind it.
+                renderer.sortingOrder = selected
+                    ? restingOrder - 100
+                    : restingOrder;
             }
         }
 

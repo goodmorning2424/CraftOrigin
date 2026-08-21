@@ -34,6 +34,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField]
         [Tooltip("全素材モデルへ共通で加えるローカル位置補正です。")]
         private Vector3 modelPositionOffset = Vector3.zero;
+        [SerializeField]
+        [Tooltip("素材モデルの画面内位置。中央より少し上を既定にします。")]
+        private Vector2 modelViewportPosition = new Vector2(0.5f, 0.82f);
         [SerializeField] private Vector3 modelRotation =
             new Vector3(10f, -20f, 0f);
         [SerializeField, Min(0f)] private float modelCameraApproach = 0.55f;
@@ -112,6 +115,11 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private bool createReturnButton = true;
         [SerializeField, Range(0.05f, 0.8f)]
         private float hologramButtonOpacity = 0.3f;
+        [Header("Return Button")]
+        [SerializeField]
+        [Tooltip("説明パネルの実寸に対する戻るボタンの幅・高さ比です。")]
+        private Vector2 returnButtonSize = new Vector2(0.55f, 0.18f);
+        [SerializeField] private Vector3 returnButtonPositionOffset;
 
         [Header("Button Text")]
         [FormerlySerializedAs("transferButtonFontSize")]
@@ -277,6 +285,10 @@ namespace CraftOrigin.CraftLive
             if (fallbackHologram != null)
             {
                 fallbackHologram.SetActive(false);
+            }
+            if (fallbackReturnButton != null)
+            {
+                fallbackReturnButton.gameObject.SetActive(false);
             }
         }
 
@@ -502,8 +514,8 @@ namespace CraftOrigin.CraftLive
                     hologramTextColor);
                 fallbackText.fontSize = Mathf.Clamp(
                     hologramGeneratedFontSize,
-                    256,
-                    512);
+                    8,
+                    256);
                 SetRendererSortingOrder(
                     fallbackText.GetComponent<Renderer>(),
                     hologramSortingOrder + 2);
@@ -539,6 +551,10 @@ namespace CraftOrigin.CraftLive
             }
 
             fallbackHologram.SetActive(true);
+            if (fallbackReturnButton != null)
+            {
+                fallbackReturnButton.gameObject.SetActive(createReturnButton);
+            }
             Camera presentationCamera = ResolvePresentationCamera();
             Transform resolvedAnchor = ResolveSelectionAnchorById(
                 displayedMaterialId);
@@ -641,12 +657,12 @@ namespace CraftOrigin.CraftLive
                     anchorViewport);
             }
 
-            Vector3 towardCamera =
-                presentationCamera.transform.position - anchorPosition;
-            Vector3 modelPosition = towardCamera.sqrMagnitude > 0.0001f
-                ? anchorPosition +
-                  towardCamera.normalized * modelCameraApproach
-                : anchorPosition;
+            Vector3 modelPosition = presentationCamera.ViewportToWorldPoint(
+                new Vector3(
+                    Mathf.Clamp(modelViewportPosition.x, 0.05f, 0.95f),
+                    Mathf.Clamp(modelViewportPosition.y, 0.05f, 0.95f),
+                    Mathf.Max(minimumDepth,
+                        anchorDepth - modelCameraApproach)));
             if (modelRoot != null)
             {
                 modelRoot.SetPositionAndRotation(
@@ -667,13 +683,12 @@ namespace CraftOrigin.CraftLive
                         ? displayAreaDepth - displayAreaDepthOffset
                         : anchorDepth - hologramCameraApproach) +
                     hologramGroupPositionOffset.z);
-                float hologramX = anchorViewport.x <= 0.5f
-                    ? 0.76f
-                    : 0.24f;
-                float hologramY = Mathf.Clamp(
-                    anchorViewport.y,
-                    0.38f,
-                    0.62f);
+                float hologramX = modelViewportPosition.x <= 0.5f
+                    ? 0.78f
+                    : 0.22f;
+                float hologramY = modelViewportPosition.y >= 0.5f
+                    ? 0.2f
+                    : 0.7f;
                 Vector3 desiredPosition =
                     presentationCamera.ViewportToWorldPoint(
                         new Vector3(
@@ -692,16 +707,14 @@ namespace CraftOrigin.CraftLive
                 ResizeFallbackHologram(
                     presentationCamera,
                     hologramDepth);
-                float fittedGroupScale = hasDisplayArea
-                    ? FitHologramGroupInsideDisplayArea(
-                        presentationCamera,
-                        hologramDepth,
-                        displayAreaViewport,
-                        ref desiredViewport)
-                    : FitHologramGroupInsideScreen(
-                        presentationCamera,
-                        hologramDepth,
-                        ref desiredViewport);
+                // The scene's four display anchors describe the gallery, not
+                // a safe detail panel region. On portrait displays they pull
+                // the panel into the model, so fit against the active camera
+                // viewport instead.
+                float fittedGroupScale = FitHologramGroupInsideScreen(
+                    presentationCamera,
+                    hologramDepth,
+                    ref desiredViewport);
                 Vector3 hologramPosition =
                     presentationCamera.ViewportToWorldPoint(
                         desiredViewport);
@@ -719,9 +732,8 @@ namespace CraftOrigin.CraftLive
                         presentationCamera,
                         hologramRoot,
                         hologramDepth,
-                        hasDisplayArea
-                            ? displayAreaViewport
-                            : null);
+                        null);
+                    PositionReturnButton();
                 }
             }
 
@@ -1154,6 +1166,124 @@ namespace CraftOrigin.CraftLive
             }
         }
 
+        private void KeepHologramClearOfPreviewModel(
+            Camera presentationCamera,
+            Transform hologramRoot,
+            float depth,
+            Vector2[] displayArea)
+        {
+            if (presentationCamera == null || hologramRoot == null ||
+                fallbackHologram == null || spawnedModel == null)
+            {
+                return;
+            }
+
+            const float gap = 0.025f;
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                if (!TryGetViewportBounds(
+                        presentationCamera,
+                        spawnedModel,
+                        out Rect modelBounds))
+                {
+                    return;
+                }
+
+                Vector3 rootViewport =
+                    presentationCamera.WorldToViewportPoint(
+                        hologramRoot.position);
+                if (!TryGetViewportBounds(
+                        presentationCamera,
+                        fallbackHologram,
+                        out Rect hologramBounds) ||
+                    !modelBounds.Overlaps(hologramBounds))
+                {
+                    return;
+                }
+
+                float moveLeft = modelBounds.xMin - gap -
+                    hologramBounds.xMax;
+                float moveRight = modelBounds.xMax + gap -
+                    hologramBounds.xMin;
+                float horizontalMove = Mathf.Abs(moveLeft) <
+                    Mathf.Abs(moveRight)
+                    ? moveLeft
+                    : moveRight;
+                rootViewport.x += horizontalMove;
+                rootViewport.z = depth;
+                hologramRoot.SetPositionAndRotation(
+                    presentationCamera.ViewportToWorldPoint(rootViewport),
+                    presentationCamera.transform.rotation);
+                ConstrainRenderedHologramInsideVisibleArea(
+                    presentationCamera,
+                    hologramRoot,
+                    depth,
+                    displayArea);
+            }
+        }
+
+        private static bool TryGetViewportBounds(
+            Camera presentationCamera,
+            GameObject target,
+            out Rect viewportBounds)
+        {
+            viewportBounds = default;
+            if (presentationCamera == null || target == null)
+            {
+                return false;
+            }
+
+            bool hasPoint = false;
+            float minimumX = float.PositiveInfinity;
+            float maximumX = float.NegativeInfinity;
+            float minimumY = float.PositiveInfinity;
+            float maximumY = float.NegativeInfinity;
+            foreach (Renderer renderer in
+                     target.GetComponentsInChildren<Renderer>(false))
+            {
+                if (renderer == null || !renderer.enabled)
+                {
+                    continue;
+                }
+
+                Bounds bounds = renderer.bounds;
+                for (int corner = 0; corner < 8; corner++)
+                {
+                    Vector3 point = new Vector3(
+                        (corner & 1) == 0
+                            ? bounds.min.x : bounds.max.x,
+                        (corner & 2) == 0
+                            ? bounds.min.y : bounds.max.y,
+                        (corner & 4) == 0
+                            ? bounds.min.z : bounds.max.z);
+                    Vector3 viewport =
+                        presentationCamera.WorldToViewportPoint(point);
+                    if (viewport.z <= 0.001f)
+                    {
+                        continue;
+                    }
+
+                    hasPoint = true;
+                    minimumX = Mathf.Min(minimumX, viewport.x);
+                    maximumX = Mathf.Max(maximumX, viewport.x);
+                    minimumY = Mathf.Min(minimumY, viewport.y);
+                    maximumY = Mathf.Max(maximumY, viewport.y);
+                }
+            }
+
+            if (!hasPoint)
+            {
+                return false;
+            }
+
+            viewportBounds = Rect.MinMaxRect(
+                minimumX,
+                minimumY,
+                maximumX,
+                maximumY);
+            return true;
+        }
+
         private List<Vector2> CollectRenderedViewportOffsets(
             Camera presentationCamera,
             Vector3 rootViewport)
@@ -1509,8 +1639,8 @@ namespace CraftOrigin.CraftLive
                 hologramTextColor);
             fallbackTransferButtonText.fontSize = Mathf.Clamp(
                 buttonFontSize,
-                256,
-                512);
+                8,
+                256);
             SetRendererSortingOrder(
                 fallbackTransferButtonText.GetComponent<Renderer>(),
                 hologramSortingOrder + 4);
@@ -1532,7 +1662,9 @@ namespace CraftOrigin.CraftLive
                 PrimitiveType.Cube);
             button.name = "ReturnButton";
             button.transform.SetParent(
-                fallbackHologram.transform,
+                bindings != null && bindings.HologramInfoRoot != null
+                    ? bindings.HologramInfoRoot
+                    : fallbackHologram.transform,
                 false);
             fallbackReturnButton = button.transform;
             fallbackReturnButtonRenderer =
@@ -1566,16 +1698,14 @@ namespace CraftOrigin.CraftLive
                 hologramTextColor);
             fallbackReturnButtonText.fontSize = Mathf.Clamp(
                 buttonFontSize,
-                256,
-                512);
+                8,
+                256);
             fallbackReturnButtonText.text = "戻る";
             SetRendererSortingOrder(
                 fallbackReturnButtonText.GetComponent<Renderer>(),
                 hologramSortingOrder + 4);
 
-            ResizeTransferButton(
-                fallbackPanelWidth,
-                fallbackPanelHeight);
+            PositionReturnButton();
         }
 
         private void ResizeTransferButton(
@@ -1588,10 +1718,13 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            float panelScale = fallbackHologram != null
+                ? Mathf.Max(0.001f, fallbackHologram.transform.lossyScale.x)
+                : 1f;
             float height = Mathf.Min(
                 transferButtonHeight,
                 panelHeight * 0.22f);
-            bool showBoth = createTransferButton && createReturnButton;
+            bool showBoth = false;
             float width = Mathf.Clamp(
                 panelWidth * (showBoth ? 0.36f : 0.68f),
                 panelWidth * 0.28f,
@@ -1604,15 +1737,6 @@ namespace CraftOrigin.CraftLive
                     y,
                     -0.055f);
                 fallbackTransferButton.localScale =
-                    new Vector3(width, height, 0.055f);
-            }
-            if (fallbackReturnButton != null)
-            {
-                fallbackReturnButton.localPosition = new Vector3(
-                    showBoth ? -panelWidth * 0.21f : 0f,
-                    y,
-                    -0.055f);
-                fallbackReturnButton.localScale =
                     new Vector3(width, height, 0.055f);
             }
             if (fallbackTransferButtonText != null)
@@ -1629,8 +1753,83 @@ namespace CraftOrigin.CraftLive
                     CraftLiveForgeUITheme.ScaleCharacterSize(
                         Mathf.Max(
                             0.01f,
-                            height * buttonTextSize));
+                            fallbackPanelHeight * panelScale *
+                            returnButtonSize.y * buttonTextSize));
             }
+        }
+
+        private void PositionReturnButton()
+        {
+            if (fallbackReturnButton == null || fallbackHologram == null ||
+                fallbackPanel == null)
+            {
+                return;
+            }
+
+            float panelScale = Mathf.Max(
+                0.001f,
+                fallbackHologram.transform.lossyScale.x);
+            float width = Mathf.Max(
+                0.05f,
+                fallbackPanelWidth * panelScale * returnButtonSize.x);
+            float height = Mathf.Max(
+                0.05f,
+                fallbackPanelHeight * panelScale * returnButtonSize.y);
+            Vector3 panelLocalPosition = new Vector3(
+                0f,
+                -fallbackPanelHeight * 0.5f - height * 0.72f,
+                -0.08f);
+            fallbackReturnButton.position =
+                fallbackHologram.transform.TransformPoint(panelLocalPosition) +
+                fallbackHologram.transform.TransformVector(
+                    returnButtonPositionOffset);
+            fallbackReturnButton.rotation = fallbackHologram.transform.rotation;
+            fallbackReturnButton.localScale =
+                new Vector3(width, height, 0.055f);
+            if (fallbackReturnButtonText != null)
+            {
+                fallbackReturnButtonText.transform.localScale = new Vector3(
+                    1f / width,
+                    1f / height,
+                    1f);
+                fallbackReturnButtonText.characterSize =
+                    CraftLiveForgeUITheme.ScaleCharacterSize(
+                        Mathf.Max(0.01f, height * buttonTextSize));
+                fallbackReturnButtonText.text = "戻る";
+                FitReturnButtonTextToButtonBounds();
+            }
+        }
+
+        private void FitReturnButtonTextToButtonBounds()
+        {
+            if (fallbackReturnButton == null ||
+                fallbackReturnButtonText == null)
+            {
+                return;
+            }
+
+            Renderer buttonRenderer =
+                fallbackReturnButton.GetComponent<Renderer>();
+            Renderer textRenderer =
+                fallbackReturnButtonText.GetComponent<Renderer>();
+            if (buttonRenderer == null || textRenderer == null)
+            {
+                return;
+            }
+
+            Vector3 buttonSize = buttonRenderer.bounds.size;
+            Vector3 textSize = textRenderer.bounds.size;
+            if (textSize.x <= Mathf.Epsilon || textSize.y <= Mathf.Epsilon)
+            {
+                return;
+            }
+
+            float fit = Mathf.Min(
+                1f,
+                buttonSize.x * 0.78f / textSize.x,
+                buttonSize.y * 0.62f / textSize.y);
+            fallbackReturnButtonText.characterSize *=
+                Mathf.Clamp(fit, 0.02f, 1f);
         }
 
         private Transform CreateHologramBorderEdge(
@@ -1709,16 +1908,18 @@ namespace CraftOrigin.CraftLive
                 return null;
             }
 
-            // Do not switch this large panel to a transparent shader variant
-            // at runtime. WebGL can strip that variant and render the panel as
-            // an opaque white rectangle. A dark opaque face is reliable while
-            // the transparent border still provides the hologram glow.
-            material.renderQueue = (int)RenderQueue.Geometry;
-            material.SetOverrideTag("RenderType", "Opaque");
-            material.SetFloat("_Surface", 0f);
+            // Match the border's Resources-backed unlit material so the panel
+            // reliably renders its tint as well as its transparency.
+            material.renderQueue = (int)RenderQueue.Transparent;
+            material.SetOverrideTag("RenderType", "Transparent");
+            material.SetFloat("_Surface", 1f);
             material.SetFloat("_Blend", 0f);
-            material.SetFloat("_ZWrite", 1f);
-            material.DisableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            material.SetFloat("_SrcBlend", (float)BlendMode.SrcAlpha);
+            material.SetFloat(
+                "_DstBlend",
+                (float)BlendMode.OneMinusSrcAlpha);
+            material.SetFloat("_ZWrite", 0f);
+            material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
             material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             material.SetShaderPassEnabled("ShadowCaster", false);
             return material;
@@ -1753,8 +1954,10 @@ namespace CraftOrigin.CraftLive
             Color panelColor = Color.Lerp(
                 new Color(0.008f, 0.014f, 0.022f, 1f),
                 themeColor,
-                Mathf.Clamp01(hologramPanelOpacity) * 0.32f);
-            panelColor.a = 1f;
+                0.65f);
+            // Tint strength and transparency must be independent. Multiplying
+            // both by opacity attenuates the visible hue twice.
+            panelColor.a = hologramPanelOpacity;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
 
             Color borderColor = themeColor;
@@ -1813,7 +2016,7 @@ namespace CraftOrigin.CraftLive
             if (fallbackTransferButtonText != null)
             {
                 ApplyFont(fallbackTransferButtonText);
-                fallbackTransferButtonText.fontSize = 128;
+                fallbackTransferButtonText.fontSize = buttonFontSize;
                 fallbackTransferButtonText.color = interactable
                     ? hologramTextColor
                     : new Color(0.42f, 0.42f, 0.42f, 1f);
@@ -1855,7 +2058,7 @@ namespace CraftOrigin.CraftLive
             if (fallbackReturnButtonText != null)
             {
                 ApplyFont(fallbackReturnButtonText);
-                fallbackReturnButtonText.fontSize = 128;
+                fallbackReturnButtonText.fontSize = buttonFontSize;
                 fallbackReturnButtonText.color = hologramTextColor;
                 fallbackReturnButtonText.text = "戻る";
             }
@@ -2114,8 +2317,8 @@ namespace CraftOrigin.CraftLive
             ApplyFont(fallbackText);
             fallbackText.fontSize = Mathf.Clamp(
                 hologramGeneratedFontSize,
-                256,
-                512);
+                8,
+                256);
             fallbackText.color = hologramTextColor;
             fallbackText.characterSize =
                 CraftLiveForgeUITheme.ScaleCharacterSize(
@@ -2129,6 +2332,34 @@ namespace CraftOrigin.CraftLive
             fallbackText.text = wrapped;
             fallbackText.transform.localPosition =
                 new Vector3(0f, 0f, -0.06f);
+            FitHologramTextToPanelBounds();
+        }
+
+        private void FitHologramTextToPanelBounds()
+        {
+            if (fallbackText == null || fallbackPanelRenderer == null)
+            {
+                return;
+            }
+
+            Renderer textRenderer = fallbackText.GetComponent<Renderer>();
+            if (textRenderer == null)
+            {
+                return;
+            }
+
+            Vector3 panelSize = fallbackPanelRenderer.bounds.size;
+            Vector3 textSize = textRenderer.bounds.size;
+            if (textSize.x <= 0.0001f || textSize.y <= 0.0001f)
+            {
+                return;
+            }
+
+            float fit = Mathf.Min(
+                1f,
+                panelSize.x * 0.82f / textSize.x,
+                panelSize.y * 0.76f / textSize.y);
+            fallbackText.characterSize *= Mathf.Clamp(fit, 0.05f, 1f);
         }
 
         private void ApplyFont(TextMesh textMesh)
@@ -2206,6 +2437,11 @@ namespace CraftOrigin.CraftLive
             {
                 target.localPosition = finalPosition;
                 target.localScale = finalScale;
+                // The model has reached its full size now; recalculate only
+                // the panel position using the final rendered bounds.
+                PositionPresentationRoots(
+                    ResolvePresentationCamera(),
+                    ResolveSelectionAnchorById(displayedMaterialId));
                 CraftLiveAudio.Play(CraftLiveSound.PaintingImpact, 0.55f);
             }
 
@@ -2533,6 +2769,14 @@ namespace CraftOrigin.CraftLive
         {
             targetModelSize = Mathf.Clamp(targetModelSize, 0.1f, 3f);
             modelCameraApproach = Mathf.Max(0f, modelCameraApproach);
+            modelViewportPosition.x = Mathf.Clamp(
+                modelViewportPosition.x,
+                0.05f,
+                0.95f);
+            modelViewportPosition.y = Mathf.Clamp(
+                modelViewportPosition.y,
+                0.05f,
+                0.95f);
             hologramPanelOpacity = Mathf.Clamp(
                 hologramPanelOpacity,
                 0.05f,
@@ -2574,8 +2818,8 @@ namespace CraftOrigin.CraftLive
                 3f);
             hologramGeneratedFontSize = Mathf.Clamp(
                 hologramGeneratedFontSize,
-                256,
-                512);
+                8,
+                256);
             hologramMaxCharacterSize = Mathf.Clamp(
                 hologramMaxCharacterSize,
                 0.008f,
@@ -2595,12 +2839,14 @@ namespace CraftOrigin.CraftLive
                 0.8f);
             buttonFontSize = Mathf.Clamp(
                 buttonFontSize,
-                256,
-                512);
+                8,
+                256);
             buttonTextSize = Mathf.Clamp(
                 buttonTextSize,
                 0.1f,
                 2f);
+            returnButtonSize.x = Mathf.Max(0.05f, returnButtonSize.x);
+            returnButtonSize.y = Mathf.Max(0.05f, returnButtonSize.y);
             if (fallbackTransferButtonText != null)
             {
                 fallbackTransferButtonText.fontSize =
@@ -2614,6 +2860,7 @@ namespace CraftOrigin.CraftLive
             ResizeTransferButton(
                 fallbackPanelWidth,
                 fallbackPanelHeight);
+            PositionReturnButton();
             outsideTapMaxDistance = Mathf.Max(
                 1f,
                 outsideTapMaxDistance);

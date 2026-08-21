@@ -84,7 +84,7 @@ namespace CraftOrigin.CraftLive
 
         public void RestartForNextGroup()
         {
-            session?.ResetRoomPreservingUnlocks();
+            session?.ResetRoomForNextGroup();
         }
 
         private void ResolveReferences()

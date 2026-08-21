@@ -183,6 +183,19 @@ namespace CraftOrigin.CraftLive
                 : null;
         }
 
+        /// <summary>
+        /// Creates a material from the included opaque URP-lit surface. This
+        /// is used for large fallback panels, where stripped unlit variants
+        /// can otherwise render as a solid white rectangle in player builds.
+        /// </summary>
+        public static Material CreateCompatibleOpaqueMaterial(string name)
+        {
+            Material source = GetRuntimeForgeMaterial();
+            return source != null
+                ? new Material(source) { name = name }
+                : null;
+        }
+
         public static Material CreateCompatibleParticleMaterial(string name)
         {
             Material source = GetRuntimeParticleMaterial();
