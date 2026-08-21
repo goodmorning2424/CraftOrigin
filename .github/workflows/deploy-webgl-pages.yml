@@ -57,6 +57,7 @@ jobs:
       - name: Prepare GitHub Pages artifact
         shell: bash
         run: |
+          sudo chown -R "$(id -u)":"$(id -g)" Builds/WebGL
           touch Builds/WebGL/.nojekyll
 
       - name: Configure GitHub Pages
