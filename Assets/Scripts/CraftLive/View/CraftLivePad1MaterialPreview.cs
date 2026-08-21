@@ -1876,9 +1876,8 @@ namespace CraftOrigin.CraftLive
 
         private Material CreateHologramMaterial()
         {
-            Material material =
-                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
-                    "Generated_HologramMaterial");
+            Material material = CreateDedicatedHologramMaterial(
+                "Generated_HologramMaterial");
             if (material == null)
             {
                 return null;
@@ -1900,9 +1899,8 @@ namespace CraftOrigin.CraftLive
 
         private static Material CreateHologramPanelMaterial()
         {
-            Material material =
-                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
-                    "Generated_HologramPanelMaterial");
+            Material material = CreateDedicatedHologramMaterial(
+                "Generated_HologramPanelMaterial");
             if (material == null)
             {
                 return null;
@@ -1923,6 +1921,18 @@ namespace CraftOrigin.CraftLive
             material.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             material.SetShaderPassEnabled("ShadowCaster", false);
             return material;
+        }
+
+        private static Material CreateDedicatedHologramMaterial(string name)
+        {
+            Shader shader = Shader.Find("CraftOrigin/HologramTransparent");
+            if (shader == null)
+            {
+                return CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    name);
+            }
+
+            return new Material(shader) { name = name };
         }
 
         private static void ConfigureHologramRenderer(

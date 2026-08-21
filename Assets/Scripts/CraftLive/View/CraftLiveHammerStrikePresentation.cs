@@ -43,6 +43,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private bool alignImpactPointToWeapon = true;
         [SerializeField] private Vector3 hammerImpactLocalOffset =
             new Vector3(0f, 0f, -0.035f);
+        [SerializeField, Min(0f)]
+        [Tooltip("武器より確実にカメラ側へ出す距離です。")]
+        private float hammerCameraClearance = 0.12f;
 
         [Header("Strike Timing")]
         [SerializeField, Min(0.04f)] private float strikeDownDuration = 0.16f;
@@ -519,6 +522,11 @@ namespace CraftOrigin.CraftLive
                                         hammerImpactLocalOffset);
             runtimeHammerPivot.position +=
                 desiredImpact - runtimeImpactPoint.position;
+            if (targetCamera != null)
+            {
+                runtimeHammerPivot.position -=
+                    targetCamera.transform.forward * hammerCameraClearance;
+            }
             runtimeHammerPivot.localRotation = savedRotation;
         }
 
