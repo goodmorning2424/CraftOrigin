@@ -512,10 +512,9 @@ namespace CraftOrigin.CraftLive
                     fallbackText,
                     0.028f,
                     hologramTextColor);
-                fallbackText.fontSize = Mathf.Clamp(
-                    hologramGeneratedFontSize,
-                    8,
-                    256);
+                CraftLiveForgeUITheme.ApplyCrispTextMetrics(
+                    fallbackText,
+                    0.028f);
                 SetRendererSortingOrder(
                     fallbackText.GetComponent<Renderer>(),
                     hologramSortingOrder + 2);
@@ -1637,10 +1636,6 @@ namespace CraftOrigin.CraftLive
                 fallbackTransferButtonText,
                 0.18f,
                 hologramTextColor);
-            fallbackTransferButtonText.fontSize = Mathf.Clamp(
-                buttonFontSize,
-                8,
-                256);
             SetRendererSortingOrder(
                 fallbackTransferButtonText.GetComponent<Renderer>(),
                 hologramSortingOrder + 4);
@@ -1696,10 +1691,6 @@ namespace CraftOrigin.CraftLive
                 fallbackReturnButtonText,
                 0.18f,
                 hologramTextColor);
-            fallbackReturnButtonText.fontSize = Mathf.Clamp(
-                buttonFontSize,
-                8,
-                256);
             fallbackReturnButtonText.text = "戻る";
             SetRendererSortingOrder(
                 fallbackReturnButtonText.GetComponent<Renderer>(),
@@ -1969,6 +1960,7 @@ namespace CraftOrigin.CraftLive
             // both by opacity attenuates the visible hue twice.
             panelColor.a = hologramPanelOpacity;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
+            ApplyRendererColor(fallbackPanelRenderer, panelColor);
 
             Color borderColor = themeColor;
             borderColor = new Color(
@@ -2026,7 +2018,9 @@ namespace CraftOrigin.CraftLive
             if (fallbackTransferButtonText != null)
             {
                 ApplyFont(fallbackTransferButtonText);
-                fallbackTransferButtonText.fontSize = buttonFontSize;
+                CraftLiveForgeUITheme.ApplyCrispTextMetrics(
+                    fallbackTransferButtonText,
+                    0.18f);
                 fallbackTransferButtonText.color = interactable
                     ? hologramTextColor
                     : new Color(0.42f, 0.42f, 0.42f, 1f);
@@ -2068,7 +2062,9 @@ namespace CraftOrigin.CraftLive
             if (fallbackReturnButtonText != null)
             {
                 ApplyFont(fallbackReturnButtonText);
-                fallbackReturnButtonText.fontSize = buttonFontSize;
+                CraftLiveForgeUITheme.ApplyCrispTextMetrics(
+                    fallbackReturnButtonText,
+                    0.18f);
                 fallbackReturnButtonText.color = hologramTextColor;
                 fallbackReturnButtonText.text = "戻る";
             }
@@ -2297,6 +2293,22 @@ namespace CraftOrigin.CraftLive
             }
         }
 
+        private static void ApplyRendererColor(
+            Renderer renderer,
+            Color color)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            MaterialPropertyBlock properties = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(properties);
+            properties.SetColor("_BaseColor", color);
+            properties.SetColor("_Color", color);
+            renderer.SetPropertyBlock(properties);
+        }
+
         private void UpdateHologramText(string details)
         {
             if (fallbackText == null)
@@ -2325,20 +2337,16 @@ namespace CraftOrigin.CraftLive
                 fallbackPanelHeight * 0.76f /
                 (Mathf.Max(1, lines.Length) * 1.25f);
             ApplyFont(fallbackText);
-            fallbackText.fontSize = Mathf.Clamp(
-                hologramGeneratedFontSize,
-                8,
-                256);
             fallbackText.color = hologramTextColor;
-            fallbackText.characterSize =
-                CraftLiveForgeUITheme.ScaleCharacterSize(
-                    Mathf.Clamp(
-                        Mathf.Min(
-                            sizeByWidth,
-                            sizeByHeight,
-                            hologramMaxCharacterSize),
-                        0.006f,
-                        hologramMaxCharacterSize));
+            CraftLiveForgeUITheme.ApplyCrispTextMetrics(
+                fallbackText,
+                Mathf.Clamp(
+                    Mathf.Min(
+                        sizeByWidth,
+                        sizeByHeight,
+                        hologramMaxCharacterSize),
+                    0.006f,
+                    hologramMaxCharacterSize));
             fallbackText.text = wrapped;
             fallbackText.transform.localPosition =
                 new Vector3(0f, 0f, -0.06f);
@@ -2384,7 +2392,7 @@ namespace CraftOrigin.CraftLive
             {
                 if (textMesh == fallbackText)
                 {
-                    CraftLiveForgeUITheme.ApplyWeaponFont(textMesh);
+                    CraftLiveForgeUITheme.ApplyBoardFont(textMesh);
                 }
                 else
                 {
@@ -2834,11 +2842,6 @@ namespace CraftOrigin.CraftLive
                 hologramMaxCharacterSize,
                 0.008f,
                 0.05f);
-            if (fallbackText != null)
-            {
-                fallbackText.fontSize =
-                    hologramGeneratedFontSize;
-            }
             transferButtonHeight = Mathf.Clamp(
                 transferButtonHeight,
                 0.12f,
@@ -2857,16 +2860,6 @@ namespace CraftOrigin.CraftLive
                 2f);
             returnButtonSize.x = Mathf.Max(0.05f, returnButtonSize.x);
             returnButtonSize.y = Mathf.Max(0.05f, returnButtonSize.y);
-            if (fallbackTransferButtonText != null)
-            {
-                fallbackTransferButtonText.fontSize =
-                    buttonFontSize;
-            }
-            if (fallbackReturnButtonText != null)
-            {
-                fallbackReturnButtonText.fontSize =
-                    buttonFontSize;
-            }
             ResizeTransferButton(
                 fallbackPanelWidth,
                 fallbackPanelHeight);

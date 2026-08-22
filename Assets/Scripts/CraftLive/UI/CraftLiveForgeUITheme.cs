@@ -26,7 +26,9 @@ namespace CraftOrigin.CraftLive
         private const int ReferenceFontSize = 64;
         // A larger generated atlas keeps thin Japanese strokes intact after
         // WebGL/iPad down-sampling. ScaleCharacterSize preserves world size.
-        private const int CrispFontSize = 256;
+        // 384 keeps Japanese strokes crisp on the 1536x2048 iPad canvas
+        // without the much larger atlas cost of 512.
+        private const int CrispFontSize = 384;
         private static Material runtimeForgeMaterial;
         private static Material runtimeUnlitMaterial;
         private static Material runtimeParticleMaterial;
@@ -336,6 +338,20 @@ namespace CraftOrigin.CraftLive
             {
                 underlayTransform.gameObject.SetActive(false);
             }
+        }
+
+        public static void ApplyCrispTextMetrics(
+            TextMesh text,
+            float characterSize)
+        {
+            if (text == null)
+            {
+                return;
+            }
+
+            ConfigureFontTexture(text.font);
+            text.fontSize = CrispFontSize;
+            text.characterSize = ScaleCharacterSize(characterSize);
         }
 
         public static void ApplyBundledFont(TextMesh text)
