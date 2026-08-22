@@ -1,0 +1,6 @@
+#!/bin/sh
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "Tools/CleanupGitLfsTemp.ps1"
+git lfs pre-push "$@"
+status=$?
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "Tools/CleanupGitLfsTemp.ps1"
+exit $status
