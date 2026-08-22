@@ -235,7 +235,9 @@ namespace CraftOrigin.CraftLive
 
             CraftLiveWeaponDefinition selected =
                 catalog.FindWeapon(state.selectedWeaponId);
-            if (!state.HasAnyPlacedMaterial())
+            if (selected != null &&
+                selected.WeaponId == SecretBareHandsWeaponId &&
+                !state.HasAnyPlacedMaterial())
             {
                 return catalog.FindWeapon(SecretBareHandsWeaponId) ??
                        selected;

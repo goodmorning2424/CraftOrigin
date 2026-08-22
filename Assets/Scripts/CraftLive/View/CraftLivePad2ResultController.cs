@@ -353,9 +353,9 @@ namespace CraftOrigin.CraftLive
             CreateText(
                 generatedPanel.transform,
                 "Title",
-                "次の部屋に進んでください",
-                new Vector3(0f, 1.25f, -0.7f),
-                0.075f,
+                "次の部屋へ\n進んでください",
+                new Vector3(0f, 1.4f, -0.7f),
+                0.06f,
                 Color.white);
             TextMesh finalWeaponName = CreateText(
                 generatedPanel.transform,
@@ -402,32 +402,12 @@ namespace CraftOrigin.CraftLive
             Transform parent,
             string weaponId)
         {
-            GameObject effectRoot = new GameObject("SecretWeaponEffect");
-            effectRoot.transform.SetParent(parent, false);
-            effectRoot.transform.localPosition =
-                new Vector3(0f, 1.62f, -0.54f);
             Color accent = weaponId ==
                            CraftLiveCalculator.SecretPikopikoWeaponId
                 ? new Color(1f, 0.28f, 0.72f)
                 : weaponId == CraftLiveCalculator.SecretKazikiWeaponId
                     ? new Color(0.12f, 0.82f, 1f)
                     : new Color(1f, 0.78f, 0.18f);
-            for (int i = 0; i < 12; i++)
-            {
-                GameObject ray = CreateDecorativePart(
-                    effectRoot.transform,
-                    $"SecretRay_{i}",
-                    Vector3.zero,
-                    new Vector3(0.055f, 2.25f, 0.035f),
-                    accent,
-                    1.4f,
-                    0.15f,
-                    0.7f);
-                ray.transform.localRotation =
-                    Quaternion.Euler(0f, 0f, i * 15f);
-            }
-
-            effectRoot.AddComponent<CraftLiveSecretResultEffect>();
             CreateText(
                 parent,
                 "SecretLabel",

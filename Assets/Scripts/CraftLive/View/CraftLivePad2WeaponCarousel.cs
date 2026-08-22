@@ -111,6 +111,8 @@ namespace CraftOrigin.CraftLive
                 }
             }
 
+            weapons.Sort(CompareWeaponsByType);
+
             selectedIndex = FindWeaponIndex(
                 session.State != null
                     ? session.State.selectedWeaponId
@@ -790,12 +792,22 @@ namespace CraftOrigin.CraftLive
             switch (type)
             {
                 case CraftLiveWeaponType.Sword:
-                    return "剣";
+                    return "剣タイプ";
                 case CraftLiveWeaponType.Thrust:
-                    return "突き";
+                    return "突きタイプ";
                 default:
-                    return "杖";
+                    return "杖タイプ";
             }
+        }
+
+        private static int CompareWeaponsByType(
+            CraftLiveWeaponDefinition left,
+            CraftLiveWeaponDefinition right)
+        {
+            int typeOrder = left.WeaponType.CompareTo(right.WeaponType);
+            return typeOrder != 0
+                ? typeOrder
+                : string.CompareOrdinal(left.DisplayName, right.DisplayName);
         }
 
         private static Color GetWeaponTypeColor(

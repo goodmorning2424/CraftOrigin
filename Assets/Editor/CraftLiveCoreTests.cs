@@ -493,7 +493,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void SecretWeapon_BareHandsRequiresEverySlotToBeEmpty()
+        public void SecretWeapon_BareHandsRequiresFistAndEverySlotEmpty()
         {
             CraftLiveWeaponDefinition sword = CreateWeapon("sword");
             CraftLiveWeaponDefinition bare =
@@ -510,13 +510,19 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 CraftLiveCalculator.ResolveResultWeapon(state, catalog)
                     .WeaponId,
+                Is.EqualTo(sword.WeaponId));
+
+            state.selectedWeaponId = bare.WeaponId;
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
                 Is.EqualTo(CraftLiveCalculator.SecretBareHandsWeaponId));
 
             state.slots.attribute = attribute.MaterialId;
             Assert.That(
                 CraftLiveCalculator.ResolveResultWeapon(state, catalog)
                     .WeaponId,
-                Is.EqualTo(sword.WeaponId));
+                Is.EqualTo(bare.WeaponId));
         }
 
         [Test]
