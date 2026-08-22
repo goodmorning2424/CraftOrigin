@@ -18,6 +18,8 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private Sprite icon;
         [SerializeField] private GameObject workbenchPrefab;
         [SerializeField] private GameObject hologramPrefab;
+        [Tooltip("インポート材質が不安定なモデルへ実行時に明示適用する材質です。")]
+        [SerializeField] private Material presentationMaterialOverride;
         [Tooltip("作業台・完成表示で使用するモデルのXYZ倍率です。")]
         [SerializeField] private Vector3 previewScale = Vector3.one;
         [SerializeField, Range(0.1f, 3f)]
@@ -31,6 +33,8 @@ namespace CraftOrigin.CraftLive
         public Sprite Icon => icon;
         public GameObject WorkbenchPrefab => workbenchPrefab;
         public GameObject HologramPrefab => hologramPrefab != null ? hologramPrefab : workbenchPrefab;
+        public Material PresentationMaterialOverride =>
+            presentationMaterialOverride;
         public Vector3 PreviewScale => previewScale;
         public float SelectionPreviewScale =>
             selectionPreviewScale > 0f ? selectionPreviewScale : 1f;

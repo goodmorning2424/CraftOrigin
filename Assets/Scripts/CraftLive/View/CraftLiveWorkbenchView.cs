@@ -289,6 +289,9 @@ namespace CraftOrigin.CraftLive
                 weaponAnchor);
             if (weapon != null)
             {
+                CraftLiveForgeUITheme.ApplyMaterialOverride(
+                    weaponObject,
+                    weapon.PresentationMaterialOverride);
                 weaponObject.transform.localScale = weapon.PreviewScale;
             }
         }

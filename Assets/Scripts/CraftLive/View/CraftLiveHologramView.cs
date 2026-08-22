@@ -227,6 +227,11 @@ namespace CraftOrigin.CraftLive
             // Imported Standard/legacy materials can lose their texture or
             // tint in a WebGL URP build. Replace only incompatible surfaces
             // while preserving their original texture and base color.
+            CraftLiveForgeUITheme.ApplyMaterialOverride(
+                currentWeapon,
+                weapon != null
+                    ? weapon.PresentationMaterialOverride
+                    : null);
             CraftLiveForgeUITheme.EnsureCompatibleSurfaces(currentWeapon);
 
             CraftLiveMaterialDefinition attribute =

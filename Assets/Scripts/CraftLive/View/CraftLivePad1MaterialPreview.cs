@@ -1969,6 +1969,15 @@ namespace CraftOrigin.CraftLive
                 borderColor.b * hologramBorderGlow,
                 0.92f);
             SetMaterialColor(fallbackBorderMaterial, borderColor);
+            foreach (Transform edge in fallbackBorderEdges)
+            {
+                if (edge != null)
+                {
+                    ApplyRendererColor(
+                        edge.GetComponent<Renderer>(),
+                        borderColor);
+                }
+            }
         }
 
         private void UpdateTransferButton(

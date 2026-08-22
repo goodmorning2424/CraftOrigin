@@ -23,5 +23,6 @@ MonoBehaviour:
   icon: {fileID: 21300000, guid: 2563ced709e67564a8e08a51e33e7df4, type: 3}
   workbenchPrefab: {fileID: 1651179294907609550, guid: 18c70b3d4d0fc8d42b46572228e0845f, type: 3}
   hologramPrefab: {fileID: 0}
+  presentationMaterialOverride: {fileID: 2100000, guid: 04a8970a03ce4de46bf1f517bc3dd504, type: 2}
   previewScale: {x: 1.5, y: 1.5, z: 1.5}
   selectionPreviewScale: 1.5

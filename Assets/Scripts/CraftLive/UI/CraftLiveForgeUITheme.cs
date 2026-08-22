@@ -146,6 +146,28 @@ namespace CraftOrigin.CraftLive
             }
         }
 
+        public static void ApplyMaterialOverride(
+            GameObject target,
+            Material material)
+        {
+            if (target == null || material == null)
+            {
+                return;
+            }
+
+            foreach (Renderer renderer in
+                     target.GetComponentsInChildren<Renderer>(true))
+            {
+                Material[] materials = renderer.sharedMaterials;
+                for (int i = 0; i < materials.Length; i++)
+                {
+                    materials[i] = material;
+                }
+
+                renderer.sharedMaterials = materials;
+            }
+        }
+
         public static void EnsureCompatibleSurface(Renderer renderer)
         {
             if (renderer == null || !NeedsUrpReplacement(renderer.sharedMaterial))
