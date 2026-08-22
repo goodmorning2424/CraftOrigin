@@ -28,6 +28,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private UnityEvent<float> onRailProgress;
         [SerializeField] private UnityEvent onHammerStrike;
         [SerializeField] private UnityEvent<string> onStartRejected;
+        [Header("Completion Flash")]
+        [SerializeField, Min(0.1f)] private float completionRevealDelay = 2f;
+        [SerializeField, Range(0.05f, 1f)] private float completionFadeDuration = 0.55f;
 
         private GameObject generatedRoot;
         private GameObject synthesisButton;
@@ -36,6 +39,8 @@ namespace CraftOrigin.CraftLive
         private int activePointerId = int.MinValue;
         private Vector2 previousPointerPosition;
         private float directedTravel;
+        private bool completionFlashVisible;
+        private float completionFlashAlpha;
 
         private void Awake()
         {
@@ -64,10 +69,31 @@ namespace CraftOrigin.CraftLive
             dragging = false;
             strikeInProgress = false;
             activePointerId = int.MinValue;
+            completionFlashVisible = false;
+            completionFlashAlpha = 0f;
             if (session != null)
             {
                 session.StateChanged -= Refresh;
             }
+        }
+
+        private void OnGUI()
+        {
+            if (!completionFlashVisible || completionFlashAlpha <= 0f)
+            {
+                return;
+            }
+
+            Color previous = GUI.color;
+            int previousDepth = GUI.depth;
+            GUI.depth = -1000;
+            GUI.color = new Color(1f, 1f, 1f, completionFlashAlpha);
+            GUI.DrawTexture(
+                new Rect(0f, 0f, Screen.width, Screen.height),
+                Texture2D.whiteTexture,
+                ScaleMode.StretchToFill);
+            GUI.color = previous;
+            GUI.depth = previousDepth;
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -460,24 +486,53 @@ namespace CraftOrigin.CraftLive
                 yield return presentation.PlayStrikeSequence(() =>
                 {
                     completed = session != null &&
-                                session.RegisterHammerPass(1f);
+                                session.RegisterHammerPass(1f, false);
                     onHammerStrike?.Invoke();
                 });
             }
             else
             {
                 completed = session != null &&
-                            session.RegisterHammerPass(1f);
+                            session.RegisterHammerPass(1f, false);
                 onHammerStrike?.Invoke();
             }
 
-            strikeInProgress = false;
             MoveHammer(0f);
             if (completed)
             {
                 dragging = false;
                 activePointerId = int.MinValue;
+                yield return PlayCompletionFlash();
+                session?.CompleteSynthesis();
             }
+
+            strikeInProgress = false;
+        }
+
+        private IEnumerator PlayCompletionFlash()
+        {
+            float duration = Mathf.Max(0.1f, completionRevealDelay);
+            float fade = Mathf.Min(
+                duration,
+                Mathf.Max(0.05f, completionFadeDuration));
+            float fadeStart = duration - fade;
+            completionFlashVisible = true;
+            completionFlashAlpha = 1f;
+            float elapsed = 0f;
+            while (elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                completionFlashAlpha = elapsed <= fadeStart
+                    ? 1f
+                    : 1f - Mathf.Clamp01(
+                        (elapsed - fadeStart) / fade);
+                yield return null;
+            }
+
+            completionFlashAlpha = 0f;
+            completionFlashVisible = false;
+            // Let the white overlay disappear before publishing completion.
+            yield return null;
         }
 
         private void MoveHammer(float normalized)

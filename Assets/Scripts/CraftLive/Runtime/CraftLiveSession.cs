@@ -693,7 +693,9 @@ namespace CraftOrigin.CraftLive
             return true;
         }
 
-        public bool RegisterHammerPass(float quality = 1f)
+        public bool RegisterHammerPass(
+            float quality = 1f,
+            bool completeImmediately = true)
         {
             if (state == null ||
                 state.craft.status !=
@@ -731,7 +733,10 @@ namespace CraftOrigin.CraftLive
 
             if (state.craft.hammerPassCount >= required)
             {
-                CompleteSynthesis();
+                if (completeImmediately)
+                {
+                    CompleteSynthesis();
+                }
                 return true;
             }
 

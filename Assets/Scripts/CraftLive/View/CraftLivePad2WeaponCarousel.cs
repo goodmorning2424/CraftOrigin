@@ -336,6 +336,7 @@ namespace CraftOrigin.CraftLive
                  state.placement.status ==
                      CraftLivePlacementStatus.ConfirmingSlot);
             return state != null &&
+                   state.sessionPhase == CraftLiveSessionPhase.Playing &&
                    (state.placement.status ==
                         CraftLivePlacementStatus.Idle ||
                     recoverableUnconfirmedMaterialSelection) &&
@@ -402,6 +403,7 @@ namespace CraftOrigin.CraftLive
             if (generatedCarousel != null)
             {
                 generatedCarousel.SetActive(
+                    state.sessionPhase == CraftLiveSessionPhase.Playing &&
                     !state.weaponSelectionConfirmed);
             }
 
@@ -429,7 +431,12 @@ namespace CraftOrigin.CraftLive
             CraftLiveWeaponDefinition weapon,
             bool confirmed)
         {
-            onSelectionVisible?.Invoke(!confirmed);
+            bool selectionVisible = session != null &&
+                                    session.State != null &&
+                                    session.State.sessionPhase ==
+                                    CraftLiveSessionPhase.Playing &&
+                                    !confirmed;
+            onSelectionVisible?.Invoke(selectionVisible);
             onWeaponConfirmed?.Invoke(confirmed);
             if (weapon == null)
             {
