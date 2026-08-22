@@ -26,9 +26,10 @@ namespace CraftOrigin.CraftLive
         private const int ReferenceFontSize = 64;
         // A larger generated atlas keeps thin Japanese strokes intact after
         // WebGL/iPad down-sampling. ScaleCharacterSize preserves world size.
-        // 384 keeps Japanese strokes crisp on the 1536x2048 iPad canvas
-        // without the much larger atlas cost of 512.
-        private const int CrispFontSize = 384;
+        // 256 fits the complete Japanese UI glyph set in WebGL's dynamic
+        // font atlas. The full-resolution iPad render target and 4x MSAA
+        // provide edge clarity without overflowing that atlas.
+        private const int CrispFontSize = 256;
         private static Material runtimeForgeMaterial;
         private static Material runtimeUnlitMaterial;
         private static Material runtimeParticleMaterial;

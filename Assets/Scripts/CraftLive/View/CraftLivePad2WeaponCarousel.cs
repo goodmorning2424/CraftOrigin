@@ -646,7 +646,7 @@ namespace CraftOrigin.CraftLive
                 new Vector3(0f, 2.72f, -0.7f),
                 new Color(0.2f, 0.55f, 0.65f),
                 OpenSelection,
-                new Vector3(1.75f, 0.46f, 0.2f));
+                new Vector3(2.6f, 0.5f, 0.2f));
             changeWeaponButton.AddComponent<
                 CraftLiveGeneratedRuntimeVisual>();
         }
@@ -753,7 +753,9 @@ namespace CraftOrigin.CraftLive
                 "Label",
                 label,
                 new Vector3(0f, 0f, -0.62f),
-                (scale ?? Vector3.one).x > 1f
+                (scale ?? Vector3.one).x > 2.2f
+                    ? 0.042f
+                    : (scale ?? Vector3.one).x > 1f
                     ? 0.032f
                     : 0.06f);
             return button;
