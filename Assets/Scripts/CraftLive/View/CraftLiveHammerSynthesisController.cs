@@ -31,6 +31,8 @@ namespace CraftOrigin.CraftLive
         [Header("Completion Flash")]
         [SerializeField, Min(0.1f)] private float completionRevealDelay = 2f;
         [SerializeField, Range(0.05f, 1f)] private float completionFadeDuration = 0.55f;
+        [SerializeField, Range(0.1f, 1f)] private float completionFadeInDuration = 0.4f;
+        [SerializeField, Range(0.1f, 0.9f)] private float completionFlashOpacity = 0.7f;
 
         private GameObject generatedRoot;
         private GameObject synthesisButton;
@@ -503,7 +505,7 @@ namespace CraftOrigin.CraftLive
                 dragging = false;
                 activePointerId = int.MinValue;
                 yield return PlayCompletionFlash();
-                session?.CompleteSynthesis();
+                session?.RevealCompletionPresentation();
             }
 
             strikeInProgress = false;
@@ -515,18 +517,44 @@ namespace CraftOrigin.CraftLive
             float fade = Mathf.Min(
                 duration,
                 Mathf.Max(0.05f, completionFadeDuration));
+            float fadeIn = Mathf.Min(
+                duration - fade,
+                Mathf.Max(0.05f, completionFadeInDuration));
             float fadeStart = duration - fade;
             completionFlashVisible = true;
-            completionFlashAlpha = 1f;
+            completionFlashAlpha = 0f;
+            bool completionSwitched = false;
             float elapsed = 0f;
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
-                completionFlashAlpha = elapsed <= fadeStart
-                    ? 1f
-                    : 1f - Mathf.Clamp01(
-                        (elapsed - fadeStart) / fade);
+                if (elapsed < fadeIn)
+                {
+                    completionFlashAlpha = completionFlashOpacity *
+                        Mathf.Clamp01(elapsed / fadeIn);
+                }
+                else if (elapsed <= fadeStart)
+                {
+                    completionFlashAlpha = completionFlashOpacity;
+                }
+                else
+                {
+                    completionFlashAlpha = completionFlashOpacity *
+                        (1f - Mathf.Clamp01(
+                            (elapsed - fadeStart) / fade));
+                }
+
+                if (!completionSwitched && elapsed >= fadeIn)
+                {
+                    completionSwitched = true;
+                    session?.CompleteSynthesis(true);
+                }
                 yield return null;
+            }
+
+            if (!completionSwitched)
+            {
+                session?.CompleteSynthesis(true);
             }
 
             completionFlashAlpha = 0f;

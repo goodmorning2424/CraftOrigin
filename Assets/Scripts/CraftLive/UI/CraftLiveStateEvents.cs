@@ -78,7 +78,10 @@ namespace CraftOrigin.CraftLive
                 session.Catalog != null
                     ? session.Catalog.FindWeapon(state.selectedWeaponId)
                     : null;
-            CraftLiveStats stats = state.craft.status == CraftLiveCraftStatus.Complete
+            bool completionReady =
+                state.craft.status == CraftLiveCraftStatus.Complete &&
+                state.craft.completionPresentationReady;
+            CraftLiveStats stats = completionReady
                 ? state.result.stats
                 : session.CalculateCurrentStats();
 
@@ -106,10 +109,15 @@ namespace CraftOrigin.CraftLive
             onAttackRate?.Invoke(stats.attackRate);
             onDefenseRate?.Invoke(stats.defenseRate);
             onEvasionRate?.Invoke(stats.evasionRate);
-            onResultWeaponName?.Invoke(state.result.weaponName ?? string.Empty);
-            onResultSkillName?.Invoke(state.result.skillName ?? string.Empty);
+            onResultWeaponName?.Invoke(completionReady
+                ? state.result.weaponName ?? string.Empty
+                : string.Empty);
+            onResultSkillName?.Invoke(completionReady
+                ? state.result.skillName ?? string.Empty
+                : string.Empty);
             onResultBuildType?.Invoke(CraftLiveCalculator.DetermineBuildType(stats));
-            onCraftComplete?.Invoke(state.craft.status == CraftLiveCraftStatus.Complete);
+            onCraftComplete?.Invoke(
+                completionReady);
         }
     }
 }

@@ -168,6 +168,7 @@ namespace CraftOrigin.CraftLive
         [Min(0)] public int hammerPassCount;
         public string resultRank = "未合成";
         public long startedAtUnixMs;
+        public bool completionPresentationReady;
     }
 
     [Serializable]
@@ -213,7 +214,7 @@ namespace CraftOrigin.CraftLive
     [Serializable]
     public sealed class CraftLiveRoomState
     {
-        public const int CurrentSchemaVersion = 5;
+        public const int CurrentSchemaVersion = 6;
 
         public int schemaVersion = CurrentSchemaVersion;
         public long revision;
@@ -282,6 +283,7 @@ namespace CraftOrigin.CraftLive
 
         public void Normalize(CraftLiveCatalog catalog)
         {
+            int sourceSchemaVersion = schemaVersion;
             registeredMaterialIds =
                 registeredMaterialIds ?? new List<string>();
             inventory = inventory ?? new List<CraftLiveInventoryEntry>();
@@ -329,6 +331,11 @@ namespace CraftOrigin.CraftLive
             craft.hammerPassCount =
                 Mathf.Max(0, craft.hammerPassCount);
             craft.resultRank = craft.resultRank ?? "未合成";
+            if (sourceSchemaVersion < 6 &&
+                craft.status == CraftLiveCraftStatus.Complete)
+            {
+                craft.completionPresentationReady = true;
+            }
             sessionStartedAtUnixMs =
                 Math.Max(0L, sessionStartedAtUnixMs);
             sessionEndsAtUnixMs =

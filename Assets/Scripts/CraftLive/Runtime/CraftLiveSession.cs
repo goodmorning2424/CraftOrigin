@@ -762,7 +762,7 @@ namespace CraftOrigin.CraftLive
             });
         }
 
-        public void CompleteSynthesis()
+        public void CompleteSynthesis(bool deferPresentation = false)
         {
             if (state.craft.status != CraftLiveCraftStatus.Mixing)
             {
@@ -787,6 +787,8 @@ namespace CraftOrigin.CraftLive
                     ? rules.EvaluateRank(next.craft.mixPower).Bonus
                     : 0f;
                 next.craft.resultRank = next.result.rank;
+                next.craft.completionPresentationReady =
+                    !deferPresentation;
                 next.completedWeapons.Add(next.result.Clone());
                 int maximum = rules != null
                     ? rules.MaximumCompletedWeapons
@@ -796,7 +798,10 @@ namespace CraftOrigin.CraftLive
                     next.completedWeapons.RemoveAt(0);
                 }
 
-                PublishStatsToPad3(next);
+                if (!deferPresentation)
+                {
+                    PublishStatsToPad3(next);
+                }
                 if (next.sessionEndsAtUnixMs > 0 &&
                     UnixNowMs() >= next.sessionEndsAtUnixMs)
                 {
@@ -805,6 +810,27 @@ namespace CraftOrigin.CraftLive
                 }
 
                 next.message = $"合成{next.result.rank}！ {next.result.weaponName}が完成しました。";
+            });
+            if (!deferPresentation)
+            {
+                CraftLiveAudio.StopSynthesisLoop();
+                CraftLiveAudio.PlayForgeComplete();
+            }
+        }
+
+        public void RevealCompletionPresentation()
+        {
+            if (state == null ||
+                state.craft.status != CraftLiveCraftStatus.Complete ||
+                state.craft.completionPresentationReady)
+            {
+                return;
+            }
+
+            Mutate(next =>
+            {
+                next.craft.completionPresentationReady = true;
+                PublishStatsToPad3(next);
             });
             CraftLiveAudio.StopSynthesisLoop();
             CraftLiveAudio.PlayForgeComplete();

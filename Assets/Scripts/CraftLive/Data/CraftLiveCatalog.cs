@@ -56,7 +56,7 @@ namespace CraftOrigin.CraftLive
         {
             foreach (CraftLiveWeaponDefinition weapon in weapons)
             {
-                if (weapon != null)
+                if (weapon != null && weapon.VisibleInSelection)
                 {
                     return weapon;
                 }

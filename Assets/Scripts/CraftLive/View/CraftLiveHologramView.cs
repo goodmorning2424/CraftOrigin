@@ -167,6 +167,7 @@ namespace CraftOrigin.CraftLive
         private void HandleStateChanged(CraftLiveRoomState state)
         {
             if (state == null ||
+                !state.craft.completionPresentationReady ||
                 (state.craft.status !=
                      CraftLiveCraftStatus.Complete &&
                  state.sessionPhase !=
@@ -193,7 +194,12 @@ namespace CraftOrigin.CraftLive
             CraftLiveWeaponDefinition weapon =
                 session.Catalog.FindWeapon(result.weaponId);
             GameObject prefab = weapon != null ? weapon.HologramPrefab : null;
-            if (prefab != null || fallbackPrefab != null)
+            if (weapon != null && weapon.HidePresentationModel)
+            {
+                currentWeapon = new GameObject("HiddenWeaponModel");
+                currentWeapon.transform.SetParent(spawnRoot, false);
+            }
+            else if (prefab != null || fallbackPrefab != null)
             {
                 currentWeapon = Instantiate(
                     prefab != null ? prefab : fallbackPrefab,

@@ -105,7 +105,7 @@ namespace CraftOrigin.CraftLive
             foreach (CraftLiveWeaponDefinition weapon in
                      session.Catalog.Weapons)
             {
-                if (weapon != null)
+                if (weapon != null && weapon.VisibleInSelection)
                 {
                     weapons.Add(weapon);
                 }

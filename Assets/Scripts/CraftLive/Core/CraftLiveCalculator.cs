@@ -2,6 +2,10 @@ namespace CraftOrigin.CraftLive
 {
     public static class CraftLiveCalculator
     {
+        public const string SecretPikopikoWeaponId =
+            "weapon_pikopiko_sword";
+        public const string SecretKazikiWeaponId = "weapon_kaziki";
+        public const string SecretBareHandsWeaponId = "weapon_kobushi";
         private static readonly CraftLiveSlotId[] BaseStatSlots =
         {
             CraftLiveSlotId.Top,
@@ -153,7 +157,7 @@ namespace CraftOrigin.CraftLive
             long completedAtUnixMs)
         {
             CraftLiveWeaponDefinition weapon =
-                catalog.FindWeapon(state.selectedWeaponId);
+                ResolveResultWeapon(state, catalog);
             CraftLiveMaterialDefinition attribute =
                 catalog.FindMaterial(state.slots.attribute);
             CraftLiveMaterialDefinition skill =
@@ -203,7 +207,7 @@ namespace CraftOrigin.CraftLive
                     ? skill.SkillEffect
                     : new CraftLiveSkillEffect(),
                 stats = CalculateStats(
-                    state,
+                    StateWithWeapon(state, weapon),
                     catalog,
                     rules,
                     rank.Bonus),
@@ -211,6 +215,101 @@ namespace CraftOrigin.CraftLive
                 completedAtUnixMs = completedAtUnixMs,
                 resultSerial = GetNextResultSerial(state)
             };
+        }
+
+        public static bool IsSecretWeaponId(string weaponId)
+        {
+            return weaponId == SecretPikopikoWeaponId ||
+                   weaponId == SecretKazikiWeaponId ||
+                   weaponId == SecretBareHandsWeaponId;
+        }
+
+        public static CraftLiveWeaponDefinition ResolveResultWeapon(
+            CraftLiveRoomState state,
+            CraftLiveCatalog catalog)
+        {
+            if (state == null || catalog == null)
+            {
+                return null;
+            }
+
+            CraftLiveWeaponDefinition selected =
+                catalog.FindWeapon(state.selectedWeaponId);
+            if (!state.HasAnyPlacedMaterial())
+            {
+                return catalog.FindWeapon(SecretBareHandsWeaponId) ??
+                       selected;
+            }
+
+            if (selected != null &&
+                selected.WeaponType == CraftLiveWeaponType.Sword &&
+                HasOnlyUpgradeProfile(state, catalog, false))
+            {
+                return catalog.FindWeapon(SecretPikopikoWeaponId) ??
+                       selected;
+            }
+
+            if (selected != null &&
+                selected.WeaponType == CraftLiveWeaponType.Thrust &&
+                HasOnlyUpgradeProfile(state, catalog, true))
+            {
+                return catalog.FindWeapon(SecretKazikiWeaponId) ??
+                       selected;
+            }
+
+            return selected;
+        }
+
+        private static CraftLiveRoomState StateWithWeapon(
+            CraftLiveRoomState source,
+            CraftLiveWeaponDefinition weapon)
+        {
+            CraftLiveRoomState copy = source.Clone();
+            copy.selectedWeaponId = weapon != null
+                ? weapon.WeaponId
+                : source.selectedWeaponId;
+            return copy;
+        }
+
+        private static bool HasOnlyUpgradeProfile(
+            CraftLiveRoomState state,
+            CraftLiveCatalog catalog,
+            bool attack)
+        {
+            bool found = false;
+            foreach (CraftLiveSlotId slot in BaseStatSlots)
+            {
+                string materialId = state.slots.Get(slot);
+                if (string.IsNullOrWhiteSpace(materialId))
+                {
+                    continue;
+                }
+
+                CraftLiveMaterialDefinition material =
+                    catalog.FindMaterial(materialId);
+                if (material == null ||
+                    material.Category != CraftLiveMaterialCategory.Upgrade)
+                {
+                    return false;
+                }
+
+                CraftLiveStats stats = material.StatModifiers;
+                bool matches = attack
+                    ? stats.attackRate > 0f &&
+                      stats.defenseRate <= 0f &&
+                      stats.evasionRate <= 0f
+                    : stats.evasionRate > 0f &&
+                      stats.attackRate <= 0f &&
+                      stats.defenseRate <= 0f;
+                if (!matches)
+                {
+                    return false;
+                }
+
+                found = true;
+            }
+
+            return found;
         }
 
         private static int GetNextResultSerial(

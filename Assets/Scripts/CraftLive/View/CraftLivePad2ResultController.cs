@@ -214,6 +214,13 @@ namespace CraftOrigin.CraftLive
                 0.058f);
             CraftLiveForgeUITheme.ApplyWeaponFont(completedWeaponName);
 
+            if (CraftLiveCalculator.IsSecretWeaponId(result.weaponId))
+            {
+                BuildSecretResultEffect(
+                    generatedPanel.transform,
+                    result.weaponId);
+            }
+
             CreateRankBadge(
                 generatedPanel.transform,
                 result.rank,
@@ -319,34 +326,59 @@ namespace CraftOrigin.CraftLive
 
         private void BuildCodePanel(CraftLiveRoomState state)
         {
-            generatedPanel = CreatePanel(
-                "Generated_WeaponCode");
+            generatedPanel = new GameObject("Generated_NextRoomPanel");
+            generatedPanel.transform.SetParent(
+                bindings.ResultHologramRoot,
+                false);
+            generatedPanel.AddComponent<CraftLiveGeneratedRuntimeVisual>();
+            GameObject backdrop = CreateDecorativePart(
+                generatedPanel.transform,
+                "FullScreenBlackBackground",
+                new Vector3(0f, 0f, 0.2f),
+                new Vector3(12f, 16f, 0.35f),
+                Color.black,
+                0f,
+                0f,
+                0f);
+            Material blackMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Generated_NextRoomBlack");
+            if (blackMaterial != null)
+            {
+                blackMaterial.SetColor("_BaseColor", Color.black);
+                blackMaterial.SetColor("_Color", Color.black);
+                backdrop.GetComponent<Renderer>().sharedMaterial =
+                    blackMaterial;
+            }
             CreateText(
                 generatedPanel.transform,
                 "Title",
                 "次の部屋に進んでください",
-                new Vector3(0f, 2.35f, -0.7f),
-                0.052f);
+                new Vector3(0f, 1.25f, -0.7f),
+                0.075f,
+                Color.white);
             TextMesh finalWeaponName = CreateText(
                 generatedPanel.transform,
                 "Weapon",
                 state.result.weaponName,
-                new Vector3(0f, 1.3f, -0.7f),
-                0.055f);
+                new Vector3(0f, 0.15f, -0.7f),
+                0.052f,
+                Color.white);
             CraftLiveForgeUITheme.ApplyWeaponFont(finalWeaponName);
             CreateText(
                 generatedPanel.transform,
                 "Code",
                 state.finalWeaponCode,
-                new Vector3(0f, 0.15f, -0.7f),
-                0.085f);
+                new Vector3(0f, -0.7f, -0.7f),
+                0.065f,
+                Color.white);
 
             GameObject restart = CreateButton(
                 generatedPanel.transform,
                 "StaffRestart",
                 "スタッフ専用\n次のグループを開始",
-                new Vector3(0f, -2.25f, -0.68f),
-                new Color(0.48f, 0.16f, 0.12f),
+                new Vector3(0f, -2.45f, -0.68f),
+                new Color(0.12f, 0.12f, 0.12f),
                 new Vector3(4.45f, 1.02f, 0.24f));
             restart.GetComponent<CraftLiveWorldButton>()
                 .AddListener(RestartForNextGroup);
@@ -364,6 +396,45 @@ namespace CraftOrigin.CraftLive
                 staffRestartRoutine = StartCoroutine(
                     RevealStaffRestart(restart, remaining));
             }
+        }
+
+        private static void BuildSecretResultEffect(
+            Transform parent,
+            string weaponId)
+        {
+            GameObject effectRoot = new GameObject("SecretWeaponEffect");
+            effectRoot.transform.SetParent(parent, false);
+            effectRoot.transform.localPosition =
+                new Vector3(0f, 1.62f, -0.54f);
+            Color accent = weaponId ==
+                           CraftLiveCalculator.SecretPikopikoWeaponId
+                ? new Color(1f, 0.28f, 0.72f)
+                : weaponId == CraftLiveCalculator.SecretKazikiWeaponId
+                    ? new Color(0.12f, 0.82f, 1f)
+                    : new Color(1f, 0.78f, 0.18f);
+            for (int i = 0; i < 12; i++)
+            {
+                GameObject ray = CreateDecorativePart(
+                    effectRoot.transform,
+                    $"SecretRay_{i}",
+                    Vector3.zero,
+                    new Vector3(0.055f, 2.25f, 0.035f),
+                    accent,
+                    1.4f,
+                    0.15f,
+                    0.7f);
+                ray.transform.localRotation =
+                    Quaternion.Euler(0f, 0f, i * 15f);
+            }
+
+            effectRoot.AddComponent<CraftLiveSecretResultEffect>();
+            CreateText(
+                parent,
+                "SecretLabel",
+                "SECRET RECIPE",
+                new Vector3(0f, 2.05f, -0.74f),
+                0.027f,
+                accent);
         }
 
         private IEnumerator RevealStaffRestart(
@@ -715,6 +786,24 @@ namespace CraftOrigin.CraftLive
             {
                 DestroyImmediate(target);
             }
+        }
+    }
+
+    public sealed class CraftLiveSecretResultEffect : MonoBehaviour
+    {
+        private Vector3 baseScale;
+
+        private void Awake()
+        {
+            baseScale = transform.localScale;
+        }
+
+        private void Update()
+        {
+            transform.Rotate(0f, 0f, 18f * Time.deltaTime);
+            float pulse = 0.88f +
+                          Mathf.Sin(Time.unscaledTime * 4.5f) * 0.12f;
+            transform.localScale = baseScale * pulse;
         }
     }
 }

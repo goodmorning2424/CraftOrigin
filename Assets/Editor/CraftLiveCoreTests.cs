@@ -412,6 +412,148 @@ namespace CraftOrigin.CraftLiveTests
                 Is.True);
         }
 
+        [Test]
+        public void SecretWeapon_EvasionUpgradesIgnoreAttributeAndSkill()
+        {
+            CraftLiveWeaponDefinition sword = CreateWeapon("sword");
+            SetField(sword, "weaponType", CraftLiveWeaponType.Sword);
+            CraftLiveWeaponDefinition secret =
+                CreateWeapon(CraftLiveCalculator.SecretPikopikoWeaponId);
+            CraftLiveWeaponDefinition bare =
+                CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
+            CraftLiveMaterialDefinition evasion = CreateMaterial(
+                "evasion",
+                CraftLiveMaterialCategory.Upgrade);
+            SetField(evasion, "statModifiers", new CraftLiveStats
+            {
+                evasionRate = 5f
+            });
+            CraftLiveMaterialDefinition attribute = CreateMaterial(
+                "fire",
+                CraftLiveMaterialCategory.Attribute);
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition>
+                {
+                    evasion,
+                    attribute
+                },
+                new List<CraftLiveWeaponDefinition>
+                {
+                    sword,
+                    secret,
+                    bare
+                });
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+            state.selectedWeaponId = sword.WeaponId;
+            state.slots.top = evasion.MaterialId;
+            state.slots.attribute = attribute.MaterialId;
+
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(CraftLiveCalculator.SecretPikopikoWeaponId));
+        }
+
+        [Test]
+        public void SecretWeapon_AttackUpgradesIgnoreAttributeAndSkill()
+        {
+            CraftLiveWeaponDefinition thrust = CreateWeapon("thrust");
+            SetField(thrust, "weaponType", CraftLiveWeaponType.Thrust);
+            CraftLiveWeaponDefinition secret =
+                CreateWeapon(CraftLiveCalculator.SecretKazikiWeaponId);
+            CraftLiveWeaponDefinition bare =
+                CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
+            CraftLiveMaterialDefinition attack = CreateMaterial(
+                "attack",
+                CraftLiveMaterialCategory.Upgrade);
+            SetField(attack, "statModifiers", new CraftLiveStats
+            {
+                attackRate = 5f
+            });
+            CraftLiveMaterialDefinition skill = CreateMaterial(
+                "skill",
+                CraftLiveMaterialCategory.Skill);
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition> { attack, skill },
+                new List<CraftLiveWeaponDefinition>
+                {
+                    thrust,
+                    secret,
+                    bare
+                });
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+            state.selectedWeaponId = thrust.WeaponId;
+            state.slots.right = attack.MaterialId;
+            state.slots.skill = skill.MaterialId;
+
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(CraftLiveCalculator.SecretKazikiWeaponId));
+        }
+
+        [Test]
+        public void SecretWeapon_BareHandsRequiresEverySlotToBeEmpty()
+        {
+            CraftLiveWeaponDefinition sword = CreateWeapon("sword");
+            CraftLiveWeaponDefinition bare =
+                CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
+            CraftLiveMaterialDefinition attribute = CreateMaterial(
+                "fire",
+                CraftLiveMaterialCategory.Attribute);
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition> { attribute },
+                new List<CraftLiveWeaponDefinition> { sword, bare });
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+            state.selectedWeaponId = sword.WeaponId;
+
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(CraftLiveCalculator.SecretBareHandsWeaponId));
+
+            state.slots.attribute = attribute.MaterialId;
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(sword.WeaponId));
+        }
+
+        [Test]
+        public void SecretWeapon_MixedUpgradesDoNotTrigger()
+        {
+            CraftLiveWeaponDefinition sword = CreateWeapon("sword");
+            SetField(sword, "weaponType", CraftLiveWeaponType.Sword);
+            CraftLiveWeaponDefinition secret =
+                CreateWeapon(CraftLiveCalculator.SecretPikopikoWeaponId);
+            CraftLiveWeaponDefinition bare =
+                CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
+            CraftLiveMaterialDefinition mixed = CreateMaterial(
+                "mixed",
+                CraftLiveMaterialCategory.Upgrade);
+            SetField(mixed, "statModifiers", new CraftLiveStats
+            {
+                defenseRate = 5f,
+                evasionRate = 5f
+            });
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition> { mixed },
+                new List<CraftLiveWeaponDefinition>
+                {
+                    sword,
+                    secret,
+                    bare
+                });
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+            state.selectedWeaponId = sword.WeaponId;
+            state.slots.bottom = mixed.MaterialId;
+
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(sword.WeaponId));
+        }
+
         private CraftLiveMaterialDefinition CreateMaterial(
             string id,
             CraftLiveMaterialCategory category)

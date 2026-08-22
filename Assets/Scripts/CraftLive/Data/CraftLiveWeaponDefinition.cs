@@ -18,6 +18,10 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private Sprite icon;
         [SerializeField] private GameObject workbenchPrefab;
         [SerializeField] private GameObject hologramPrefab;
+        [Tooltip("通常の武器選択一覧に表示するかどうかです。")]
+        [SerializeField] private bool visibleInSelection = true;
+        [Tooltip("完成表示でモデルを表示しない武器です。")]
+        [SerializeField] private bool hidePresentationModel;
         [Tooltip("インポート材質が不安定なモデルへ実行時に明示適用する材質です。")]
         [SerializeField] private Material presentationMaterialOverride;
         [Tooltip("作業台・完成表示で使用するモデルのXYZ倍率です。")]
@@ -33,6 +37,8 @@ namespace CraftOrigin.CraftLive
         public Sprite Icon => icon;
         public GameObject WorkbenchPrefab => workbenchPrefab;
         public GameObject HologramPrefab => hologramPrefab != null ? hologramPrefab : workbenchPrefab;
+        public bool VisibleInSelection => visibleInSelection;
+        public bool HidePresentationModel => hidePresentationModel;
         public Material PresentationMaterialOverride =>
             presentationMaterialOverride;
         public Vector3 PreviewScale => previewScale;
