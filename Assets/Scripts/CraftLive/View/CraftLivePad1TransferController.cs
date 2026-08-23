@@ -133,6 +133,7 @@ namespace CraftOrigin.CraftLive
             new HashSet<int>();
         private readonly List<GameObject> activeBatchTickets =
             new List<GameObject>();
+        private GameObject activeBatchGroup;
         private Transform launcherSeat;
         private Transform launcherArm;
         private Transform springVisual;
@@ -250,6 +251,14 @@ namespace CraftOrigin.CraftLive
             queueArrivalRoutines.Clear();
             prelaunchedTransferSerials.Clear();
 
+            if (activeBatchGroup != null)
+            {
+                DestroySafely(activeBatchGroup);
+                activeBatchGroup = null;
+                activeTicket = null;
+                activeBatchTickets.Clear();
+            }
+
             foreach (GameObject ticket in activeBatchTickets)
             {
                 if (ticket != activeTicket)
@@ -360,6 +369,17 @@ namespace CraftOrigin.CraftLive
             }
 
             pulling = false;
+            // A quick swipe can be delivered as BeginDrag -> EndDrag without
+            // an intermediate Drag callback. Always include the release
+            // position so a fully pulled spring never falls back to a partial
+            // (or single-item) launch.
+            float releaseDistance = Mathf.Max(
+                0f,
+                pullStartX - eventData.position.x);
+            SetPull(ResolveReleasePull(
+                pullAmount,
+                releaseDistance,
+                requiredPullPixels));
             bool shouldLaunch = pullAmount >= 0.98f;
             if (!shouldLaunch || !TryLaunchSelectedMode())
             {
@@ -374,6 +394,17 @@ namespace CraftOrigin.CraftLive
                        CraftLivePlacementStatus.Idle &&
                    state.transferQueue != null &&
                    state.transferQueue.Count > 0;
+        }
+
+        public static float ResolveReleasePull(
+            float currentPull,
+            float releaseDistance,
+            float requiredDistance)
+        {
+            float releasedPull = requiredDistance > 0.0001f
+                ? Mathf.Max(0f, releaseDistance) / requiredDistance
+                : 0f;
+            return Mathf.Clamp01(Mathf.Max(currentPull, releasedPull));
         }
 
         private bool CanOperateSpring(CraftLiveRoomState state)
@@ -633,6 +664,14 @@ namespace CraftOrigin.CraftLive
 
         private IEnumerator Launch(CraftLiveRoomState snapshot)
         {
+            if (usingPhysicalLauncher &&
+                snapshot != null &&
+                snapshot.transferBatchRemaining > 0)
+            {
+                yield return LaunchPhysicalBatch(snapshot);
+                yield break;
+            }
+
             CraftLiveMaterialDefinition material =
                 session.Catalog != null
                     ? session.Catalog.FindMaterial(
@@ -759,13 +798,33 @@ namespace CraftOrigin.CraftLive
                 CollectPhysicalBatchTickets(snapshot);
             activeBatchTickets.Clear();
             activeBatchTickets.AddRange(batchObjects);
-            int count = batchObjects.Count;
-            Transform[] tickets = new Transform[count];
-            Vector3[] starts = new Vector3[count];
-            Vector3[] seats = new Vector3[count];
-            Vector3[] grooveEnds = new Vector3[count];
-            Vector3[] rampControls = new Vector3[count];
-            Vector3[] rampEnds = new Vector3[count];
+            if (batchObjects.Count == 0)
+            {
+                FinishLaunchRoutine();
+                yield break;
+            }
+
+            // Keep every frame in one rigid group. Previously each frame had
+            // its own seat, curve and velocity, so timing differences made a
+            // four-item volley stretch, overlap and occasionally appear to
+            // leave only one frame moving. The first frame is the group pivot;
+            // the remaining frames retain their packed queue offsets.
+            activeBatchGroup = new GameObject("PhysicalFrameBatch");
+            activeBatchGroup.transform.SetPositionAndRotation(
+                batchObjects[0].transform.position,
+                Quaternion.identity);
+            foreach (GameObject ticket in batchObjects)
+            {
+                if (ticket != null)
+                {
+                    ticket.transform.SetParent(
+                        activeBatchGroup.transform,
+                        true);
+                }
+            }
+
+            Transform batch = activeBatchGroup.transform;
+            Vector3 batchStart = batch.position;
             Vector3 railUp = ResolveCameraUp().normalized;
             Vector3 baseSeat = launcherSeat != null
                 ? launcherSeat.position
@@ -788,63 +847,32 @@ namespace CraftOrigin.CraftLive
                 ? rampLaunchEnd.position
                 : baseGrooveEnd +
                   physicalLaunchDirection * rampLaunchDistance;
-            float[] halfExtents = new float[count];
-            for (int index = 0; index < count; index++)
-            {
-                halfExtents[index] = ResolveProjectedExtent(
-                    batchObjects[index],
-                    physicalLaunchDirection,
-                    batchTrainSpacing * 0.5f);
-            }
-            float[] trainOffsets = ResolveBatchTrainOffsets(
-                halfExtents,
-                physicalFrameGap);
-            for (int index = 0; index < count; index++)
-            {
-                tickets[index] = batchObjects[index].transform;
-                starts[index] = tickets[index].position;
-                Vector3 trainOffset =
-                    physicalLaunchDirection * trainOffsets[index];
-                seats[index] = baseSeat + trainOffset;
-                grooveEnds[index] = baseGrooveEnd + trainOffset;
-                rampControls[index] = baseRampControl + trainOffset;
-                rampEnds[index] = baseRampEnd + trainOffset;
-            }
 
             onLoadingStarted?.Invoke();
-            yield return AnimateBatchLoad(tickets, starts, seats);
+            yield return AnimateLoad(batch, batchStart, baseSeat);
             session.MarkTransferLaunching();
             yield return AnimatePhysicalImpact();
             PlayLaunchSound();
             onLaunched?.Invoke();
-            yield return AnimateBatchLinear(
-                tickets,
-                seats,
-                grooveEnds);
+            yield return AnimateGrooveLaunch(
+                batch,
+                baseSeat,
+                baseGrooveEnd);
             cameraTurnRoutine = StartCoroutine(
                 AnimateCamera(true));
-            yield return AnimateBatchRamp(
-                tickets,
-                grooveEnds,
-                rampControls,
-                rampEnds);
+            yield return AnimateRampLaunch(
+                batch,
+                baseGrooveEnd,
+                baseRampEnd);
             if (cameraTurning)
             {
-                Vector3[] exitDirections =
-                    new Vector3[tickets.Length];
-                for (int index = 0; index < tickets.Length; index++)
-                {
-                    Vector3 direction =
-                        rampEnds[index] - rampControls[index];
-                    exitDirections[index] =
-                        direction.sqrMagnitude > 0.0001f
-                            ? direction.normalized
-                            : physicalLaunchDirection;
-                }
-
-                yield return AnimateBatchPostRampFlight(
-                    tickets,
-                    exitDirections);
+                Vector3 exitDirection =
+                    baseRampEnd - baseRampControl;
+                yield return AnimatePostRampFlight(
+                    batch,
+                    exitDirection.sqrMagnitude > 0.0001f
+                        ? exitDirection.normalized
+                        : physicalLaunchDirection);
             }
             if (cameraTurnRoutine != null)
             {
@@ -852,11 +880,8 @@ namespace CraftOrigin.CraftLive
                 cameraTurnRoutine = null;
             }
 
-            foreach (GameObject ticket in batchObjects)
-            {
-                DestroySafely(ticket);
-            }
-
+            DestroySafely(activeBatchGroup);
+            activeBatchGroup = null;
             activeBatchTickets.Clear();
             activeTicket = null;
             RestoreMechanism();

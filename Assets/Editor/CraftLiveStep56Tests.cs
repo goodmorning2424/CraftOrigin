@@ -314,6 +314,23 @@ namespace CraftOrigin.CraftLiveTests
                 Is.False);
         }
 
+        [Test]
+        public void ReleasePull_UsesEndPositionWhenDragCallbackWasSkipped()
+        {
+            Assert.That(
+                CraftLivePad1TransferController.ResolveReleasePull(
+                    0f,
+                    130f,
+                    110f),
+                Is.EqualTo(1f));
+            Assert.That(
+                CraftLivePad1TransferController.ResolveReleasePull(
+                    0.7f,
+                    20f,
+                    110f),
+                Is.EqualTo(0.7f).Within(0.0001f));
+        }
+
         [TestCase(0f, 100f, 0f)]
         [TestCase(25f, 100f, 0.25f)]
         [TestCase(120f, 100f, 1f)]
