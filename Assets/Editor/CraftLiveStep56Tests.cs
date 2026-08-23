@@ -227,6 +227,61 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void BatchGridOffsets_FormCenteredTwoByTwoGroup()
+        {
+            Vector2[] offsets = new Vector2[4];
+            for (int index = 0; index < offsets.Length; index++)
+            {
+                offsets[index] =
+                    CraftLivePad1TransferController.ResolveBatchGridOffset(
+                        index,
+                        4,
+                        2f,
+                        4f);
+            }
+
+            Assert.That(offsets[0], Is.EqualTo(new Vector2(-1f, 2f)));
+            Assert.That(offsets[1], Is.EqualTo(new Vector2(1f, 2f)));
+            Assert.That(offsets[2], Is.EqualTo(new Vector2(-1f, -2f)));
+            Assert.That(offsets[3], Is.EqualTo(new Vector2(1f, -2f)));
+        }
+
+        [Test]
+        public void ContinueAfterPlacement_RejectsStaleTransferSerial()
+        {
+            CraftLiveMaterialDefinition first =
+                CreateMaterial("first", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveMaterialDefinition second =
+                CreateMaterial("second", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(new[] { first, second }));
+            QueueMaterial(session, first, CraftLiveSlotId.Top);
+            QueueMaterial(session, second, CraftLiveSlotId.Left);
+
+            Assert.That(session.BeginAllQueuedTransfers(), Is.True);
+            session.MarkTransferLaunching();
+            session.MarkTransferArriving();
+            session.CompleteCurrentPlacement();
+            int firstSerial = session.State.placement.transferSerial;
+
+            Assert.That(
+                session.ContinueAfterPlacement(firstSerial + 1),
+                Is.False);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.PlacementComplete));
+            Assert.That(
+                session.ContinueAfterPlacement(firstSerial),
+                Is.True);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
+            Assert.That(
+                session.State.placement.materialId,
+                Is.EqualTo(second.MaterialId));
+        }
+
+        [Test]
         public void ClearTransferQueue_ReleasesReservedSlots()
         {
             CraftLiveMaterialDefinition ore =

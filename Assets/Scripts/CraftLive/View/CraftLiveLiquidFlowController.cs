@@ -301,6 +301,14 @@ namespace CraftOrigin.CraftLive
             completedTransferSerial =
                 snapshot.placement.transferSerial;
             flowRoutine = null;
+            // A new PlacementComplete state can arrive while the previous
+            // flow coroutine is still active. Re-check the latest state after
+            // releasing the routine so that the next material's light pass is
+            // never lost.
+            if (isActiveAndEnabled && session != null)
+            {
+                Refresh(session.State);
+            }
         }
 
         private void RefreshPersistentFills(
@@ -377,7 +385,10 @@ namespace CraftOrigin.CraftLive
                 Root = new GameObject(
                     $"PersistentLiquid_{slot}_{materialId}")
             };
-            fill.Root.transform.SetParent(center, false);
+            // Flow points are calculated in world space. Keeping the runtime
+            // fill under a scaled scene anchor applied that scale a second
+            // time, which made later trails sink into the workbench or vanish.
+            fill.Root.transform.SetParent(null, false);
             fill.Root.AddComponent<CraftLiveGeneratedRuntimeVisual>();
             fill.Rim = CreateRimGlow(
                 fill.Root.transform,

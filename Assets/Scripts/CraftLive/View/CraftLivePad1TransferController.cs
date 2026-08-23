@@ -807,11 +807,11 @@ namespace CraftOrigin.CraftLive
             // Keep every frame in one rigid group. Previously each frame had
             // its own seat, curve and velocity, so timing differences made a
             // four-item volley stretch, overlap and occasionally appear to
-            // leave only one frame moving. The first frame is the group pivot;
-            // the remaining frames retain their packed queue offsets.
+            // leave only one frame moving. Repacking them around the shared
+            // pivot also prevents the front queue item from flying ahead.
             activeBatchGroup = new GameObject("PhysicalFrameBatch");
             activeBatchGroup.transform.SetPositionAndRotation(
-                batchObjects[0].transform.position,
+                ResolveBatchCenter(batchObjects),
                 Quaternion.identity);
             foreach (GameObject ticket in batchObjects)
             {
@@ -824,6 +824,7 @@ namespace CraftOrigin.CraftLive
             }
 
             Transform batch = activeBatchGroup.transform;
+            ArrangeRigidBatch(batchObjects, batch.position);
             Vector3 batchStart = batch.position;
             Vector3 railUp = ResolveCameraUp().normalized;
             Vector3 baseSeat = launcherSeat != null
@@ -895,6 +896,101 @@ namespace CraftOrigin.CraftLive
             }
 
             FinishLaunchRoutine();
+        }
+
+        private void ArrangeRigidBatch(
+            List<GameObject> tickets,
+            Vector3 center)
+        {
+            if (tickets == null || tickets.Count == 0)
+            {
+                return;
+            }
+
+            Vector3 travel = physicalLaunchDirection.sqrMagnitude > 0.0001f
+                ? physicalLaunchDirection.normalized
+                : Vector3.right;
+            Vector3 up = ResolveCameraUp().normalized;
+            float travelExtent = batchTrainSpacing * 0.5f;
+            float upExtent = batchTrainSpacing * 0.5f;
+            foreach (GameObject ticket in tickets)
+            {
+                travelExtent = Mathf.Max(
+                    travelExtent,
+                    ResolveProjectedExtent(
+                        ticket,
+                        travel,
+                        batchTrainSpacing * 0.5f));
+                upExtent = Mathf.Max(
+                    upExtent,
+                    ResolveProjectedExtent(
+                        ticket,
+                        up,
+                        batchTrainSpacing * 0.5f));
+            }
+
+            float horizontalSpacing =
+                travelExtent * 2f + physicalFrameGap;
+            float verticalSpacing =
+                upExtent * 2f + physicalFrameGap;
+            for (int index = 0; index < tickets.Count; index++)
+            {
+                if (tickets[index] == null)
+                {
+                    continue;
+                }
+
+                Vector2 offset = ResolveBatchGridOffset(
+                    index,
+                    tickets.Count,
+                    horizontalSpacing,
+                    verticalSpacing);
+                tickets[index].transform.position =
+                    center + travel * offset.x + up * offset.y;
+            }
+        }
+
+        private static Vector3 ResolveBatchCenter(
+            List<GameObject> tickets)
+        {
+            Vector3 total = Vector3.zero;
+            int count = 0;
+            if (tickets != null)
+            {
+                foreach (GameObject ticket in tickets)
+                {
+                    if (ticket == null)
+                    {
+                        continue;
+                    }
+
+                    total += ticket.transform.position;
+                    count++;
+                }
+            }
+
+            return count > 0 ? total / count : Vector3.zero;
+        }
+
+        public static Vector2 ResolveBatchGridOffset(
+            int index,
+            int count,
+            float horizontalSpacing,
+            float verticalSpacing)
+        {
+            int safeCount = Mathf.Max(1, count);
+            int columns = safeCount == 1 ? 1 : 2;
+            int row = Mathf.Max(0, index) / columns;
+            int column = Mathf.Max(0, index) % columns;
+            int rowCount = Mathf.CeilToInt(safeCount / (float)columns);
+            int itemsInRow = Mathf.Min(
+                columns,
+                safeCount - row * columns);
+            float x = (column - (itemsInRow - 1) * 0.5f) *
+                      Mathf.Max(0f, horizontalSpacing);
+            float y = ((rowCount - 1) * 0.5f - row) *
+                      Mathf.Max(0f, verticalSpacing);
+            return new Vector2(x, y);
         }
 
         public static float[] ResolveBatchTrainOffsets(

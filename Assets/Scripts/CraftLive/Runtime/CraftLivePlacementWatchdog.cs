@@ -56,9 +56,18 @@ namespace CraftOrigin.CraftLive
 
             if (session.Role == CraftLiveRole.WorkbenchPad)
             {
+                CraftLivePad2TransferReceiver receiver =
+                    FindAnyObjectByType<
+                        CraftLivePad2TransferReceiver>();
                 if (placement.status == CraftLivePlacementStatus.Pad2Arriving &&
                     elapsed >= stageTimeoutSeconds)
                 {
+                    if (receiver != null &&
+                        receiver.IsReceivingAnyTransfer)
+                    {
+                        return;
+                    }
+
                     session.CompleteCurrentPlacement();
                     return;
                 }
@@ -66,6 +75,16 @@ namespace CraftOrigin.CraftLive
                 if (placement.status == CraftLivePlacementStatus.PlacementComplete &&
                     elapsed >= completionTimeoutSeconds)
                 {
+                    if (receiver != null &&
+                        receiver.IsReceivingTransfer(
+                            placement.transferSerial))
+                    {
+                        // The receiver owns the place -> light -> continue
+                        // sequence. Advancing here at the same frame as the
+                        // light completion used to swallow the next arrival.
+                        return;
+                    }
+
                     CraftLiveLiquidFlowController flow =
                         FindAnyObjectByType<
                             CraftLiveLiquidFlowController>();
@@ -75,7 +94,8 @@ namespace CraftOrigin.CraftLive
                         completionTimeoutSeconds + stageTimeoutSeconds;
                     if (flowFinished || recoveryTimeoutReached)
                     {
-                        session.ContinueAfterPlacement();
+                        session.ContinueAfterPlacement(
+                            placement.transferSerial);
                     }
                 }
             }

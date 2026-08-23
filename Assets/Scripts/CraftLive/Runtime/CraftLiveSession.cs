@@ -571,9 +571,18 @@ namespace CraftOrigin.CraftLive
 
         public void ContinueAfterPlacement()
         {
-            if (state.placement.status != CraftLivePlacementStatus.PlacementComplete)
+            ContinueAfterPlacement(
+                state != null ? state.placement.transferSerial : -1);
+        }
+
+        public bool ContinueAfterPlacement(int expectedTransferSerial)
+        {
+            if (state == null ||
+                state.placement.status !=
+                    CraftLivePlacementStatus.PlacementComplete ||
+                state.placement.transferSerial != expectedTransferSerial)
             {
-                return;
+                return false;
             }
 
             Mutate(next =>
@@ -597,6 +606,7 @@ namespace CraftOrigin.CraftLive
                         : "次の素材を選ぼう";
                 }
             });
+            return true;
         }
 
         public void RemoveSlot(CraftLiveSlotId slot)

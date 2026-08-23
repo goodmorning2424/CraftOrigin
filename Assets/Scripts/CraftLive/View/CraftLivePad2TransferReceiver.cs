@@ -48,6 +48,7 @@ namespace CraftOrigin.CraftLive
             displayedMaterialIds =
                 new Dictionary<CraftLiveSlotId, string>();
         private int handledTransferSerial = -1;
+        private int activeTransferSerial = -1;
         private Coroutine receiveRoutine;
         private Coroutine localAutoStartRoutine;
         private GameObject activeTransferVisual;
@@ -99,6 +100,7 @@ namespace CraftOrigin.CraftLive
 
             DestroySafely(activeTransferVisual);
             activeTransferVisual = null;
+            activeTransferSerial = -1;
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -116,6 +118,14 @@ namespace CraftOrigin.CraftLive
                 localAutoStartRoutine = null;
             }
         }
+
+        public bool IsReceivingTransfer(int transferSerial)
+        {
+            return receiveRoutine != null &&
+                   activeTransferSerial == transferSerial;
+        }
+
+        public bool IsReceivingAnyTransfer => receiveRoutine != null;
 
 #if UNITY_EDITOR
         [ContextMenu("Debug/Start First Queued Arrival")]
@@ -187,6 +197,7 @@ namespace CraftOrigin.CraftLive
             {
                 handledTransferSerial =
                     state.placement.transferSerial;
+                activeTransferSerial = handledTransferSerial;
                 receiveRoutine = StartCoroutine(
                     Receive(state.Clone()));
             }
@@ -269,8 +280,9 @@ namespace CraftOrigin.CraftLive
             if (material == null || target == null)
             {
                 session.CompleteCurrentPlacement();
-                receiveRoutine = null;
-                session.ContinueAfterPlacement();
+                FinishReceive(
+                    snapshot.placement.transferSerial,
+                    true);
                 yield break;
             }
 
@@ -380,8 +392,28 @@ namespace CraftOrigin.CraftLive
                 yield return new WaitForSecondsRealtime(completionHoldSeconds);
             }
 
+            FinishReceive(transferSerial, true);
+        }
+
+        private void FinishReceive(
+            int transferSerial,
+            bool continueBatch)
+        {
             receiveRoutine = null;
-            session.ContinueAfterPlacement();
+            activeTransferSerial = -1;
+            if (continueBatch && session != null)
+            {
+                session.ContinueAfterPlacement(transferSerial);
+            }
+
+            // ContinueAfterPlacement can synchronously expose the next state,
+            // and a remote Pad1 update may already have reached Pad2 while the
+            // previous coroutine was occupied. Re-evaluate after clearing the
+            // guard so the third/fourth arrival cannot be missed.
+            if (isActiveAndEnabled && session != null)
+            {
+                Refresh(session.State);
+            }
         }
 
         private void RefreshPlacedVisual(
@@ -428,10 +460,15 @@ namespace CraftOrigin.CraftLive
                 ResolvePrimitive(material.MaterialForm),
                 ResolveDisplayPosition(slot, anchor),
                 ResolveDisplayRotation(slot, anchor),
-                anchor,
-                ResolveMaterialSize(slot, 0.58f),
+                null,
+                ResolveWorldVisualSize(
+                    ResolveMaterialSize(slot, 0.58f)),
                 material.Pad2PreviewRollDegrees,
                 true);
+            visual.transform.position = ResolveClearDisplayPosition(
+                slot,
+                anchor,
+                visual);
             visual.name = $"Placed_{slot}_{materialId}";
             ApplyMaterialColor(visual, material.EffectColor);
             DisableColliders(visual);
@@ -477,6 +514,10 @@ namespace CraftOrigin.CraftLive
             Vector3 targetPosition = ResolveDisplayPosition(
                 slot,
                 target);
+            targetPosition = ResolveClearDisplayPosition(
+                slot,
+                target,
+                visual.gameObject);
             Quaternion targetRotation = ResolveDisplayRotation(
                 slot,
                 target);
@@ -642,6 +683,81 @@ namespace CraftOrigin.CraftLive
                         ResolveWorldVisualSize(webGlSurfaceSafetyOffset);
 #endif
             return resolved;
+        }
+
+        private Vector3 ResolveClearDisplayPosition(
+            CraftLiveSlotId slot,
+            Transform target,
+            GameObject visual)
+        {
+            Vector3 resolved = ResolveDisplayPosition(slot, target);
+            if (target == null || visual == null ||
+                !TryGetRendererBounds(visual, out Bounds bounds))
+            {
+                return resolved;
+            }
+
+            Vector3 normal = ResolveSurfaceNormal();
+            float extent = ProjectBoundsExtent(bounds.extents, normal);
+            float surfaceProjection = Vector3.Dot(target.position, normal);
+            Vector3 boundsCenterAtResolved = bounds.center +
+                (resolved - visual.transform.position);
+            float backProjection =
+                Vector3.Dot(boundsCenterAtResolved, normal) - extent;
+            float desiredBackProjection = surfaceProjection +
+                ResolveWorldVisualSize(webGlSurfaceSafetyOffset);
+            float correction = Mathf.Max(
+                0f,
+                desiredBackProjection - backProjection);
+            return resolved + normal * correction;
+        }
+
+        private static bool TryGetRendererBounds(
+            GameObject target,
+            out Bounds bounds)
+        {
+            bounds = default;
+            if (target == null)
+            {
+                return false;
+            }
+
+            Renderer[] renderers =
+                target.GetComponentsInChildren<Renderer>(true);
+            bool found = false;
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null || !renderer.enabled)
+                {
+                    continue;
+                }
+
+                if (!found)
+                {
+                    bounds = renderer.bounds;
+                    found = true;
+                }
+                else
+                {
+                    bounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            return found;
+        }
+
+        private static float ProjectBoundsExtent(
+            Vector3 extents,
+            Vector3 axis)
+        {
+            Vector3 normalized = axis.sqrMagnitude > 0.0001f
+                ? axis.normalized
+                : Vector3.forward;
+            normalized = new Vector3(
+                Mathf.Abs(normalized.x),
+                Mathf.Abs(normalized.y),
+                Mathf.Abs(normalized.z));
+            return Vector3.Dot(extents, normalized);
         }
 
         private Quaternion ResolveDisplayRotation(
