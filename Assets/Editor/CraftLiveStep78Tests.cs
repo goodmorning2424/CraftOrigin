@@ -276,6 +276,32 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(0f).Within(0.0001f));
         }
 
+        [TestCase(CraftLiveCraftStatus.Editing,
+            CraftLivePlacementStatus.Idle, false)]
+        [TestCase(CraftLiveCraftStatus.Mixing,
+            CraftLivePlacementStatus.Idle, true)]
+        [TestCase(CraftLiveCraftStatus.Mixing,
+            CraftLivePlacementStatus.SelectingSlot, false)]
+        [TestCase(CraftLiveCraftStatus.Mixing,
+            CraftLivePlacementStatus.ConfirmingSlot, false)]
+        public void HammerInput_NeverCoversMaterialPlacement(
+            CraftLiveCraftStatus craftStatus,
+            CraftLivePlacementStatus placementStatus,
+            bool expected)
+        {
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                sessionPhase = CraftLiveSessionPhase.Playing
+            };
+            state.craft.status = craftStatus;
+            state.placement.status = placementStatus;
+
+            Assert.That(
+                CraftLiveHammerSynthesisController
+                    .ShouldShowHammerInput(state),
+                Is.EqualTo(expected));
+        }
+
         [Test]
         public void Scenes_HaveStep78Components()
         {

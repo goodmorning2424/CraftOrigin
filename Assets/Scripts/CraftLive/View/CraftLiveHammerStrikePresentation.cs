@@ -153,10 +153,7 @@ namespace CraftOrigin.CraftLive
 
         private void OnDisable()
         {
-            StopAllCoroutines();
-            isStriking = false;
-            RestoreWeaponMaterials();
-            RestoreCameraImmediate();
+            HideImmediately();
         }
 
         private void OnDestroy()
@@ -214,6 +211,13 @@ namespace CraftOrigin.CraftLive
             if (value == isMixing)
             {
                 SetGuideVisible(value && !isStriking);
+                if (!value && finishRoutine == null)
+                {
+                    SetHammerVisible(false);
+                    SetVisualRootsActive(false);
+                    RestoreWeaponMaterials();
+                    RestoreCameraImmediate();
+                }
                 return;
             }
 
@@ -245,6 +249,28 @@ namespace CraftOrigin.CraftLive
 
                 finishRoutine = StartCoroutine(FinishPresentation());
             }
+        }
+
+        /// <summary>
+        /// Immediately removes every forging-only visual and input surface.
+        /// This is used when Pad 2 returns to editing/material placement; a
+        /// completion hold from the previous state must never cover the slot
+        /// colliders or the placement confirmation controls.
+        /// </summary>
+        public void HideImmediately()
+        {
+            StopAllCoroutines();
+            cameraRoutine = null;
+            finishRoutine = null;
+            activeStrikeRoutine = null;
+            isMixing = false;
+            isStriking = false;
+            strikeGlow = 0f;
+            SetGuideVisible(false);
+            SetHammerVisible(false);
+            SetVisualRootsActive(false);
+            RestoreWeaponMaterials();
+            RestoreCameraImmediate();
         }
 
         public void PreviewStrike(float normalized)

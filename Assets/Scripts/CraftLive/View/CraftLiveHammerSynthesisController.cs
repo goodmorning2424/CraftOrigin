@@ -77,6 +77,18 @@ namespace CraftOrigin.CraftLive
             {
                 session.StateChanged -= Refresh;
             }
+
+            if (generatedRoot != null)
+            {
+                generatedRoot.SetActive(false);
+            }
+
+            if (synthesisButton != null)
+            {
+                synthesisButton.SetActive(false);
+            }
+
+            presentation?.HideImmediately();
         }
 
         private void OnGUI()
@@ -361,9 +373,7 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            bool mixing =
-                state.craft.status ==
-                CraftLiveCraftStatus.Mixing;
+            bool mixing = ShouldShowHammerInput(state);
             if (generatedRoot != null)
             {
                 generatedRoot.SetActive(mixing);
@@ -392,15 +402,33 @@ namespace CraftOrigin.CraftLive
             int remaining = PassesRemaining(
                 count,
                 required);
-            presentation?.SetMixing(
-                mixing,
-                count / (float)Mathf.Max(1, required),
-                count,
-                required);
+            if (presentation != null)
+            {
+                presentation.SetMixing(
+                    mixing,
+                    count / (float)Mathf.Max(1, required),
+                    count,
+                    required);
+                if (!mixing &&
+                    state.craft.status != CraftLiveCraftStatus.Complete)
+                {
+                    // Editing and material-placement states must not retain
+                    // the previous forge guide or its full-screen collider.
+                    presentation.HideImmediately();
+                }
+            }
 
             onHammerVisible?.Invoke(mixing);
             onPassCountChanged?.Invoke(count);
             onPassesRemainingChanged?.Invoke(remaining);
+        }
+
+        public static bool ShouldShowHammerInput(CraftLiveRoomState state)
+        {
+            return state != null &&
+                   state.sessionPhase == CraftLiveSessionPhase.Playing &&
+                   state.craft.status == CraftLiveCraftStatus.Mixing &&
+                   state.placement.status == CraftLivePlacementStatus.Idle;
         }
 
         private void BuildFallback()
