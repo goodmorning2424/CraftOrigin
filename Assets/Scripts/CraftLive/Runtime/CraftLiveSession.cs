@@ -584,7 +584,7 @@ namespace CraftOrigin.CraftLive
                     next.transferBatchRemaining--;
                     ActivateNextQueuedTransfer(
                         next,
-                        CraftLivePlacementStatus.Pad2Arriving);
+                        CraftLivePlacementStatus.Pad1Loading);
                     next.message = "次の素材を転送準備中";
                 }
                 else

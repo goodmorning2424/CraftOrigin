@@ -796,13 +796,23 @@ namespace CraftOrigin.CraftLive
                 ? rampLaunchEnd.position
                 : baseGrooveEnd +
                   physicalLaunchDirection * rampLaunchDistance;
+            float[] halfExtents = new float[count];
+            for (int index = 0; index < count; index++)
+            {
+                halfExtents[index] = ResolveProjectedExtent(
+                    batchObjects[index],
+                    physicalLaunchDirection,
+                    batchTrainSpacing * 0.5f);
+            }
+            float[] trainOffsets = ResolveBatchTrainOffsets(
+                halfExtents,
+                physicalFrameGap);
             for (int index = 0; index < count; index++)
             {
                 tickets[index] = batchObjects[index].transform;
                 starts[index] = tickets[index].position;
                 Vector3 trainOffset =
-                    -physicalLaunchDirection *
-                    (index * batchTrainSpacing);
+                    physicalLaunchDirection * trainOffsets[index];
                 seats[index] = baseSeat + trainOffset;
                 grooveEnds[index] = baseGrooveEnd + trainOffset;
                 rampControls[index] = baseRampControl + trainOffset;
@@ -868,6 +878,28 @@ namespace CraftOrigin.CraftLive
             }
 
             FinishLaunchRoutine();
+        }
+
+        public static float[] ResolveBatchTrainOffsets(
+            float[] halfExtents,
+            float gap)
+        {
+            if (halfExtents == null || halfExtents.Length == 0)
+            {
+                return System.Array.Empty<float>();
+            }
+
+            float[] offsets = new float[halfExtents.Length];
+            float safeGap = Mathf.Max(0f, gap);
+            float occupiedFront = Mathf.Max(0f, halfExtents[0]);
+            for (int index = 1; index < halfExtents.Length; index++)
+            {
+                float halfExtent = Mathf.Max(0f, halfExtents[index]);
+                offsets[index] = occupiedFront + safeGap + halfExtent;
+                occupiedFront = offsets[index] + halfExtent;
+            }
+
+            return offsets;
         }
 
         private void FinishLaunchRoutine()

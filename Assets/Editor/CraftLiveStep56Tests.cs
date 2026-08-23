@@ -160,6 +160,73 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void AllTransfer_FourItemsCompleteWithoutStopping()
+        {
+            CraftLiveMaterialDefinition[] materials =
+            {
+                CreateMaterial("oreA", CraftLiveMaterialCategory.Upgrade),
+                CreateMaterial("oreB", CraftLiveMaterialCategory.Upgrade),
+                CreateMaterial("oreC", CraftLiveMaterialCategory.Upgrade),
+                CreateMaterial("oreD", CraftLiveMaterialCategory.Upgrade)
+            };
+            CraftLiveSlotId[] slots =
+            {
+                CraftLiveSlotId.Top,
+                CraftLiveSlotId.Left,
+                CraftLiveSlotId.Right,
+                CraftLiveSlotId.Bottom
+            };
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(materials));
+            for (int index = 0; index < materials.Length; index++)
+            {
+                QueueMaterial(session, materials[index], slots[index]);
+            }
+
+            Assert.That(session.BeginAllQueuedTransfers(), Is.True);
+            for (int index = 0; index < materials.Length; index++)
+            {
+                Assert.That(
+                    session.State.placement.status,
+                    Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
+                Assert.That(
+                    session.State.placement.materialId,
+                    Is.EqualTo(materials[index].MaterialId));
+                CompleteActiveTransfer(session);
+                Assert.That(
+                    session.State.slots.Get(slots[index]),
+                    Is.EqualTo(materials[index].MaterialId));
+            }
+
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+            Assert.That(session.State.transferQueue, Is.Empty);
+            Assert.That(session.State.transferBatchRemaining, Is.Zero);
+        }
+
+        [Test]
+        public void BatchTrainOffsets_KeepEveryFrameSeparatedInFront()
+        {
+            float[] halfExtents = { 0.3f, 0.4f, 0.25f, 0.5f };
+            float[] offsets =
+                CraftLivePad1TransferController.ResolveBatchTrainOffsets(
+                    halfExtents,
+                    0.05f);
+
+            Assert.That(offsets[0], Is.Zero);
+            for (int index = 1; index < offsets.Length; index++)
+            {
+                float previousFront =
+                    offsets[index - 1] + halfExtents[index - 1];
+                float currentBack = offsets[index] - halfExtents[index];
+                Assert.That(currentBack, Is.GreaterThanOrEqualTo(
+                    previousFront + 0.05f - 0.0001f));
+                Assert.That(offsets[index], Is.GreaterThan(0f));
+            }
+        }
+
+        [Test]
         public void ClearTransferQueue_ReleasesReservedSlots()
         {
             CraftLiveMaterialDefinition ore =
