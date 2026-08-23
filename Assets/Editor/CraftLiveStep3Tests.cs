@@ -678,6 +678,7 @@ namespace CraftOrigin.CraftLiveTests
                 session,
                 "state",
                 CraftLiveRoomState.Create(catalog));
+            session.State.weaponSelectionConfirmed = true;
 
             GameObject systemObject = new GameObject("Pad1System");
             createdObjects.Add(systemObject);
@@ -734,6 +735,80 @@ namespace CraftOrigin.CraftLiveTests
                 session.State.placement.status,
                 Is.EqualTo(CraftLivePlacementStatus.Idle));
             Assert.That(preview.DisplayedMaterialId, Is.Empty);
+        }
+
+        [Test]
+        public void PaintingSelection_WithoutConfirmedWeaponOpensPreview()
+        {
+            CraftLiveMaterialDefinition material =
+                ScriptableObject.CreateInstance<
+                    CraftLiveMaterialDefinition>();
+            createdObjects.Add(material);
+            SetField(material, "materialId", "browse_material");
+            SetField(material, "displayName", "Browse Material");
+            SetField(material, "requiresQrUnlock", false);
+
+            CraftLiveCatalog catalog =
+                ScriptableObject.CreateInstance<CraftLiveCatalog>();
+            createdObjects.Add(catalog);
+            SetField(
+                catalog,
+                "materials",
+                new List<CraftLiveMaterialDefinition> { material });
+
+            GameObject sessionObject = new GameObject("Session");
+            createdObjects.Add(sessionObject);
+            CraftLiveSession session =
+                sessionObject.AddComponent<CraftLiveSession>();
+            SetField(session, "catalog", catalog);
+            SetField(
+                session,
+                "state",
+                CraftLiveRoomState.Create(catalog));
+
+            GameObject systemObject = new GameObject("Pad1System");
+            createdObjects.Add(systemObject);
+            systemObject.SetActive(false);
+            CraftLivePad1Bindings bindings =
+                systemObject.AddComponent<CraftLivePad1Bindings>();
+            CraftLivePad1GalleryController controller =
+                systemObject.AddComponent<
+                    CraftLivePad1GalleryController>();
+            CraftLivePad1MaterialPreview preview =
+                systemObject.AddComponent<CraftLivePad1MaterialPreview>();
+            GameObject previewRoot = new GameObject("PreviewRoot");
+            previewRoot.transform.SetParent(systemObject.transform, false);
+            GameObject hologramRoot = new GameObject("HologramRoot");
+            hologramRoot.transform.SetParent(systemObject.transform, false);
+            SetField(
+                bindings,
+                "materialPreviewRoot",
+                previewRoot.transform);
+            SetField(
+                bindings,
+                "hologramInfoRoot",
+                hologramRoot.transform);
+            SetField(controller, "session", session);
+            SetField(controller, "bindings", bindings);
+            SetField(preview, "session", session);
+            SetField(preview, "bindings", bindings);
+            SetField(preview, "createPlaceholderWhenMissing", false);
+            SetField(preview, "createFallbackHologram", false);
+            systemObject.SetActive(true);
+            InvokeMethod(preview, "OnDisable");
+            InvokeMethod(preview, "OnEnable");
+
+            controller.SelectMaterial(material);
+            preview.Refresh(session.State);
+
+            Assert.That(session.State.weaponSelectionConfirmed, Is.False);
+            Assert.That(session.State.selectedMaterialId, Is.Empty);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+            Assert.That(
+                preview.DisplayedMaterialId,
+                Is.EqualTo(material.MaterialId));
         }
 
         [Test]

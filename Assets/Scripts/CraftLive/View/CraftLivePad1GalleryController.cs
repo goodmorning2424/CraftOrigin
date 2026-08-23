@@ -217,12 +217,27 @@ namespace CraftOrigin.CraftLive
             CraftLivePad1MaterialPreview preview =
                 GetComponent<CraftLivePad1MaterialPreview>();
             preview?.SetSelectionAnchor(material, selectionAnchor);
-            session.SelectMaterial(material);
-            if (session.State != null &&
-                session.State.selectedMaterialId == material.MaterialId)
+
+            if (CanBeginMaterialPlacement(session.State))
             {
-                preview?.DisplayMaterial(material);
+                session.SelectMaterial(material);
+                return;
             }
+
+            // Browsing the painting is independent from starting Pad 2
+            // placement. In particular, a newly-started craft has no
+            // confirmed weapon yet, but Pad 1 must still show the material.
+            preview?.DisplayMaterial(material);
+        }
+
+        public static bool CanBeginMaterialPlacement(
+            CraftLiveRoomState state)
+        {
+            return state != null &&
+                   state.sessionPhase == CraftLiveSessionPhase.Playing &&
+                   state.weaponSelectionConfirmed &&
+                   state.placement != null &&
+                   state.placement.status == CraftLivePlacementStatus.Idle;
         }
 
         public Transform FindMaterialAnchor(string materialId)
