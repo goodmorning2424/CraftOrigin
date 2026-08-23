@@ -356,10 +356,28 @@ namespace CraftOrigin.CraftLive
                 session.PublishCurrentStatsToPad3();
             }
 
-            if (completionHoldSeconds > 0f)
+            CraftLiveLiquidFlowController flowController =
+                FindAnyObjectByType<CraftLiveLiquidFlowController>();
+            int transferSerial = snapshot.placement.transferSerial;
+            if (flowController != null)
             {
-                yield return new WaitForSecondsRealtime(
-                    completionHoldSeconds);
+                // CompleteCurrentPlacement starts the groove light through
+                // StateChanged. Do not advance the batch until that material's
+                // full light pass has finished, so every queued item repeats
+                // the same place-then-flow sequence as the first one.
+                yield return null;
+                float waited = 0f;
+                float timeout = Mathf.Max(8f, completionHoldSeconds);
+                while (!flowController.HasCompletedFlow(transferSerial) &&
+                       waited < timeout)
+                {
+                    waited += Time.unscaledDeltaTime;
+                    yield return null;
+                }
+            }
+            else if (completionHoldSeconds > 0f)
+            {
+                yield return new WaitForSecondsRealtime(completionHoldSeconds);
             }
 
             receiveRoutine = null;

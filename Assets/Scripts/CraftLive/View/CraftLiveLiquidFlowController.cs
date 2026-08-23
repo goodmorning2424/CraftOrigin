@@ -56,7 +56,14 @@ namespace CraftOrigin.CraftLive
                 new Dictionary<CraftLiveSlotId, string>();
 
         private int handledTransferSerial = -1;
+        private int completedTransferSerial = -1;
         private Coroutine flowRoutine;
+
+        public bool HasCompletedFlow(int transferSerial)
+        {
+            return transferSerial > 0 &&
+                   completedTransferSerial == transferSerial;
+        }
 
         private void Awake()
         {
@@ -211,6 +218,8 @@ namespace CraftOrigin.CraftLive
                 center == null)
             {
                 session.PublishCurrentStatsToPad3();
+                completedTransferSerial =
+                    snapshot.placement.transferSerial;
                 flowRoutine = null;
                 yield break;
             }
@@ -289,6 +298,8 @@ namespace CraftOrigin.CraftLive
             ClearDrops();
             session.PublishCurrentStatsToPad3();
             onFlowCompleted?.Invoke();
+            completedTransferSerial =
+                snapshot.placement.transferSerial;
             flowRoutine = null;
         }
 

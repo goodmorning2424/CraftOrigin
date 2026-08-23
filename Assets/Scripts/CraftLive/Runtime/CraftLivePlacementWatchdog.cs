@@ -66,7 +66,17 @@ namespace CraftOrigin.CraftLive
                 if (placement.status == CraftLivePlacementStatus.PlacementComplete &&
                     elapsed >= completionTimeoutSeconds)
                 {
-                    session.ContinueAfterPlacement();
+                    CraftLiveLiquidFlowController flow =
+                        FindAnyObjectByType<
+                            CraftLiveLiquidFlowController>();
+                    bool flowFinished = flow == null ||
+                        flow.HasCompletedFlow(placement.transferSerial);
+                    bool recoveryTimeoutReached = elapsed >=
+                        completionTimeoutSeconds + stageTimeoutSeconds;
+                    if (flowFinished || recoveryTimeoutReached)
+                    {
+                        session.ContinueAfterPlacement();
+                    }
                 }
             }
         }

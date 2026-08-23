@@ -633,14 +633,6 @@ namespace CraftOrigin.CraftLive
 
         private IEnumerator Launch(CraftLiveRoomState snapshot)
         {
-            if (usingPhysicalLauncher &&
-                snapshot != null &&
-                snapshot.transferBatchRemaining > 0)
-            {
-                yield return LaunchPhysicalBatch(snapshot);
-                yield break;
-            }
-
             CraftLiveMaterialDefinition material =
                 session.Catalog != null
                     ? session.Catalog.FindMaterial(

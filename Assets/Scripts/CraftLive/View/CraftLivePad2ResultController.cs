@@ -415,6 +415,47 @@ namespace CraftOrigin.CraftLive
                 new Vector3(0f, 2.05f, -0.74f),
                 0.027f,
                 accent);
+            CreateText(
+                parent,
+                "SecretSuccessLabel",
+                "隠し武器合成成功！！",
+                new Vector3(-0.25f, 1.13f, -0.74f),
+                0.034f,
+                accent);
+
+            Vector3[] sparklePositions =
+            {
+                new Vector3(-2.75f, 2.62f, -0.73f),
+                new Vector3(-1.95f, 2.30f, -0.73f),
+                new Vector3(-0.95f, 2.78f, -0.73f),
+                new Vector3(0.72f, 2.72f, -0.73f),
+                new Vector3(1.72f, 2.35f, -0.73f),
+                new Vector3(2.68f, 2.68f, -0.73f),
+                new Vector3(-2.92f, 1.45f, -0.73f),
+                new Vector3(2.9f, 1.36f, -0.73f),
+                new Vector3(-2.86f, 0.62f, -0.73f),
+                new Vector3(2.82f, 0.55f, -0.73f),
+                new Vector3(-2.72f, -0.48f, -0.73f),
+                new Vector3(2.7f, -0.38f, -0.73f),
+                new Vector3(-2.55f, -1.65f, -0.73f),
+                new Vector3(2.48f, -1.58f, -0.73f)
+            };
+            for (int index = 0; index < sparklePositions.Length; index++)
+            {
+                float size = index % 3 == 0 ? 0.14f : 0.09f;
+                GameObject sparkle = CreateDecorativePart(
+                    parent,
+                    $"SecretSparkle_{index}",
+                    sparklePositions[index],
+                    new Vector3(size, size, 0.035f),
+                    Color.Lerp(accent, Color.white, 0.55f),
+                    1.8f,
+                    0.12f,
+                    0.82f);
+                sparkle.transform.localRotation =
+                    Quaternion.Euler(0f, 0f, 45f);
+                sparkle.AddComponent<CraftLiveSecretResultEffect>();
+            }
         }
 
         private IEnumerator RevealStaffRestart(
@@ -772,17 +813,21 @@ namespace CraftOrigin.CraftLive
     public sealed class CraftLiveSecretResultEffect : MonoBehaviour
     {
         private Vector3 baseScale;
+        private float phase;
 
         private void Awake()
         {
             baseScale = transform.localScale;
+            phase = Mathf.Abs(gameObject.name.GetHashCode() % 17) *
+                    0.37f;
         }
 
         private void Update()
         {
-            transform.Rotate(0f, 0f, 18f * Time.deltaTime);
-            float pulse = 0.88f +
-                          Mathf.Sin(Time.unscaledTime * 4.5f) * 0.12f;
+            float pulse = 0.58f +
+                          (Mathf.Sin(
+                               Time.unscaledTime * 5.2f + phase) + 1f) *
+                          0.31f;
             transform.localScale = baseScale * pulse;
         }
     }
