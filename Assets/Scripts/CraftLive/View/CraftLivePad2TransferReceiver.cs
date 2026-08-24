@@ -11,6 +11,8 @@ namespace CraftOrigin.CraftLive
         [Header("References")]
         [SerializeField] private CraftLiveSession session;
         [SerializeField] private CraftLivePad2Bindings bindings;
+        [SerializeField] private CraftLiveLiquidFlowController
+            liquidFlowController;
         [SerializeField] private GameObject fallbackTicketPrefab;
         [SerializeField] private GameObject fallbackMaterialPrefab;
 
@@ -75,6 +77,7 @@ namespace CraftOrigin.CraftLive
         private void OnEnable()
         {
             ResolveReferences();
+            liquidFlowController?.SetExternalSequencing(true);
             if (session != null)
             {
                 session.StateChanged -= Refresh;
@@ -97,6 +100,7 @@ namespace CraftOrigin.CraftLive
         {
             bindings = targetBindings;
             ResolveReferences();
+            liquidFlowController?.SetExternalSequencing(true);
         }
 
         public void SetLocalAutoStartEnabled(bool value)
@@ -174,6 +178,17 @@ namespace CraftOrigin.CraftLive
             {
                 bindings = GetComponent<CraftLivePad2Bindings>();
             }
+
+            if (liquidFlowController == null)
+            {
+                liquidFlowController =
+                    GetComponent<CraftLiveLiquidFlowController>();
+                if (liquidFlowController == null)
+                {
+                    liquidFlowController = FindAnyObjectByType<
+                        CraftLiveLiquidFlowController>();
+                }
+            }
         }
 
         private void Refresh(CraftLiveRoomState state)
@@ -227,7 +242,7 @@ namespace CraftOrigin.CraftLive
                     handledTransferGeneration;
                 activeTransferSerial = handledTransferSerial;
                 receiveRoutine = StartCoroutine(
-                    ReceiveGuarded(
+                    PlaceSingleMaterialGuarded(
                         state.Clone(),
                         activeTransferGeneration,
                         activeTransferSerial));
@@ -303,7 +318,7 @@ namespace CraftOrigin.CraftLive
         }
 #endif
 
-        private IEnumerator ReceiveGuarded(
+        private IEnumerator PlaceSingleMaterialGuarded(
             CraftLiveRoomState snapshot,
             int groupGeneration,
             int transferSerial)
@@ -443,47 +458,18 @@ namespace CraftOrigin.CraftLive
                 }
 
                 onPlacementCompleted?.Invoke(slot);
-                if (publishStatsAfterArrival)
-                {
-                    if (statusPublishDelay > 0f)
-                    {
-                        yield return new WaitForSecondsRealtime(
-                            statusPublishDelay);
-                    }
 
-                    session.PublishCurrentStatsToPad3(
-                        groupGeneration,
-                        transferSerial);
-                }
-
-                CraftLiveLiquidFlowController flowController =
-                    GetComponent<CraftLiveLiquidFlowController>();
-                if (flowController == null)
+                // Single and batch transfers share this exact method. Pad 2
+                // directly awaits the light pass for the current slot before
+                // publishing or exposing the next queued material; no second
+                // StateChanged coroutine is allowed to race this sequence.
+                if (liquidFlowController != null)
                 {
-                    flowController = FindAnyObjectByType<
-                        CraftLiveLiquidFlowController>();
-                }
-
-                if (flowController != null)
-                {
-                    // CompleteCurrentPlacement starts the groove light through
-                    // StateChanged. Keep this serial active until its own light
-                    // pass finishes; a later generation can never satisfy it.
-                    yield return null;
-                    float waited = 0f;
-                    float timeout = Mathf.Max(8f, completionHoldSeconds);
-                    while (IsCurrentTransfer(
-                               groupGeneration,
-                               transferSerial,
-                               CraftLivePlacementStatus.PlacementComplete) &&
-                           !flowController.HasCompletedFlow(
-                               groupGeneration,
-                               transferSerial) &&
-                           waited < timeout)
-                    {
-                        waited += Time.unscaledDeltaTime;
-                        yield return null;
-                    }
+                    yield return liquidFlowController
+                        .PlaySinglePlacementFlow(
+                            snapshot,
+                            groupGeneration,
+                            transferSerial);
                 }
                 else if (completionHoldSeconds > 0f)
                 {
@@ -496,6 +482,19 @@ namespace CraftOrigin.CraftLive
                         transferSerial,
                         CraftLivePlacementStatus.PlacementComplete))
                 {
+                    if (publishStatsAfterArrival)
+                    {
+                        if (statusPublishDelay > 0f)
+                        {
+                            yield return new WaitForSecondsRealtime(
+                                statusPublishDelay);
+                        }
+
+                        session.PublishCurrentStatsToPad3(
+                            groupGeneration,
+                            transferSerial);
+                    }
+
                     session.ContinueAfterPlacement(
                         groupGeneration,
                         transferSerial);

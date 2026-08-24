@@ -183,6 +183,41 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void ExternallySequencedFlow_CannotAutoStartCompetingRoutine()
+        {
+            Assert.That(
+                CraftLiveLiquidFlowController.ShouldStartAutomaticFlow(
+                    true,
+                    CraftLivePlacementStatus.PlacementComplete,
+                    3,
+                    12,
+                    2,
+                    11,
+                    false),
+                Is.False);
+            Assert.That(
+                CraftLiveLiquidFlowController.ShouldStartAutomaticFlow(
+                    false,
+                    CraftLivePlacementStatus.PlacementComplete,
+                    3,
+                    12,
+                    2,
+                    11,
+                    false),
+                Is.True);
+            Assert.That(
+                CraftLiveLiquidFlowController.ShouldStartAutomaticFlow(
+                    false,
+                    CraftLivePlacementStatus.PlacementComplete,
+                    3,
+                    12,
+                    3,
+                    12,
+                    false),
+                Is.False);
+        }
+
+        [Test]
         public void LocalPad2_QueuedMaterialAutoStarts()
         {
             CraftLiveRoomState state = new CraftLiveRoomState

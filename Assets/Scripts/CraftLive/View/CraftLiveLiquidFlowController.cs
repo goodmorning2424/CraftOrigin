@@ -60,6 +60,8 @@ namespace CraftOrigin.CraftLive
         private int completedTransferGeneration = -1;
         private int completedTransferSerial = -1;
         private bool isResettingFlowLifecycle;
+        private bool externallySequenced;
+        private bool externalFlowActive;
         private Coroutine flowRoutine;
 
         public bool HasCompletedFlow(
@@ -76,6 +78,22 @@ namespace CraftOrigin.CraftLive
             return HasCompletedFlow(
                 observedGroupGeneration,
                 transferSerial);
+        }
+
+        public static bool ShouldStartAutomaticFlow(
+            bool isExternallySequenced,
+            CraftLivePlacementStatus status,
+            int groupGeneration,
+            int transferSerial,
+            int handledGroupGeneration,
+            int handledTransferSerial,
+            bool hasActiveRoutine)
+        {
+            return !isExternallySequenced &&
+                   status == CraftLivePlacementStatus.PlacementComplete &&
+                   (groupGeneration != handledGroupGeneration ||
+                    transferSerial != handledTransferSerial) &&
+                   !hasActiveRoutine;
         }
 
         private void Awake()
@@ -108,6 +126,75 @@ namespace CraftOrigin.CraftLive
         {
             bindings = targetBindings;
             ResolveReferences();
+        }
+
+        /// <summary>
+        /// When Pad 2 owns the placement sequence, state changes must not
+        /// independently start a second light coroutine. The receiver calls
+        /// the same single-item flow method explicitly after each landing.
+        /// </summary>
+        public void SetExternalSequencing(bool value)
+        {
+            externallySequenced = value;
+            if (!value && isActiveAndEnabled && session != null)
+            {
+                Refresh(session.State);
+            }
+        }
+
+        public IEnumerator PlaySinglePlacementFlow(
+            CraftLiveRoomState snapshot,
+            int groupGeneration,
+            int transferSerial)
+        {
+            if (snapshot == null)
+            {
+                yield break;
+            }
+
+            // A scene can enable the flow component before the receiver in
+            // the same frame. If an automatic pass already owns the current
+            // transfer, await it instead of skipping the light and advancing
+            // the queue. Different transfers are never run concurrently.
+            while (externalFlowActive || flowRoutine != null)
+            {
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.PlacementComplete))
+                {
+                    yield break;
+                }
+
+                yield return null;
+            }
+
+            if (HasCompletedFlow(groupGeneration, transferSerial) ||
+                !IsCurrentTransfer(
+                    groupGeneration,
+                    transferSerial,
+                    CraftLivePlacementStatus.PlacementComplete))
+            {
+                yield break;
+            }
+
+            externalFlowActive = true;
+            handledTransferGeneration = groupGeneration;
+            handledTransferSerial = transferSerial;
+            activeTransferGeneration = groupGeneration;
+            activeTransferSerial = transferSerial;
+            try
+            {
+                yield return RunFlowLifecycle(
+                    snapshot,
+                    groupGeneration,
+                    transferSerial,
+                    false);
+            }
+            finally
+            {
+                externalFlowActive = false;
+            }
         }
 
         public static Vector3 EvaluatePath(
@@ -186,14 +273,14 @@ namespace CraftOrigin.CraftLive
                 ResetFlowLifecycle(state.groupGeneration);
             }
 
-            bool shouldStartFlow =
-                state.placement.status ==
-                    CraftLivePlacementStatus.PlacementComplete &&
-                (state.groupGeneration !=
-                     handledTransferGeneration ||
-                 state.placement.transferSerial !=
-                     handledTransferSerial) &&
-                flowRoutine == null;
+            bool shouldStartFlow = ShouldStartAutomaticFlow(
+                externallySequenced,
+                state.placement.status,
+                state.groupGeneration,
+                state.placement.transferSerial,
+                handledTransferGeneration,
+                handledTransferSerial,
+                flowRoutine != null || externalFlowActive);
 
             RefreshPersistentFills(
                 state,
@@ -224,6 +311,19 @@ namespace CraftOrigin.CraftLive
             int groupGeneration,
             int transferSerial)
         {
+            yield return RunFlowLifecycle(
+                snapshot,
+                groupGeneration,
+                transferSerial,
+                true);
+        }
+
+        private IEnumerator RunFlowLifecycle(
+            CraftLiveRoomState snapshot,
+            int groupGeneration,
+            int transferSerial,
+            bool publishStatsOnComplete)
+        {
             // Allow flowRoutine to receive the Coroutine handle before any
             // checked publish synchronously invokes Refresh.
             yield return null;
@@ -250,6 +350,12 @@ namespace CraftOrigin.CraftLive
                 {
                     completedTransferGeneration = groupGeneration;
                     completedTransferSerial = transferSerial;
+                    if (publishStatsOnComplete && !externallySequenced)
+                    {
+                        session.PublishCurrentStatsToPad3(
+                            groupGeneration,
+                            transferSerial);
+                    }
                 }
             }
             finally
@@ -311,9 +417,6 @@ namespace CraftOrigin.CraftLive
                 slot == null ||
                 center == null)
             {
-                session.PublishCurrentStatsToPad3(
-                    groupGeneration,
-                    transferSerial);
                 yield break;
             }
 
@@ -397,9 +500,6 @@ namespace CraftOrigin.CraftLive
 
             RevealPersistentFill(fill, 1f);
             ClearDrops();
-            session.PublishCurrentStatsToPad3(
-                groupGeneration,
-                transferSerial);
             onFlowCompleted?.Invoke();
         }
 
@@ -738,6 +838,7 @@ namespace CraftOrigin.CraftLive
                 activeTransferSerial = -1;
                 completedTransferGeneration = -1;
                 completedTransferSerial = -1;
+                externalFlowActive = false;
             }
             finally
             {
