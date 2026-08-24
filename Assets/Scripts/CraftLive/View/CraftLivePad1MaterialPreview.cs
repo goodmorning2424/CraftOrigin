@@ -157,6 +157,8 @@ namespace CraftOrigin.CraftLive
         private Material fallbackTransferButtonMaterial;
         private Material fallbackReturnButtonMaterial;
         private TextMesh fallbackText;
+        private Color readableHologramTextColor =
+            new Color(1f, 0.94f, 0.72f, 1f);
         private Transform fallbackTransferButton;
         private Renderer fallbackTransferButtonRenderer;
         private CraftLiveWorldButton fallbackTransferWorldButton;
@@ -1978,17 +1980,24 @@ namespace CraftOrigin.CraftLive
 
         private void UpdateHologramColors(Color themeColor)
         {
+            // Separate the three visual roles instead of painting the whole
+            // hologram with one color. A dark tinted field preserves the
+            // material identity, a bright rim defines the silhouette, and a
+            // warm ivory foreground stays readable over every gallery wall.
             Color panelColor = Color.Lerp(
-                new Color(0.008f, 0.014f, 0.022f, 1f),
+                new Color(0.006f, 0.011f, 0.018f, 1f),
                 themeColor,
-                0.65f);
+                0.34f);
             // Tint strength and transparency must be independent. Multiplying
             // both by opacity attenuates the visible hue twice.
             panelColor.a = hologramPanelOpacity;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
             ApplyRendererColor(fallbackPanelRenderer, panelColor);
 
-            Color borderColor = themeColor;
+            Color borderColor = Color.Lerp(
+                themeColor,
+                Color.white,
+                0.24f);
             borderColor = new Color(
                 borderColor.r * hologramBorderGlow,
                 borderColor.g * hologramBorderGlow,
@@ -2003,6 +2012,17 @@ namespace CraftOrigin.CraftLive
                         edge.GetComponent<Renderer>(),
                         borderColor);
                 }
+            }
+
+
+            readableHologramTextColor = new Color(
+                1f,
+                0.94f,
+                0.72f,
+                1f);
+            if (fallbackText != null)
+            {
+                fallbackText.color = readableHologramTextColor;
             }
         }
 
@@ -2057,7 +2077,7 @@ namespace CraftOrigin.CraftLive
                     fallbackTransferButtonText,
                     0.18f);
                 fallbackTransferButtonText.color = interactable
-                    ? hologramTextColor
+                    ? readableHologramTextColor
                     : new Color(0.42f, 0.42f, 0.42f, 1f);
                 fallbackTransferButtonText.text = "転送";
             }
@@ -2100,7 +2120,8 @@ namespace CraftOrigin.CraftLive
                 CraftLiveForgeUITheme.ApplyCrispTextMetrics(
                     fallbackReturnButtonText,
                     0.18f);
-                fallbackReturnButtonText.color = hologramTextColor;
+                fallbackReturnButtonText.color =
+                    readableHologramTextColor;
                 fallbackReturnButtonText.text = "戻る";
             }
         }
@@ -2372,7 +2393,7 @@ namespace CraftOrigin.CraftLive
                 fallbackPanelHeight * 0.76f /
                 (Mathf.Max(1, lines.Length) * 1.25f);
             ApplyFont(fallbackText);
-            fallbackText.color = hologramTextColor;
+            fallbackText.color = readableHologramTextColor;
             CraftLiveForgeUITheme.ApplyCrispTextMetrics(
                 fallbackText,
                 Mathf.Clamp(

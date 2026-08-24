@@ -95,7 +95,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void GalleryWall_LowerNameplatesMatchTopReferenceSize()
+        public void GalleryWall_LowerNameplatesUseTopWidthAndReducedHeight()
         {
             CraftLiveGalleryWallView.ResetNameplateReference();
             MethodInfo ensure = typeof(CraftLiveGalleryWallView).GetMethod(
@@ -133,7 +133,12 @@ namespace CraftOrigin.CraftLiveTests
             Vector3 lowerSize =
                 lowerPlate.transform.Find("WoodShadow").localScale;
             Assert.That(lowerSize.x, Is.EqualTo(topSize.x).Within(0.0001f));
-            Assert.That(lowerSize.y, Is.EqualTo(topSize.y).Within(0.0001f));
+            Assert.That(
+                lowerSize.y,
+                Is.EqualTo(topSize.y * 0.82f).Within(0.0001f));
+            Assert.That(
+                lowerPlate.transform.position.x,
+                Is.LessThan(topPlate.transform.position.x));
         }
 
         [Test]

@@ -28,6 +28,10 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private TextMesh headerText;
         [SerializeField] private GameObject emptyStateRoot;
         [SerializeField] private TextMesh emptyStateText;
+        [SerializeField, Range(0.6f, 1f)]
+        private float lowerNameplateHeightScale = 0.82f;
+        [SerializeField, Range(0f, 0.2f)]
+        private float lowerNameplateLeftShiftRatio = 0.055f;
 
         [Header("Scrolling")]
         [SerializeField, Min(0.1f)] private float itemSpacing = 2.35f;
@@ -47,6 +51,7 @@ namespace CraftOrigin.CraftLive
         private Quaternion fixedHeaderWorldRotation;
         private bool hasFixedHeaderPose;
         private bool hasAppliedHeaderDepthOffset;
+        private bool hasAppliedLowerHeaderOffset;
         private GameObject generatedHeaderNameplate;
 
         public CraftLiveMaterialCategory Category => category;
@@ -308,7 +313,20 @@ namespace CraftOrigin.CraftLive
                           referenceNameplateCameraDistance
                         : 1f;
                 width = referenceNameplateWorldSize.x * perspectiveScale;
-                height = referenceNameplateWorldSize.y * perspectiveScale;
+                height = referenceNameplateWorldSize.y *
+                    perspectiveScale * lowerNameplateHeightScale;
+
+                if (!hasAppliedLowerHeaderOffset)
+                {
+                    Vector3 screenRight = targetCamera != null
+                        ? targetCamera.transform.right
+                        : headerText.transform.right;
+                    headerText.transform.position -=
+                        screenRight *
+                        (width * lowerNameplateLeftShiftRatio);
+                    hasAppliedLowerHeaderOffset = true;
+                    textBounds = textRenderer.bounds;
+                }
             }
 
             if (generatedHeaderNameplate == null)
