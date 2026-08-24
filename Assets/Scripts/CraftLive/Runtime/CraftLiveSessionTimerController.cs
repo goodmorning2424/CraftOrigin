@@ -104,7 +104,9 @@ namespace CraftOrigin.CraftLive
             }
 
             string value = state.sessionPhase ==
-                CraftLiveSessionPhase.Playing
+                CraftLiveSessionPhase.StartScreen
+                    ? string.Empty
+                    : state.sessionPhase == CraftLiveSessionPhase.Playing
                     ? FormatTime(remaining)
                     : state.sessionPhase ==
                       CraftLiveSessionPhase.FinalSelection
@@ -113,6 +115,9 @@ namespace CraftOrigin.CraftLive
             if (timerText != null)
             {
                 timerText.text = value;
+                timerText.gameObject.SetActive(
+                    state.sessionPhase !=
+                    CraftLiveSessionPhase.StartScreen);
             }
 
             onRemainingSeconds?.Invoke(remaining);

@@ -200,6 +200,7 @@ namespace CraftOrigin.CraftLive
         public void EnsureSessionStarted()
         {
             if (state == null ||
+                state.sessionPhase == CraftLiveSessionPhase.StartScreen ||
                 state.sessionStartedAtUnixMs > 0)
             {
                 return;
@@ -216,6 +217,28 @@ namespace CraftOrigin.CraftLive
                 next.sessionEndsAtUnixMs = now + durationMs;
                 next.sessionPhase =
                     CraftLiveSessionPhase.Playing;
+                next.message = "武器づくりを始めよう";
+            });
+        }
+
+        public void StartGroup()
+        {
+            if (state == null ||
+                state.sessionPhase != CraftLiveSessionPhase.StartScreen)
+            {
+                return;
+            }
+
+            long now = UnixNowMs();
+            long durationMs = Mathf.RoundToInt(
+                (rules != null
+                    ? rules.SessionDurationSeconds
+                    : 300f) * 1000f);
+            Mutate(next =>
+            {
+                next.sessionStartedAtUnixMs = now;
+                next.sessionEndsAtUnixMs = now + durationMs;
+                next.sessionPhase = CraftLiveSessionPhase.Playing;
                 next.message = "武器づくりを始めよう";
             });
         }
@@ -1148,8 +1171,11 @@ namespace CraftOrigin.CraftLive
             next.transferBatchSerial = Mathf.Max(
                 0,
                 state.transferBatchSerial);
+            next.sessionPhase = CraftLiveSessionPhase.StartScreen;
+            next.sessionStartedAtUnixMs = 0L;
+            next.sessionEndsAtUnixMs = 0L;
             next.message =
-                "次のグループを開始します。武器を選んでください。";
+                "スタートを押してください。";
             next.revision = state.revision + 1;
             next.updatedAtUnixMs = UnixNowMs();
             state = next;

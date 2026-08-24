@@ -96,7 +96,8 @@ namespace CraftOrigin.CraftLive
     {
         Playing,
         FinalSelection,
-        Finished
+        Finished,
+        StartScreen
     }
 
     [Serializable]

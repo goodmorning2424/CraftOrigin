@@ -34,6 +34,10 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0.01f)]
         [Tooltip("Pad4に表示する完成武器全体の大きさです。1が元の大きさです。")]
         private float weaponSizeMultiplier = 1f;
+        [SerializeField] private Camera targetCamera;
+        [SerializeField, Range(0.02f, 0.2f)]
+        [Tooltip("回転中も武器と属性演出を画面内に収めるための余白です。")]
+        private float viewportMargin = 0.07f;
         [SerializeField] private bool applyAttributeColor = true;
         [SerializeField, Range(0f, 1f)]
         [Tooltip("0 keeps the original weapon colors; 1 fully applies the attribute color.")]
@@ -52,12 +56,14 @@ namespace CraftOrigin.CraftLive
         private GameObject currentParticleEffect;
         private Material generatedParticleMaterial;
         private int displayedResultSerial = -1;
+        private float currentScreenFitMultiplier = 1f;
 
         public float WeaponSizeMultiplier => weaponSizeMultiplier;
 
         private void OnValidate()
         {
             weaponSizeMultiplier = Mathf.Max(0.01f, weaponSizeMultiplier);
+            viewportMargin = Mathf.Clamp(viewportMargin, 0.02f, 0.2f);
             particleScaleMultiplier.x = Mathf.Max(
                 0.001f,
                 particleScaleMultiplier.x);
@@ -133,6 +139,11 @@ namespace CraftOrigin.CraftLive
                 spawnRoot = transform;
             }
 
+            if (targetCamera == null)
+            {
+                targetCamera = Camera.main;
+            }
+
             ResolveEffectRoot();
         }
 
@@ -166,14 +177,24 @@ namespace CraftOrigin.CraftLive
 
         private void HandleStateChanged(CraftLiveRoomState state)
         {
-            if (state == null ||
-                !state.craft.completionPresentationReady ||
+            if (state == null)
+            {
+                ClearPresentation();
+                return;
+            }
+
+            if (!state.craft.completionPresentationReady ||
                 (state.craft.status !=
                      CraftLiveCraftStatus.Complete &&
                  state.sessionPhase !=
                      CraftLiveSessionPhase.Finished) ||
-                state.result == null ||
-                state.result.resultSerial == displayedResultSerial)
+                state.result == null)
+            {
+                ClearPresentation();
+                return;
+            }
+
+            if (state.result.resultSerial == displayedResultSerial)
             {
                 return;
             }
@@ -239,6 +260,8 @@ namespace CraftOrigin.CraftLive
                     ? weapon.PresentationMaterialOverride
                     : null);
             CraftLiveForgeUITheme.EnsureCompatibleSurfaces(currentWeapon);
+
+            currentScreenFitMultiplier = FitWeaponInsideCamera();
 
             CraftLiveMaterialDefinition attribute =
                 FindAttribute(result.attributeId);
@@ -329,9 +352,6 @@ namespace CraftOrigin.CraftLive
                                     sharedSetting == null
                 ? attribute.Pad4ParticleLocalScale
                 : sharedSetting.localScale;
-            currentParticleEffect.transform.localPosition =
-                calibrationPosition +
-                particlePosition * weaponSizeMultiplier;
             currentParticleEffect.transform.localRotation =
                 calibrationRotation *
                 particleRotation;
@@ -341,6 +361,13 @@ namespace CraftOrigin.CraftLive
                     particleScale,
                     particleScaleMultiplier)) *
                 weaponSizeMultiplier;
+
+            currentParticleEffect.transform.localPosition =
+                calibrationPosition +
+                particlePosition * weaponSizeMultiplier *
+                currentScreenFitMultiplier;
+            currentParticleEffect.transform.localScale *=
+                currentScreenFitMultiplier;
 
             bool tintParticles = usesMaterialSetting ||
                                  sharedSetting == null
@@ -352,6 +379,126 @@ namespace CraftOrigin.CraftLive
                     currentParticleEffect,
                     attribute.EffectColor);
             }
+        }
+
+        private float FitWeaponInsideCamera()
+        {
+            if (currentWeapon == null)
+            {
+                return 1f;
+            }
+
+            Camera camera = targetCamera != null
+                ? targetCamera
+                : Camera.main;
+            if (camera == null)
+            {
+                return 1f;
+            }
+
+            Renderer[] renderers = currentWeapon.GetComponentsInChildren<Renderer>();
+            Vector3 pivot = currentWeapon.transform.position;
+            float radius = 0f;
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null || !renderer.enabled)
+                {
+                    continue;
+                }
+
+                Bounds bounds = renderer.bounds;
+                Vector3 extents = bounds.extents;
+                for (int x = -1; x <= 1; x += 2)
+                {
+                    for (int y = -1; y <= 1; y += 2)
+                    {
+                        for (int z = -1; z <= 1; z += 2)
+                        {
+                            Vector3 corner = bounds.center +
+                                Vector3.Scale(extents, new Vector3(x, y, z));
+                            radius = Mathf.Max(
+                                radius,
+                                Vector3.Distance(pivot, corner));
+                        }
+                    }
+                }
+            }
+
+            if (radius <= 0.0001f)
+            {
+                return 1f;
+            }
+
+            Vector3 viewportCenter = camera.WorldToViewportPoint(pivot);
+            if (viewportCenter.z <= camera.nearClipPlane)
+            {
+                return 1f;
+            }
+
+            float worldHeight;
+            float worldWidth;
+            if (camera.orthographic)
+            {
+                worldHeight = camera.orthographicSize * 2f;
+                worldWidth = worldHeight * camera.aspect;
+            }
+            else
+            {
+                worldHeight = 2f * viewportCenter.z * Mathf.Tan(
+                    camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+                worldWidth = worldHeight * camera.aspect;
+            }
+
+            float fit = ResolveScreenFitScale(
+                radius,
+                viewportCenter,
+                viewportMargin,
+                worldWidth,
+                worldHeight);
+            currentWeapon.transform.localScale *= fit;
+            return fit;
+        }
+
+        public static float ResolveScreenFitScale(
+            float radius,
+            Vector3 viewportCenter,
+            float margin,
+            float worldWidth,
+            float worldHeight)
+        {
+            if (radius <= 0f || worldWidth <= 0f || worldHeight <= 0f)
+            {
+                return 1f;
+            }
+
+            float safeMargin = Mathf.Clamp(margin, 0f, 0.45f);
+            float availableX = Mathf.Max(
+                0f,
+                Mathf.Min(
+                    viewportCenter.x - safeMargin,
+                    1f - safeMargin - viewportCenter.x));
+            float availableY = Mathf.Max(
+                0f,
+                Mathf.Min(
+                    viewportCenter.y - safeMargin,
+                    1f - safeMargin - viewportCenter.y));
+            float allowedRadius = Mathf.Min(
+                worldWidth * availableX,
+                worldHeight * availableY);
+            return Mathf.Clamp01(allowedRadius / radius * 0.96f);
+        }
+
+        private void ClearPresentation()
+        {
+            displayedResultSerial = -1;
+            currentScreenFitMultiplier = 1f;
+            if (currentWeapon != null)
+            {
+                Destroy(currentWeapon);
+                currentWeapon = null;
+            }
+
+            DestroyParticleEffect();
         }
 
         private AttributeParticleSetting FindParticleSetting(

@@ -42,6 +42,7 @@ namespace CraftOrigin.CraftLive
         private Vector3 fixedHeaderWorldPosition;
         private Quaternion fixedHeaderWorldRotation;
         private bool hasFixedHeaderPose;
+        private GameObject generatedHeaderNameplate;
 
         public CraftLiveMaterialCategory Category => category;
         public Transform SlideRoot => slideRoot != null ? slideRoot : transform;
@@ -109,6 +110,11 @@ namespace CraftOrigin.CraftLive
             {
                 renderer.enabled = visible;
             }
+
+            if (generatedHeaderNameplate != null)
+            {
+                generatedHeaderNameplate.SetActive(visible);
+            }
         }
 
         public bool TryBind(
@@ -161,6 +167,7 @@ namespace CraftOrigin.CraftLive
             if (headerText != null)
             {
                 headerText.text = header ?? string.Empty;
+                EnsureHeaderNameplate();
             }
 
             if (emptyStateRoot != null)
@@ -227,6 +234,135 @@ namespace CraftOrigin.CraftLive
             {
                 column = GetComponent<CraftLiveGalleryColumn>();
             }
+        }
+
+        private void EnsureHeaderNameplate()
+        {
+            bool needsNameplate =
+                category == CraftLiveMaterialCategory.Skill ||
+                category == CraftLiveMaterialCategory.Attribute;
+            if (!needsNameplate || headerText == null)
+            {
+                if (generatedHeaderNameplate != null)
+                {
+                    generatedHeaderNameplate.SetActive(false);
+                }
+                return;
+            }
+
+            Renderer textRenderer = headerText.GetComponent<Renderer>();
+            if (textRenderer == null)
+            {
+                return;
+            }
+
+            Bounds textBounds = textRenderer.localBounds;
+            float width = Mathf.Clamp(
+                textBounds.size.x * 1.24f,
+                1.15f,
+                3.25f);
+            float height = Mathf.Clamp(
+                textBounds.size.y * 1.55f,
+                0.58f,
+                0.94f);
+
+            if (generatedHeaderNameplate == null)
+            {
+                generatedHeaderNameplate = new GameObject(
+                    "Generated_WoodHeaderNameplate");
+                generatedHeaderNameplate.transform.SetParent(
+                    headerText.transform,
+                    false);
+                generatedHeaderNameplate.AddComponent<
+                    CraftLiveGeneratedRuntimeVisual>();
+            }
+
+            Transform root = generatedHeaderNameplate.transform;
+            root.localPosition = new Vector3(
+                textBounds.center.x,
+                textBounds.center.y,
+                0f);
+            root.localRotation = Quaternion.identity;
+            root.localScale = Vector3.one;
+            ClearNameplateParts(root);
+
+            Color wood = new Color(0.30f, 0.13f, 0.045f);
+            Color darkWood = new Color(0.12f, 0.045f, 0.018f);
+            Color brass = CraftLiveForgeUITheme.Brass;
+            CreateNameplatePart(
+                root,
+                "WoodShadow",
+                new Vector3(0.025f, -0.035f, 0.075f),
+                new Vector3(width, height, 0.08f),
+                darkWood);
+            CreateNameplatePart(
+                root,
+                "WoodFace",
+                new Vector3(0f, 0f, 0.045f),
+                new Vector3(width * 0.96f, height * 0.9f, 0.055f),
+                wood);
+            float railWidth = width * 0.82f;
+            CreateNameplatePart(
+                root,
+                "TopBrassInlay",
+                new Vector3(0f, height * 0.31f, 0.012f),
+                new Vector3(railWidth, 0.045f, 0.018f),
+                brass);
+            CreateNameplatePart(
+                root,
+                "BottomBrassInlay",
+                new Vector3(0f, -height * 0.31f, 0.012f),
+                new Vector3(railWidth, 0.045f, 0.018f),
+                brass);
+            generatedHeaderNameplate.SetActive(true);
+        }
+
+        private static void ClearNameplateParts(Transform root)
+        {
+            for (int i = root.childCount - 1; i >= 0; i--)
+            {
+                GameObject child = root.GetChild(i).gameObject;
+                if (Application.isPlaying)
+                {
+                    Destroy(child);
+                }
+                else
+                {
+                    DestroyImmediate(child);
+                }
+            }
+        }
+
+        private static void CreateNameplatePart(
+            Transform parent,
+            string name,
+            Vector3 position,
+            Vector3 scale,
+            Color color)
+        {
+            GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            part.name = name;
+            part.transform.SetParent(parent, false);
+            part.transform.localPosition = position;
+            part.transform.localScale = scale;
+            Collider collider = part.GetComponent<Collider>();
+            if (collider != null)
+            {
+                if (Application.isPlaying)
+                {
+                    Destroy(collider);
+                }
+                else
+                {
+                    DestroyImmediate(collider);
+                }
+            }
+            CraftLiveForgeUITheme.ApplyForgeSurface(
+                part.GetComponent<Renderer>(),
+                color,
+                0.01f,
+                0.18f,
+                0.25f);
         }
 
         private void CollectValidSlots()

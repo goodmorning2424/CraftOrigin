@@ -87,6 +87,11 @@ namespace CraftOrigin.CraftLive
             session?.ResetRoomForNextGroup();
         }
 
+        public void StartGroup()
+        {
+            session?.StartGroup();
+        }
+
         private void ResolveReferences()
         {
             if (session == null)
@@ -169,6 +174,13 @@ namespace CraftOrigin.CraftLive
             }
 
             if (state.sessionPhase ==
+                CraftLiveSessionPhase.StartScreen)
+            {
+                BuildStartScreen();
+                return;
+            }
+
+            if (state.sessionPhase ==
                 CraftLiveSessionPhase.FinalSelection)
             {
                 BuildFinalSelection(state);
@@ -187,6 +199,86 @@ namespace CraftOrigin.CraftLive
             {
                 BuildResultPanel(state);
             }
+        }
+
+        private void BuildStartScreen()
+        {
+            generatedPanel = CreatePanel("Generated_StartScreen");
+
+            GameObject forgeGlow = CreateDecorativePart(
+                generatedPanel.transform,
+                "ForgeGlow",
+                new Vector3(0f, 0.55f, -0.44f),
+                new Vector3(3.5f, 2.9f, 0.09f),
+                new Color(0.38f, 0.075f, 0.018f),
+                0.28f,
+                0.12f,
+                0.32f);
+            forgeGlow.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 45f);
+
+            GameObject blade = CreateDecorativePart(
+                generatedPanel.transform,
+                "ForgingBlade",
+                new Vector3(-0.72f, 0.65f, -0.56f),
+                new Vector3(0.32f, 4.35f, 0.16f),
+                CraftLiveForgeUITheme.Iron,
+                0.035f,
+                0.92f,
+                0.5f);
+            blade.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 42f);
+            GameObject hammerHandle = CreateDecorativePart(
+                generatedPanel.transform,
+                "ForgeHammerHandle",
+                new Vector3(0.68f, 0.42f, -0.57f),
+                new Vector3(0.3f, 3.75f, 0.18f),
+                new Color(0.28f, 0.12f, 0.045f),
+                0f,
+                0.12f,
+                0.2f);
+            hammerHandle.transform.localRotation =
+                Quaternion.Euler(0f, 0f, -43f);
+            GameObject hammerHead = CreateDecorativePart(
+                generatedPanel.transform,
+                "ForgeHammerHead",
+                new Vector3(-0.72f, 1.8f, -0.59f),
+                new Vector3(1.55f, 0.62f, 0.24f),
+                CraftLiveForgeUITheme.Iron,
+                0.025f,
+                0.94f,
+                0.38f);
+            hammerHead.transform.localRotation =
+                Quaternion.Euler(0f, 0f, -43f);
+
+            CreateDecorativePart(
+                generatedPanel.transform,
+                "AnvilTop",
+                new Vector3(0f, -0.85f, -0.61f),
+                new Vector3(3.65f, 0.55f, 0.28f),
+                CraftLiveForgeUITheme.Iron,
+                0.02f,
+                0.94f,
+                0.35f);
+            CreateDecorativePart(
+                generatedPanel.transform,
+                "AnvilBase",
+                new Vector3(0f, -1.35f, -0.58f),
+                new Vector3(2.05f, 0.75f, 0.32f),
+                CraftLiveForgeUITheme.DeepIron,
+                0f,
+                0.88f,
+                0.24f);
+
+            GameObject start = CreateButton(
+                generatedPanel.transform,
+                "Start",
+                "スタート",
+                new Vector3(0f, -2.62f, -0.7f),
+                CraftLiveForgeUITheme.Ember,
+                new Vector3(3.85f, 0.92f, 0.25f));
+            start.GetComponent<CraftLiveWorldButton>()
+                .AddListener(StartGroup);
         }
 
         private void BuildResultPanel(CraftLiveRoomState state)

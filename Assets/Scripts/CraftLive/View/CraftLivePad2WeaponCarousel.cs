@@ -618,7 +618,7 @@ namespace CraftOrigin.CraftLive
             centerWeapon = CreateWeaponVisual(
                 SelectedWeapon,
                 bindings.CenterWeaponRoot,
-                centerModelSize);
+                centerModelSize * SelectedWeapon.WorkbenchCenterScale);
             centerWeapon.name =
                 $"Generated_CenterWeapon_{SelectedWeapon.WeaponId}";
             centerWeapon.AddComponent<

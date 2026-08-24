@@ -25,3 +25,4 @@ MonoBehaviour:
   hologramPrefab: {fileID: 0}
   previewScale: {x: 1.5, y: 1.5, z: 1.5}
   selectionPreviewScale: 1.5
+  workbenchCenterScale: 0.88

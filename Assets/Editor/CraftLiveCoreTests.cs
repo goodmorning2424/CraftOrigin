@@ -326,6 +326,49 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(session.State.groupGeneration, Is.EqualTo(5));
             Assert.That(session.State.transferQueueSerial, Is.EqualTo(17));
             Assert.That(session.State.transferBatchSerial, Is.EqualTo(8));
+            Assert.That(
+                session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
+            Assert.That(session.State.sessionEndsAtUnixMs, Is.Zero);
+        }
+
+        [Test]
+        public void StartGroup_StartsTimerFromStartScreen()
+        {
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(
+                    new List<CraftLiveMaterialDefinition>(),
+                    new List<CraftLiveWeaponDefinition>()));
+            session.ResetRoomForNextGroup();
+
+            session.StartGroup();
+
+            Assert.That(
+                session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.Playing));
+            Assert.That(
+                session.State.sessionEndsAtUnixMs,
+                Is.GreaterThan(session.State.sessionStartedAtUnixMs));
+        }
+
+        [Test]
+        public void Pad4ScreenFit_UsesNearestViewportEdge()
+        {
+            float centered = CraftLiveHologramView.ResolveScreenFitScale(
+                4f,
+                new Vector3(0.5f, 0.5f, 10f),
+                0.05f,
+                10f,
+                12f);
+            float nearEdge = CraftLiveHologramView.ResolveScreenFitScale(
+                4f,
+                new Vector3(0.2f, 0.5f, 10f),
+                0.05f,
+                10f,
+                12f);
+
+            Assert.That(centered, Is.EqualTo(1f));
+            Assert.That(nearEdge, Is.LessThan(centered));
         }
 
         [Test]

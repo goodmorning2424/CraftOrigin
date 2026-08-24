@@ -29,6 +29,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(0.1f, 3f)]
         [Tooltip("武器選択カードと中央プレビューだけに使用する、武器ごとの大きさ倍率です。")]
         private float selectionPreviewScale = 1f;
+        [SerializeField, Range(0.1f, 2f)]
+        [Tooltip("合成台中央に置いたモデルだけに使用する大きさ倍率です。")]
+        private float workbenchCenterScale = 1f;
 
         public string WeaponId => weaponId;
         public string DisplayName => displayName;
@@ -44,6 +47,8 @@ namespace CraftOrigin.CraftLive
         public Vector3 PreviewScale => previewScale;
         public float SelectionPreviewScale =>
             selectionPreviewScale > 0f ? selectionPreviewScale : 1f;
+        public float WorkbenchCenterScale =>
+            workbenchCenterScale > 0f ? workbenchCenterScale : 1f;
 
         private void OnValidate()
         {
@@ -62,6 +67,10 @@ namespace CraftOrigin.CraftLive
                 selectionPreviewScale,
                 0.1f,
                 3f);
+            workbenchCenterScale = Mathf.Clamp(
+                workbenchCenterScale,
+                0.1f,
+                2f);
         }
     }
 }
