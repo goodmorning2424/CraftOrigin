@@ -218,6 +218,15 @@ namespace CraftOrigin.CraftLive
                 GetComponent<CraftLivePad1MaterialPreview>();
             preview?.SetSelectionAnchor(material, selectionAnchor);
 
+            if (IsWaitingForSingleTransfer(session.State))
+            {
+                // Let Pad1 show the material details, but keep the shared
+                // placement state Idle so Pad2 does not light a second guide.
+                session.ShowSingleTransferWarning();
+                preview?.ShowDetailsWithoutPlacement(material);
+                return;
+            }
+
             if (CanBeginMaterialPlacement(session.State, material))
             {
                 session.SelectMaterial(material);
@@ -242,7 +251,19 @@ namespace CraftOrigin.CraftLive
                    state.weaponSelectionConfirmed &&
                    state.placement != null &&
                    state.placement.status == CraftLivePlacementStatus.Idle &&
+                   !IsWaitingForSingleTransfer(state) &&
                    HasCompatibleOpenSlot(state, material);
+        }
+
+        public static bool IsWaitingForSingleTransfer(
+            CraftLiveRoomState state)
+        {
+            return !CraftLiveSession.MultiMaterialTransferEnabled &&
+                   state != null &&
+                   state.placement != null &&
+                   state.placement.status == CraftLivePlacementStatus.Idle &&
+                   state.transferQueue != null &&
+                   state.transferQueue.Count > 0;
         }
 
         private static bool HasCompatibleOpenSlot(

@@ -12,6 +12,8 @@ namespace CraftOrigin.CraftLive
         // later repair, but every public launch path currently transfers one
         // material per spring operation.
         public static bool MultiMaterialTransferEnabled => false;
+        public const string SingleTransferWarningMessage =
+            "素材を一個ずつ転送してください";
 
         [SerializeField] private CraftLiveCatalog catalog;
         [SerializeField] private CraftLiveRules rules;
@@ -335,6 +337,11 @@ namespace CraftOrigin.CraftLive
                 next.message = "Pad2で配置場所を選んでください。";
             });
             CraftLiveAudio.Play(CraftLiveSound.MaterialSelect, 0.78f);
+        }
+
+        public void ShowSingleTransferWarning()
+        {
+            SetMessage(SingleTransferWarningMessage);
         }
 
         public void ChoosePlacementSlot(CraftLiveSlotId slot)

@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -42,6 +43,9 @@ namespace CraftOrigin.CraftLive
         private GameObject changeButton;
         private GameObject cancelButton;
         private TextMesh instructionText;
+        private GameObject singleTransferWarningPopup;
+        private Coroutine singleTransferWarningCoroutine;
+        private long lastSingleTransferWarningRevision = long.MinValue;
 
         public IReadOnlyList<CraftLivePlacementSlotView> SlotViews =>
             slotViews;
@@ -72,6 +76,13 @@ namespace CraftOrigin.CraftLive
             {
                 session.StateChanged -= Refresh;
             }
+
+            if (singleTransferWarningCoroutine != null)
+            {
+                StopCoroutine(singleTransferWarningCoroutine);
+                singleTransferWarningCoroutine = null;
+            }
+            SetActive(singleTransferWarningPopup, false);
         }
 
         public void Rebuild()
@@ -115,6 +126,7 @@ namespace CraftOrigin.CraftLive
             }
 
             BuildFallbackControls();
+            BuildSingleTransferWarningPopup();
             Refresh(session.State);
         }
 
@@ -262,6 +274,13 @@ namespace CraftOrigin.CraftLive
             bool showPlacementSlots =
                 state.weaponSelectionConfirmed &&
                 (selecting || confirming);
+            if (state.message ==
+                    CraftLiveSession.SingleTransferWarningMessage &&
+                state.revision != lastSingleTransferWarningRevision)
+            {
+                lastSingleTransferWarningRevision = state.revision;
+                ShowSingleTransferWarningPopup();
+            }
             foreach (CraftLivePlacementSlotView slotView in slotViews)
             {
                 if (slotView == null)
@@ -429,6 +448,82 @@ namespace CraftOrigin.CraftLive
                 new Vector3(1.52f, -2.68f, -0.8f),
                 new Color(0.68f, 0.24f, 0.22f),
                 CancelPlacement);
+        }
+
+        private void BuildSingleTransferWarningPopup()
+        {
+            if (singleTransferWarningCoroutine != null)
+            {
+                StopCoroutine(singleTransferWarningCoroutine);
+                singleTransferWarningCoroutine = null;
+            }
+            DestroySafely(singleTransferWarningPopup);
+            singleTransferWarningPopup = null;
+            if (bindings == null || bindings.UiRoot == null)
+            {
+                return;
+            }
+
+            singleTransferWarningPopup = new GameObject(
+                "Generated_SingleTransferWarning");
+            singleTransferWarningPopup.transform.SetParent(
+                bindings.UiRoot,
+                false);
+            singleTransferWarningPopup.transform.localPosition =
+                new Vector3(0f, 3.08f, -1.02f);
+            singleTransferWarningPopup.AddComponent<
+                CraftLiveGeneratedRuntimeVisual>();
+
+            GameObject panel = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            panel.name = "WarningPanel";
+            panel.transform.SetParent(
+                singleTransferWarningPopup.transform,
+                false);
+            panel.transform.localScale =
+                new Vector3(5.7f, 0.72f, 0.16f);
+            ApplyColor(
+                panel.GetComponent<Renderer>(),
+                new Color(0.055f, 0.04f, 0.03f, 1f));
+            DestroySafely(panel.GetComponent<Collider>());
+
+            CreateText(
+                singleTransferWarningPopup.transform,
+                "WarningText",
+                CraftLiveSession.SingleTransferWarningMessage,
+                new Vector3(0f, 0f, -0.13f),
+                0.046f);
+            singleTransferWarningPopup.SetActive(false);
+        }
+
+        private void ShowSingleTransferWarningPopup()
+        {
+            if (singleTransferWarningPopup == null)
+            {
+                BuildSingleTransferWarningPopup();
+            }
+            if (singleTransferWarningPopup == null)
+            {
+                return;
+            }
+
+            if (singleTransferWarningCoroutine != null)
+            {
+                StopCoroutine(singleTransferWarningCoroutine);
+            }
+            singleTransferWarningCoroutine =
+                StartCoroutine(HideSingleTransferWarningAfterDelay());
+        }
+
+        private IEnumerator HideSingleTransferWarningAfterDelay()
+        {
+            singleTransferWarningPopup.SetActive(true);
+            yield return new WaitForSecondsRealtime(3f);
+            if (singleTransferWarningPopup != null)
+            {
+                singleTransferWarningPopup.SetActive(false);
+            }
+            singleTransferWarningCoroutine = null;
         }
 
         private GameObject CreateButton(

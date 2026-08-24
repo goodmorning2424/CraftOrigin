@@ -170,6 +170,7 @@ namespace CraftOrigin.CraftLive
         private Transform selectionAnchor;
         private string selectionAnchorMaterialId = string.Empty;
         private string displayedMaterialId = string.Empty;
+        private bool detailsOnlyWhileTransferWaiting;
         private Coroutine revealCoroutine;
         private Coroutine returnCoroutine;
         private Vector3 revealHiddenLocalPosition;
@@ -219,6 +220,23 @@ namespace CraftOrigin.CraftLive
                 ? state.selectedMaterialId
                 : string.Empty;
 
+            if (string.IsNullOrEmpty(materialId) &&
+                detailsOnlyWhileTransferWaiting &&
+                CraftLivePad1GalleryController.IsWaitingForSingleTransfer(state))
+            {
+                CraftLiveMaterialDefinition detailsMaterial =
+                    session != null && session.Catalog != null
+                        ? session.Catalog.FindMaterial(displayedMaterialId)
+                        : null;
+                if (detailsMaterial != null)
+                {
+                    Publish(detailsMaterial, true);
+                    return;
+                }
+            }
+
+            detailsOnlyWhileTransferWaiting = false;
+
             CraftLiveMaterialDefinition material =
                 state != null && session != null &&
                 session.Catalog != null
@@ -251,8 +269,26 @@ namespace CraftOrigin.CraftLive
                 : string.Empty;
         }
 
+        public void ShowDetailsWithoutPlacement(
+            CraftLiveMaterialDefinition material)
+        {
+            if (material == null)
+            {
+                return;
+            }
+
+            detailsOnlyWhileTransferWaiting = true;
+            if (displayedMaterialId != material.MaterialId)
+            {
+                SpawnPreview(material);
+            }
+
+            Publish(material, true);
+        }
+
         public void ClearPreview()
         {
+            detailsOnlyWhileTransferWaiting = false;
             displayedMaterialId = string.Empty;
             selectionAnchor = null;
             selectionAnchorMaterialId = string.Empty;

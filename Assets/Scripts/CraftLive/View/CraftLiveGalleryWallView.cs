@@ -42,6 +42,7 @@ namespace CraftOrigin.CraftLive
         private Vector3 fixedHeaderWorldPosition;
         private Quaternion fixedHeaderWorldRotation;
         private bool hasFixedHeaderPose;
+        private bool hasAppliedHeaderDepthOffset;
         private GameObject generatedHeaderNameplate;
 
         public CraftLiveMaterialCategory Category => category;
@@ -167,6 +168,8 @@ namespace CraftOrigin.CraftLive
             if (headerText != null)
             {
                 headerText.text = header ?? string.Empty;
+                MoveSpecialHeaderInFrontOfWall(
+                    owner != null ? owner.TargetCamera : Camera.main);
                 EnsureHeaderNameplate();
             }
 
@@ -258,13 +261,13 @@ namespace CraftOrigin.CraftLive
 
             Bounds textBounds = textRenderer.localBounds;
             float width = Mathf.Clamp(
-                textBounds.size.x * 1.32f,
-                1.35f,
-                3.4f);
+                textBounds.size.x * 1.08f,
+                1.25f,
+                2.25f);
             float height = Mathf.Clamp(
-                textBounds.size.y * 1.72f,
-                0.68f,
-                1.02f);
+                textBounds.size.y * 1.28f,
+                0.54f,
+                0.72f);
 
             if (generatedHeaderNameplate == null)
             {
@@ -337,6 +340,32 @@ namespace CraftOrigin.CraftLive
                 brass);
             headerText.color = Color.white;
             generatedHeaderNameplate.SetActive(true);
+        }
+
+        private void MoveSpecialHeaderInFrontOfWall(Camera targetCamera)
+        {
+            bool needsNameplate =
+                category == CraftLiveMaterialCategory.Skill ||
+                category == CraftLiveMaterialCategory.Attribute;
+            if (!needsNameplate ||
+                headerText == null ||
+                targetCamera == null ||
+                hasAppliedHeaderDepthOffset)
+            {
+                return;
+            }
+
+            // The authored labels share almost the same depth as the shelf.
+            // Move the complete text/nameplate pair toward the camera once so
+            // the plate cannot z-fight with or intersect the wooden shelf.
+            Vector3 towardCamera =
+                targetCamera.transform.position - headerText.transform.position;
+            if (towardCamera.sqrMagnitude > 0.0001f)
+            {
+                headerText.transform.position +=
+                    towardCamera.normalized * 0.16f;
+                hasAppliedHeaderDepthOffset = true;
+            }
         }
 
         private static void ClearNameplateParts(Transform root)

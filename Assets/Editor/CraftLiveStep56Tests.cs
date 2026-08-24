@@ -74,6 +74,35 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void QueuedSingleTransfer_BlocksSecondPad2Guide()
+        {
+            CraftLiveMaterialDefinition oreA =
+                CreateMaterial(
+                    "oreA",
+                    CraftLiveMaterialCategory.Upgrade);
+            CraftLiveMaterialDefinition oreB =
+                CreateMaterial(
+                    "oreB",
+                    CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session =
+                CreateSession(CreateCatalog(oreA, oreB));
+            QueueMaterial(session, oreA, CraftLiveSlotId.Top);
+
+            Assert.That(
+                CraftLivePad1GalleryController.IsWaitingForSingleTransfer(
+                    session.State),
+                Is.True);
+            Assert.That(
+                CraftLivePad1GalleryController.CanBeginMaterialPlacement(
+                    session.State,
+                    oreB),
+                Is.False);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+        }
+
+        [Test]
         public void ReservedSlot_CannotBeSelectedAgain()
         {
             CraftLiveMaterialDefinition oreA =
