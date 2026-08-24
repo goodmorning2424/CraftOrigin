@@ -149,6 +149,13 @@ namespace CraftOrigin.CraftLiveEditor.Tests
             StringAssert.Contains("devicePixelRatio", template);
             StringAssert.Contains("isIPad ? 1.5 : 2", template);
             StringAssert.Contains("recoverFromStaleBuild", template);
+            StringAssert.Contains("unknown data format", template);
+            StringAssert.Contains(
+                "type === \"error\" && recoverFromStaleBuild(message)",
+                template);
+            StringAssert.Contains(
+                "searchParams.delete(recoveryParameter)",
+                template);
             StringAssert.Contains("isSecureContext", bridge);
             StringAssert.Contains("BarcodeDetector", bridge);
         }

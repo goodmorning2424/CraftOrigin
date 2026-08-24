@@ -32,7 +32,7 @@
       function recoverFromStaleBuild(error) {
         const message = String(error || "");
         const isBuildRuntimeFailure =
-          /memory access out of bounds|wasm|failed to fetch|load/i.test(message);
+          /memory access out of bounds|unknown data format|doctype|data format|wasm|failed to fetch|load/i.test(message);
         const currentUrl = new URL(window.location.href);
         if (!isBuildRuntimeFailure ||
             currentUrl.searchParams.has(recoveryParameter)) {
@@ -100,6 +100,13 @@
           isIPad ? 1.5 : 2),
         autoSyncPersistentDataPath: true,
         showBanner: (message, type) => {
+          // Unity reports a missing hashed .data file through showBanner as
+          // "Unknown data format" after GitHub Pages returns its HTML 404
+          // document. Route that path through the same one-time cache-busting
+          // recovery used for loader and WebAssembly failures.
+          if (type === "error" && recoverFromStaleBuild(message)) {
+            return;
+          }
           showStatus(message, type, type === "error");
         }
       };
@@ -117,6 +124,14 @@
         }).then(unityInstance => {
           loading.hidden = true;
           window.craftLiveUnityInstance = unityInstance;
+          // The marker only prevents a reload loop during this attempt. Once
+          // loading succeeds, remove it so a later deployment can recover in
+          // the same browser tab as well.
+          const loadedUrl = new URL(window.location.href);
+          if (loadedUrl.searchParams.has(recoveryParameter)) {
+            loadedUrl.searchParams.delete(recoveryParameter);
+            window.history.replaceState(null, "", loadedUrl.toString());
+          }
         }).catch(error => {
           loading.hidden = true;
           if (!recoverFromStaleBuild(error)) {
