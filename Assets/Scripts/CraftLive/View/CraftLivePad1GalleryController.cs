@@ -80,9 +80,7 @@ namespace CraftOrigin.CraftLive
                     FindObjectsInactive.Include);
             foreach (CraftLiveGalleryWallView wall in walls)
             {
-                if (wall == null ||
-                    (wall.Category != CraftLiveMaterialCategory.Skill &&
-                     wall.Category != CraftLiveMaterialCategory.Attribute))
+                if (wall == null)
                 {
                     continue;
                 }
@@ -94,12 +92,26 @@ namespace CraftOrigin.CraftLive
         private void Awake()
         {
             ResolveReferences();
+            EnsureSynchronizedStartScreen();
             ConfigureCameraFraming();
             EnsureCommentBoard();
             EnsureEventSystem();
             DisableLegacyWallCarousel();
             EnsureCameraRaycaster();
             ConfigureWallInputSurfaces();
+        }
+
+        private void EnsureSynchronizedStartScreen()
+        {
+            CraftLiveSynchronizedStartScreen startScreen =
+                GetComponent<CraftLiveSynchronizedStartScreen>();
+            if (startScreen == null)
+            {
+                startScreen = gameObject.AddComponent<
+                    CraftLiveSynchronizedStartScreen>();
+            }
+
+            startScreen.Configure(bindings != null ? bindings.UiRoot : null);
         }
 
         private void OnEnable()
@@ -144,6 +156,7 @@ namespace CraftOrigin.CraftLive
             ClearGeneratedColumns();
             paintings.Clear();
             categoryCounts.Clear();
+            CraftLiveGalleryWallView.ResetNameplateReference();
 
             bool preserveSceneWallPositions = HasAnyWallBounds();
             if (applyDefaultLayout && !preserveSceneWallPositions)

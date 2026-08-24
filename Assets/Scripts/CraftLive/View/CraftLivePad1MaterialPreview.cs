@@ -439,7 +439,10 @@ namespace CraftOrigin.CraftLive
                 GetComponent<CraftLivePad1GalleryController>();
             if (gallery != null)
             {
-                gallery.SetSpecialHeadersVisible(!visible);
+                // Gallery category signs are permanent navigation landmarks.
+                // Keep all three visible while the material model and its
+                // supplemental hologram are open.
+                gallery.SetSpecialHeadersVisible(true);
             }
 
             onDetailsVisible?.Invoke(visible);

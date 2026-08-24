@@ -10,6 +10,10 @@ namespace CraftOrigin.CraftLive
     /// </summary>
     public sealed class CraftLiveGalleryWallView : MonoBehaviour
     {
+        private static Vector2 referenceNameplateWorldSize;
+        private static float referenceNameplateCameraDistance;
+        private static bool hasReferenceNameplateSize;
+
         [Header("Identity")]
         [SerializeField] private CraftLiveMaterialCategory category;
 
@@ -64,6 +68,13 @@ namespace CraftOrigin.CraftLive
                 CollectValidSlots();
                 return contentRoot != null && validSlots.Count > 0;
             }
+        }
+
+        public static void ResetNameplateReference()
+        {
+            referenceNameplateWorldSize = Vector2.zero;
+            referenceNameplateCameraDistance = 0f;
+            hasReferenceNameplateSize = false;
         }
 
         public void ConfigureHorizontalSlider(
@@ -272,6 +283,34 @@ namespace CraftOrigin.CraftLive
                     textBounds.center,
                     width));
 
+            float cameraDistance = ResolveCameraDistance(
+                targetCamera,
+                textBounds.center);
+            if (category == CraftLiveMaterialCategory.Upgrade ||
+                !hasReferenceNameplateSize)
+            {
+                referenceNameplateWorldSize = new Vector2(width, height);
+                referenceNameplateCameraDistance = cameraDistance;
+                hasReferenceNameplateSize = true;
+            }
+            else
+            {
+                // The authored Skill/Attribute TextMesh objects use a larger
+                // font than Upgrade. Sizing their boards from text bounds made
+                // only the lower two boards fill almost an entire tier. Keep
+                // the top board as the visual source of truth and compensate
+                // only for perspective depth so all three match on screen.
+                float perspectiveScale =
+                    targetCamera != null &&
+                    !targetCamera.orthographic &&
+                    referenceNameplateCameraDistance > 0.001f
+                        ? cameraDistance /
+                          referenceNameplateCameraDistance
+                        : 1f;
+                width = referenceNameplateWorldSize.x * perspectiveScale;
+                height = referenceNameplateWorldSize.y * perspectiveScale;
+            }
+
             if (generatedHeaderNameplate == null)
             {
                 generatedHeaderNameplate = new GameObject(
@@ -351,6 +390,22 @@ namespace CraftOrigin.CraftLive
                 brass);
             headerText.color = Color.white;
             generatedHeaderNameplate.SetActive(true);
+        }
+
+        private static float ResolveCameraDistance(
+            Camera targetCamera,
+            Vector3 worldPosition)
+        {
+            if (targetCamera == null)
+            {
+                return 1f;
+            }
+
+            return Mathf.Max(
+                0.001f,
+                Vector3.Dot(
+                    worldPosition - targetCamera.transform.position,
+                    targetCamera.transform.forward));
         }
 
         private void MoveHeaderInFrontOfWall(Camera targetCamera)

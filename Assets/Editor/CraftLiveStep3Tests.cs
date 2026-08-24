@@ -28,6 +28,7 @@ namespace CraftOrigin.CraftLiveTests
             }
 
             createdObjects.Clear();
+            CraftLiveGalleryWallView.ResetNameplateReference();
         }
 
         [TestCase(
@@ -91,6 +92,86 @@ namespace CraftOrigin.CraftLiveTests
                 nameplate.transform.IsChildOf(header.transform),
                 Is.False);
             Assert.That(nameplate.transform.childCount, Is.EqualTo(7));
+        }
+
+        [Test]
+        public void GalleryWall_LowerNameplatesMatchTopReferenceSize()
+        {
+            CraftLiveGalleryWallView.ResetNameplateReference();
+            MethodInfo ensure = typeof(CraftLiveGalleryWallView).GetMethod(
+                "EnsureHeaderNameplate",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            FieldInfo generatedField =
+                typeof(CraftLiveGalleryWallView).GetField(
+                    "generatedHeaderNameplate",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(ensure, Is.Not.Null);
+            Assert.That(generatedField, Is.Not.Null);
+
+            GameObject parent = new GameObject("HeaderLayer");
+            createdObjects.Add(parent);
+            CraftLiveGalleryWallView top = CreateNameplateWall(
+                parent.transform,
+                CraftLiveMaterialCategory.Upgrade,
+                "パワーアップ",
+                40);
+            ensure.Invoke(top, new object[] { null });
+            GameObject topPlate = generatedField.GetValue(top) as GameObject;
+
+            CraftLiveGalleryWallView lower = CreateNameplateWall(
+                parent.transform,
+                CraftLiveMaterialCategory.Skill,
+                "スキル",
+                96);
+            ensure.Invoke(lower, new object[] { null });
+            GameObject lowerPlate =
+                generatedField.GetValue(lower) as GameObject;
+
+            Assert.That(topPlate, Is.Not.Null);
+            Assert.That(lowerPlate, Is.Not.Null);
+            Vector3 topSize = topPlate.transform.Find("WoodShadow").localScale;
+            Vector3 lowerSize =
+                lowerPlate.transform.Find("WoodShadow").localScale;
+            Assert.That(lowerSize.x, Is.EqualTo(topSize.x).Within(0.0001f));
+            Assert.That(lowerSize.y, Is.EqualTo(topSize.y).Within(0.0001f));
+        }
+
+        [Test]
+        public void SynchronizedStartScreen_OnlyShowsDuringStartPhase()
+        {
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                sessionPhase = CraftLiveSessionPhase.StartScreen
+            };
+            Assert.That(
+                CraftLiveSynchronizedStartScreen.ShouldShow(state),
+                Is.True);
+
+            state.sessionPhase = CraftLiveSessionPhase.Playing;
+            Assert.That(
+                CraftLiveSynchronizedStartScreen.ShouldShow(state),
+                Is.False);
+        }
+
+        private CraftLiveGalleryWallView CreateNameplateWall(
+            Transform parent,
+            CraftLiveMaterialCategory category,
+            string label,
+            int fontSize)
+        {
+            GameObject wallObject = new GameObject($"Wall_{category}");
+            createdObjects.Add(wallObject);
+            CraftLiveGalleryWallView wall =
+                wallObject.AddComponent<CraftLiveGalleryWallView>();
+            GameObject headerObject = new GameObject($"Header_{category}");
+            headerObject.transform.SetParent(parent, false);
+            TextMesh header = headerObject.AddComponent<TextMesh>();
+            header.text = label;
+            header.fontSize = fontSize;
+            header.anchor = TextAnchor.MiddleCenter;
+            SetField(wall, "category", category);
+            SetField(wall, "headerText", header);
+            return wall;
         }
 
         [Test]
