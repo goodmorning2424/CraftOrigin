@@ -834,14 +834,18 @@ namespace CraftOrigin.CraftLive
 
         private static Material CreateGlowMaterial(Color color)
         {
-            Shader shader = Shader.Find(
-                                "Universal Render Pipeline/Unlit") ??
-                            Shader.Find("Unlit/Color") ??
-                            Shader.Find("Standard");
-            Material material = new Material(shader)
+            // Shader.Find is not reliable in WebGL: shaders referenced only
+            // by name can be stripped from the player. The Resources-backed
+            // material is explicitly included in the build and already uses
+            // the compatible URP surface.
+            Material material =
+                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
+                    "Pad2RimGlowMaterial");
+            if (material == null)
             {
-                name = "Pad2RimGlowMaterial"
-            };
+                return null;
+            }
+
             Color glow = color * 2.5f;
             glow.a = color.a;
             if (material.HasProperty("_BaseColor"))

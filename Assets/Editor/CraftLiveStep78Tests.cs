@@ -225,6 +225,40 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void Pad2ReceiverExit_ReleasesOnlyMatchingCompletedPlacement()
+        {
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                groupGeneration = 7,
+                placement = new CraftLivePlacementFlow
+                {
+                    transferSerial = 12,
+                    status = CraftLivePlacementStatus.PlacementComplete
+                }
+            };
+
+            Assert.That(
+                CraftLivePad2TransferReceiver.
+                    ShouldReleaseCompletedPlacement(state, 7, 12),
+                Is.True);
+            Assert.That(
+                CraftLivePad2TransferReceiver.
+                    ShouldReleaseCompletedPlacement(state, 7, 11),
+                Is.False);
+            Assert.That(
+                CraftLivePad2TransferReceiver.
+                    ShouldReleaseCompletedPlacement(state, 6, 12),
+                Is.False);
+
+            state.placement.status =
+                CraftLivePlacementStatus.Pad2Arriving;
+            Assert.That(
+                CraftLivePad2TransferReceiver.
+                    ShouldReleaseCompletedPlacement(state, 7, 12),
+                Is.False);
+        }
+
+        [Test]
         public void ExternallySequencedFlow_CannotAutoStartCompetingRoutine()
         {
             Assert.That(

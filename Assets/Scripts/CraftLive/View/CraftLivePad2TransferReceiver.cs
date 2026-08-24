@@ -523,6 +523,23 @@ namespace CraftOrigin.CraftLive
                     }
                 }
 
+                // Visual presentation must never keep the authoritative
+                // placement locked. In particular, a WebGL-only material or
+                // shader failure can terminate the light coroutine after the
+                // slot has already reached PlacementComplete. Release that
+                // completed transfer here so Pad 1 can select the next item.
+                if (!isResettingTransferLifecycle &&
+                    session != null &&
+                    ShouldReleaseCompletedPlacement(
+                        session.State,
+                        groupGeneration,
+                        transferSerial))
+                {
+                    session.ContinueAfterPlacement(
+                        groupGeneration,
+                        transferSerial);
+                }
+
                 if (!isResettingTransferLifecycle &&
                     isActiveAndEnabled && session != null &&
                     session.State != null &&
@@ -532,6 +549,19 @@ namespace CraftOrigin.CraftLive
                     Refresh(session.State);
                 }
             }
+        }
+
+        public static bool ShouldReleaseCompletedPlacement(
+            CraftLiveRoomState state,
+            int groupGeneration,
+            int transferSerial)
+        {
+            return state != null &&
+                   state.placement != null &&
+                   state.groupGeneration == groupGeneration &&
+                   state.placement.transferSerial == transferSerial &&
+                   state.placement.status ==
+                       CraftLivePlacementStatus.PlacementComplete;
         }
 
         private bool IsCurrentTransfer(
