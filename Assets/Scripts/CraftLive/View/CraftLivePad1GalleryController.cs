@@ -464,11 +464,56 @@ namespace CraftOrigin.CraftLive
             if (built &&
                 state.registrationSerial != handledRegistrationSerial)
             {
+                bool playArrival = ShouldPlayRegistrationArrival(
+                    built,
+                    state.registrationSerial,
+                    handledRegistrationSerial,
+                    state.lastRegisteredMaterialId);
+                string registeredMaterialId =
+                    state.lastRegisteredMaterialId;
                 Rebuild();
+                if (playArrival)
+                {
+                    FindPainting(registeredMaterialId)?
+                        .PlayRegistrationArrival();
+                }
                 return;
             }
 
             RefreshPaintings(state);
+        }
+
+        public static bool ShouldPlayRegistrationArrival(
+            bool galleryBuilt,
+            int registrationSerial,
+            int handledSerial,
+            string registeredMaterialId)
+        {
+            return galleryBuilt &&
+                   registrationSerial > 0 &&
+                   registrationSerial != handledSerial &&
+                   !string.IsNullOrWhiteSpace(registeredMaterialId);
+        }
+
+        private CraftLiveMaterialPaintingView FindPainting(
+            string materialId)
+        {
+            if (string.IsNullOrWhiteSpace(materialId))
+            {
+                return null;
+            }
+
+            foreach (CraftLiveMaterialPaintingView painting in paintings)
+            {
+                if (painting != null &&
+                    painting.Material != null &&
+                    painting.Material.MaterialId == materialId)
+                {
+                    return painting;
+                }
+            }
+
+            return null;
         }
 
         private void RefreshPaintings(CraftLiveRoomState state)

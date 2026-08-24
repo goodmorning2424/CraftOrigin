@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -33,6 +34,16 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(1f)] private float selectedScale = 1.06f;
         [SerializeField, Range(0f, 1f)] private float lockedBrightness = 0.2f;
 
+        [Header("Registration Arrival")]
+        [SerializeField, Min(0.05f)] private float registrationDropDuration =
+            0.48f;
+        [SerializeField, Min(0f)] private float registrationDropDistance =
+            0.9f;
+        [SerializeField, Min(0.05f)] private float registrationGlowDuration =
+            0.72f;
+        [SerializeField, Min(0f)] private float registrationGlowIntensity =
+            2.4f;
+
         [Header("Events")]
         [SerializeField] private UnityEvent<Sprite> onIconChanged;
         [SerializeField] private UnityEvent<string> onNameChanged;
@@ -50,6 +61,9 @@ namespace CraftOrigin.CraftLive
         private Vector3 iconBaseScale;
         private CraftLiveGalleryColumn owningColumn;
         private float nextAllowedSelectTime;
+        private Coroutine registrationArrivalRoutine;
+        private Color lastDisplayColor = Color.white;
+        private bool lastSelected;
         private readonly Dictionary<Renderer, int> restingSortingOrders =
             new Dictionary<Renderer, int>();
 
@@ -71,6 +85,12 @@ namespace CraftOrigin.CraftLive
             CaptureIconLayout();
             CaptureSortingOrders();
             owningColumn = GetComponentInParent<CraftLiveGalleryColumn>();
+        }
+
+        private void OnDisable()
+        {
+            StopRegistrationArrival();
+            RestoreRestingTransform();
         }
 
         public void ConfigureFallbackVisuals(
@@ -149,6 +169,7 @@ namespace CraftOrigin.CraftLive
 
         public void Unbind()
         {
+            StopRegistrationArrival();
             RestoreRestingTransform();
             controller = null;
             material = null;
@@ -218,8 +239,119 @@ namespace CraftOrigin.CraftLive
             }
 
             ApplyColor(color, selected);
+            lastDisplayColor = color;
+            lastSelected = selected;
             ApplyPreviewSorting(selected);
             RefreshColliders();
+        }
+
+        public void PlayRegistrationArrival()
+        {
+            if (!isActiveAndEnabled || movingRoot == null)
+            {
+                return;
+            }
+
+            StopRegistrationArrival();
+            registrationArrivalRoutine =
+                StartCoroutine(RegistrationArrival());
+        }
+
+        private IEnumerator RegistrationArrival()
+        {
+            Vector3 startPosition = restingPosition +
+                                    Vector3.up * registrationDropDistance;
+            Vector3 startScale = restingScale * 0.9f;
+            movingRoot.localPosition = startPosition;
+            movingRoot.localScale = startScale;
+
+            float elapsed = 0f;
+            while (elapsed < registrationDropDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(
+                    elapsed / registrationDropDuration);
+                float eased = 1f - Mathf.Pow(1f - t, 3f);
+                movingRoot.localPosition = Vector3.LerpUnclamped(
+                    startPosition,
+                    restingPosition,
+                    eased);
+                movingRoot.localScale = Vector3.LerpUnclamped(
+                    startScale,
+                    restingScale,
+                    eased);
+                SetRegistrationEmission(
+                    material != null
+                        ? material.EffectColor * (eased * 0.8f)
+                        : Color.white * (eased * 0.8f));
+                yield return null;
+            }
+
+            movingRoot.localPosition = restingPosition;
+            movingRoot.localScale = restingScale;
+            elapsed = 0f;
+            while (elapsed < registrationGlowDuration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(
+                    elapsed / registrationGlowDuration);
+                float pulse = Mathf.Sin(t * Mathf.PI) *
+                              registrationGlowIntensity;
+                Color glowColor = material != null
+                    ? material.EffectColor
+                    : Color.white;
+                SetRegistrationEmission(glowColor * pulse);
+                yield return null;
+            }
+
+            ApplyColor(lastDisplayColor, lastSelected);
+            registrationArrivalRoutine = null;
+        }
+
+        private void StopRegistrationArrival()
+        {
+            if (registrationArrivalRoutine != null)
+            {
+                StopCoroutine(registrationArrivalRoutine);
+                registrationArrivalRoutine = null;
+            }
+
+            if (movingRoot != null)
+            {
+                movingRoot.localPosition = restingPosition;
+                movingRoot.localScale = restingScale;
+            }
+
+            ApplyColor(lastDisplayColor, lastSelected);
+        }
+
+        private void SetRegistrationEmission(Color color)
+        {
+            if (tintRenderers == null)
+            {
+                return;
+            }
+
+            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            foreach (Renderer targetRenderer in tintRenderers)
+            {
+                if (targetRenderer == null ||
+                    (targetRenderer.transform != transform &&
+                     !targetRenderer.transform.IsChildOf(transform)))
+                {
+                    continue;
+                }
+
+                targetRenderer.GetPropertyBlock(block);
+                Color visibleColor = Color.Lerp(
+                    lastDisplayColor,
+                    Color.white,
+                    Mathf.Clamp01(color.maxColorComponent * 0.45f));
+                block.SetColor("_BaseColor", visibleColor);
+                block.SetColor("_Color", visibleColor);
+                block.SetColor("_EmissionColor", color);
+                targetRenderer.SetPropertyBlock(block);
+            }
         }
 
         public void SetViewportVisible(bool visible)

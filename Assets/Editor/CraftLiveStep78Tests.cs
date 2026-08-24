@@ -202,6 +202,28 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expectedLength).Within(0.0001f));
         }
 
+        [TestCase(true, 4, 3, "upgrade_attack", true)]
+        [TestCase(true, 4, 4, "upgrade_attack", false)]
+        [TestCase(false, 4, 3, "upgrade_attack", false)]
+        [TestCase(true, 0, -1, "upgrade_attack", false)]
+        [TestCase(true, 4, 3, "", false)]
+        public void Pad1RegistrationArrival_PlaysOnceAfterNewRegistration(
+            bool built,
+            int registrationSerial,
+            int handledSerial,
+            string materialId,
+            bool expected)
+        {
+            Assert.That(
+                CraftLivePad1GalleryController.
+                    ShouldPlayRegistrationArrival(
+                        built,
+                        registrationSerial,
+                        handledSerial,
+                        materialId),
+                Is.EqualTo(expected));
+        }
+
         [Test]
         public void ExternallySequencedFlow_CannotAutoStartCompetingRoutine()
         {
