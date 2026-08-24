@@ -29,6 +29,13 @@ namespace CraftOrigin.CraftLive
         private sealed class PersistentFill
         {
             public GameObject Root;
+            public GameObject GuideChannel;
+            public Vector3 GuideChannelPosition;
+            public Quaternion GuideChannelRotation;
+            public Vector3 GuideChannelScale;
+            public GameObject Rim;
+            public Material RimMaterial;
+            public Mesh RimMesh;
             public readonly List<GameObject> Trail =
                 new List<GameObject>();
         }
@@ -583,35 +590,73 @@ namespace CraftOrigin.CraftLive
             fill.Root.transform.SetParent(null, false);
             fill.Root.AddComponent<CraftLiveGeneratedRuntimeVisual>();
 
-            int samples = Mathf.Max(4, trailSampleCount);
-            for (int i = 0; i < samples; i++)
+            if (TryResolveGuidePose(
+                    CraftLivePad2AlignmentGuideKind.FlowWidth,
+                    slot,
+                    out CraftLivePad2GuidePose channelPose))
             {
-                float t = samples > 1
-                    ? i / (float)(samples - 1)
-                    : 1f;
-                GameObject segment = GameObject.CreatePrimitive(
-                    PrimitiveType.Sphere);
-                segment.name = $"GrooveFill_{i:00}";
-                segment.transform.SetParent(
+                fill.GuideChannel = GameObject.CreatePrimitive(
+                    PrimitiveType.Cube);
+                fill.GuideChannel.name = "AuthoredGrooveFill";
+                fill.GuideChannel.transform.SetParent(
                     fill.Root.transform,
                     false);
-                segment.transform.position = Vector3.Lerp(
-                    flowStart,
-                    flowEnd,
-                    t);
-                segment.transform.localScale =
-                    new Vector3(
-                        resolvedTrailWidth,
-                        resolvedTrailWidth,
-                        resolvedTrailDepth);
-                DestroySafely(segment.GetComponent<Collider>());
-                ApplyColor(segment, color);
-                segment.SetActive(revealAll);
-                fill.Trail.Add(segment);
+                ResolveGuideWorldTransform(
+                    channelPose,
+                    out fill.GuideChannelPosition,
+                    out fill.GuideChannelRotation,
+                    out fill.GuideChannelScale);
+                fill.GuideChannel.transform.SetPositionAndRotation(
+                    fill.GuideChannelPosition,
+                    fill.GuideChannelRotation);
+                fill.GuideChannel.transform.localScale =
+                    fill.GuideChannelScale;
+                DestroySafely(
+                    fill.GuideChannel.GetComponent<Collider>());
+                ApplyColor(fill.GuideChannel, color);
+            }
+
+            fill.Rim = CreateRimGlow(
+                fill.Root.transform,
+                slot,
+                color,
+                out fill.RimMaterial,
+                out fill.RimMesh);
+
+            // Older scenes without alignment guides retain the sampled trail
+            // fallback. Pad2 uses the authored FlowWidth transform verbatim.
+            if (fill.GuideChannel == null)
+            {
+                int samples = Mathf.Max(4, trailSampleCount);
+                for (int i = 0; i < samples; i++)
+                {
+                    float t = samples > 1
+                        ? i / (float)(samples - 1)
+                        : 1f;
+                    GameObject segment = GameObject.CreatePrimitive(
+                        PrimitiveType.Sphere);
+                    segment.name = $"GrooveFill_{i:00}";
+                    segment.transform.SetParent(
+                        fill.Root.transform,
+                        false);
+                    segment.transform.position = Vector3.Lerp(
+                        flowStart,
+                        flowEnd,
+                        t);
+                    segment.transform.localScale =
+                        new Vector3(
+                            resolvedTrailWidth,
+                            resolvedTrailWidth,
+                            resolvedTrailDepth);
+                    DestroySafely(segment.GetComponent<Collider>());
+                    ApplyColor(segment, color);
+                    fill.Trail.Add(segment);
+                }
             }
 
             persistentFills[slot] = fill;
             persistentMaterialIds[slot] = materialId;
+            RevealPersistentFill(fill, revealAll ? 1f : 0f);
             return fill;
         }
 
@@ -624,9 +669,30 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            float progress = Mathf.Clamp01(normalizedProgress);
+            if (fill.GuideChannel != null)
+            {
+                Vector2 reveal = ResolveGuideChannelReveal(progress);
+                Vector3 scale = fill.GuideChannelScale;
+                scale.x *= reveal.y;
+                fill.GuideChannel.transform.localScale = scale;
+                fill.GuideChannel.transform.SetPositionAndRotation(
+                    fill.GuideChannelPosition +
+                    fill.GuideChannelRotation *
+                    (Vector3.right *
+                     (fill.GuideChannelScale.x * reveal.x)),
+                    fill.GuideChannelRotation);
+                fill.GuideChannel.SetActive(progress > 0f);
+            }
+
+            if (fill.Rim != null)
+            {
+                fill.Rim.SetActive(progress >= 0.98f);
+            }
+
             int visible = VisibleTrailSegments(
                 fill.Trail.Count,
-                normalizedProgress);
+                progress);
 
             for (int i = 0; i < fill.Trail.Count; i++)
             {
@@ -635,6 +701,166 @@ namespace CraftOrigin.CraftLive
                     fill.Trail[i].SetActive(i < visible);
                 }
             }
+        }
+
+        public static Vector2 ResolveGuideChannelReveal(float progress)
+        {
+            float clamped = Mathf.Clamp01(progress);
+            // x is the center offset measured in full channel lengths;
+            // y is the revealed length. The guide's local -X end is the
+            // authored FlowStart side, so the light grows toward +X.
+            return new Vector2((clamped - 1f) * 0.5f, clamped);
+        }
+
+        private GameObject CreateRimGlow(
+            Transform parent,
+            CraftLiveSlotId slot,
+            Color color,
+            out Material rimMaterial,
+            out Mesh rimMesh)
+        {
+            rimMaterial = null;
+            rimMesh = null;
+            if (bindings == null || parent == null ||
+                !TryResolveGuidePose(
+                    CraftLivePad2AlignmentGuideKind.Pool,
+                    slot,
+                    out CraftLivePad2GuidePose poolPose))
+            {
+                return null;
+            }
+
+            ResolveGuideWorldTransform(
+                poolPose,
+                out Vector3 worldPosition,
+                out Quaternion worldRotation,
+                out Vector3 worldScale);
+            GameObject rimRoot = new GameObject("SlotRimGlow");
+            rimRoot.transform.SetParent(parent, false);
+            rimRoot.transform.SetPositionAndRotation(
+                worldPosition,
+                worldRotation);
+
+            float radiusX = Mathf.Max(0.005f, worldScale.x * 0.5f);
+            float radiusY = Mathf.Max(0.005f, worldScale.y * 0.5f);
+            float rimWidth = Mathf.Max(
+                0.0035f,
+                Mathf.Min(worldScale.x, worldScale.y) * 0.07f);
+            rimMesh = CreateEllipseRingMesh(
+                radiusX,
+                radiusY,
+                rimWidth,
+                96);
+            MeshFilter filter = rimRoot.AddComponent<MeshFilter>();
+            filter.sharedMesh = rimMesh;
+            MeshRenderer renderer = rimRoot.AddComponent<MeshRenderer>();
+            rimMaterial = CreateGlowMaterial(color);
+            renderer.sharedMaterial = rimMaterial;
+            return rimRoot;
+        }
+
+        private void ResolveGuideWorldTransform(
+            CraftLivePad2GuidePose pose,
+            out Vector3 position,
+            out Quaternion rotation,
+            out Vector3 scale)
+        {
+            position = bindings.transform.TransformPoint(
+                pose.LocalPosition);
+            rotation = bindings.transform.rotation * pose.LocalRotation;
+            Vector3 rootScale = bindings.transform.lossyScale;
+            scale = new Vector3(
+                Mathf.Abs(pose.LocalScale.x * rootScale.x),
+                Mathf.Abs(pose.LocalScale.y * rootScale.y),
+                Mathf.Abs(pose.LocalScale.z * rootScale.z));
+        }
+
+        private static Mesh CreateEllipseRingMesh(
+            float radiusX,
+            float radiusY,
+            float width,
+            int segmentCount)
+        {
+            int segments = Mathf.Max(16, segmentCount);
+            float innerRadiusX = Mathf.Max(0.001f, radiusX - width);
+            float innerRadiusY = Mathf.Max(0.001f, radiusY - width);
+            Vector3[] vertices = new Vector3[segments * 4];
+            int[] triangles = new int[segments * 12];
+            for (int i = 0; i < segments; i++)
+            {
+                float angle0 = i / (float)segments * Mathf.PI * 2f;
+                float angle1 = (i + 1) / (float)segments * Mathf.PI * 2f;
+                int vertex = i * 4;
+                vertices[vertex] = new Vector3(
+                    Mathf.Cos(angle0) * radiusX,
+                    Mathf.Sin(angle0) * radiusY,
+                    0f);
+                vertices[vertex + 1] = new Vector3(
+                    Mathf.Cos(angle1) * radiusX,
+                    Mathf.Sin(angle1) * radiusY,
+                    0f);
+                vertices[vertex + 2] = new Vector3(
+                    Mathf.Cos(angle0) * innerRadiusX,
+                    Mathf.Sin(angle0) * innerRadiusY,
+                    0f);
+                vertices[vertex + 3] = new Vector3(
+                    Mathf.Cos(angle1) * innerRadiusX,
+                    Mathf.Sin(angle1) * innerRadiusY,
+                    0f);
+
+                int triangle = i * 12;
+                int[] indices =
+                {
+                    vertex, vertex + 1, vertex + 2,
+                    vertex + 1, vertex + 3, vertex + 2,
+                    vertex + 2, vertex + 1, vertex,
+                    vertex + 2, vertex + 3, vertex + 1
+                };
+                for (int j = 0; j < indices.Length; j++)
+                {
+                    triangles[triangle + j] = indices[j];
+                }
+            }
+
+            Mesh mesh = new Mesh
+            {
+                name = "Pad2ContinuousRimMesh",
+                vertices = vertices,
+                triangles = triangles
+            };
+            mesh.RecalculateBounds();
+            return mesh;
+        }
+
+        private static Material CreateGlowMaterial(Color color)
+        {
+            Shader shader = Shader.Find(
+                                "Universal Render Pipeline/Unlit") ??
+                            Shader.Find("Unlit/Color") ??
+                            Shader.Find("Standard");
+            Material material = new Material(shader)
+            {
+                name = "Pad2RimGlowMaterial"
+            };
+            Color glow = color * 2.5f;
+            glow.a = color.a;
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", glow);
+            }
+
+            if (material.HasProperty("_Color"))
+            {
+                material.SetColor("_Color", glow);
+            }
+
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.EnableKeyword("_EMISSION");
+                material.SetColor("_EmissionColor", glow);
+            }
+
+            return material;
         }
 
         private void ResolveFlowPath(
@@ -658,8 +884,6 @@ namespace CraftOrigin.CraftLive
                     startPose.LocalPosition);
                 end = bindings.transform.TransformPoint(
                     endPose.LocalPosition);
-                start += surfaceLift;
-                end += surfaceLift;
                 return;
             }
 
@@ -865,6 +1089,8 @@ namespace CraftOrigin.CraftLive
                     slot,
                     out PersistentFill fill))
             {
+                DestroySafely(fill.RimMaterial);
+                DestroySafely(fill.RimMesh);
                 DestroySafely(fill.Root);
                 persistentFills.Remove(slot);
             }
@@ -878,6 +1104,8 @@ namespace CraftOrigin.CraftLive
             {
                 if (fill != null)
                 {
+                    DestroySafely(fill.RimMaterial);
+                    DestroySafely(fill.RimMesh);
                     DestroySafely(fill.Root);
                 }
             }

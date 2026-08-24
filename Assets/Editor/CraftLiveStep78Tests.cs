@@ -182,6 +182,26 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(dimensions.y, Is.EqualTo(0.011f).Within(0.0001f));
         }
 
+        [TestCase(0f, -0.5f, 0f)]
+        [TestCase(0.5f, -0.25f, 0.5f)]
+        [TestCase(1f, 0f, 1f)]
+        public void AuthoredLiquidGuide_RevealsFromStartWithoutChangingPose(
+            float progress,
+            float expectedCenterOffset,
+            float expectedLength)
+        {
+            Vector2 reveal =
+                CraftLiveLiquidFlowController.ResolveGuideChannelReveal(
+                    progress);
+
+            Assert.That(
+                reveal.x,
+                Is.EqualTo(expectedCenterOffset).Within(0.0001f));
+            Assert.That(
+                reveal.y,
+                Is.EqualTo(expectedLength).Within(0.0001f));
+        }
+
         [Test]
         public void ExternallySequencedFlow_CannotAutoStartCompetingRoutine()
         {
