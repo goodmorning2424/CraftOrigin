@@ -170,6 +170,19 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void LiquidTrailDimensions_ApplyPadScaleExactlyOnce()
+        {
+            Vector2 dimensions =
+                CraftLiveLiquidFlowController.ScaleTrailDimensionsToWorld(
+                    0.2f,
+                    0.05f,
+                    0.22f);
+
+            Assert.That(dimensions.x, Is.EqualTo(0.044f).Within(0.0001f));
+            Assert.That(dimensions.y, Is.EqualTo(0.011f).Within(0.0001f));
+        }
+
+        [Test]
         public void LocalPad2_QueuedMaterialAutoStarts()
         {
             CraftLiveRoomState state = new CraftLiveRoomState

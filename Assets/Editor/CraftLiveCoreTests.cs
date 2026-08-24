@@ -258,6 +258,7 @@ namespace CraftOrigin.CraftLiveTests
                 new List<CraftLiveWeaponDefinition>());
             CraftLiveSession session = CreateSession(catalog);
             session.UnlockMaterialId("fire");
+            session.State.weaponSelectionConfirmed = true;
 
             session.SelectMaterial(material);
             session.ChoosePlacementSlot(CraftLiveSlotId.Attribute);
@@ -311,6 +312,9 @@ namespace CraftOrigin.CraftLiveTests
                 new List<CraftLiveWeaponDefinition>());
             CraftLiveSession session = CreateSession(catalog);
             session.UnlockMaterialId("fire");
+            session.State.groupGeneration = 4;
+            session.State.transferQueueSerial = 17;
+            session.State.transferBatchSerial = 8;
 
             session.ResetRoomForNextGroup();
 
@@ -319,6 +323,9 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 session.State.schemaVersion,
                 Is.EqualTo(CraftLiveRoomState.CurrentSchemaVersion));
+            Assert.That(session.State.groupGeneration, Is.EqualTo(5));
+            Assert.That(session.State.transferQueueSerial, Is.EqualTo(17));
+            Assert.That(session.State.transferBatchSerial, Is.EqualTo(8));
         }
 
         [Test]
@@ -394,6 +401,9 @@ namespace CraftOrigin.CraftLiveTests
             expired.sessionPhase = CraftLiveSessionPhase.FinalSelection;
             expired.weaponSelectionConfirmed = false;
             expired.revision = 12;
+            expired.groupGeneration = 6;
+            expired.transferQueueSerial = 23;
+            expired.transferBatchSerial = 11;
 
             session.ApplyRemoteState(expired);
 
@@ -404,6 +414,9 @@ namespace CraftOrigin.CraftLiveTests
                 session.State.sessionEndsAtUnixMs,
                 Is.GreaterThan(CraftLiveSession.UnixNowMs()));
             Assert.That(session.State.revision, Is.EqualTo(13));
+            Assert.That(session.State.groupGeneration, Is.EqualTo(7));
+            Assert.That(session.State.transferQueueSerial, Is.EqualTo(23));
+            Assert.That(session.State.transferBatchSerial, Is.EqualTo(11));
             Assert.That(
                 session.State.HasMaterialRegistered("registered"),
                 Is.True);

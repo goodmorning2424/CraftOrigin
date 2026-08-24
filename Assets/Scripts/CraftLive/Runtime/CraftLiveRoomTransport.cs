@@ -587,6 +587,16 @@ namespace CraftOrigin.CraftLive
                 return 1;
             }
 
+            // A group reset is a hard lifecycle boundary. Its generation must
+            // outrank revision/timestamp so a delayed write from the previous
+            // group cannot restore old transfer IDs or visuals.
+            int generationComparison =
+                left.groupGeneration.CompareTo(right.groupGeneration);
+            if (generationComparison != 0)
+            {
+                return generationComparison;
+            }
+
             int revisionComparison =
                 left.revision.CompareTo(right.revision);
             return revisionComparison != 0

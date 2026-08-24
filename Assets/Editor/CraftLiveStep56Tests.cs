@@ -227,23 +227,272 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void BatchGridOffsets_FormCenteredTwoByTwoGroup()
+        public void ParentBatchPreservingWorldPose_KeepsFourFrameFormation()
         {
-            Vector2[] offsets = new Vector2[4];
-            for (int index = 0; index < offsets.Length; index++)
+            GameObject parentObject = new GameObject("BatchRoot");
+            createdObjects.Add(parentObject);
+            parentObject.transform.SetPositionAndRotation(
+                new Vector3(3.4f, -1.2f, 5.6f),
+                Quaternion.Euler(17f, 39f, -11f));
+            parentObject.transform.localScale = Vector3.one * 1.35f;
+
+            List<GameObject> frames = new List<GameObject>();
+            Vector3[] positions =
             {
-                offsets[index] =
-                    CraftLivePad1TransferController.ResolveBatchGridOffset(
-                        index,
-                        4,
-                        2f,
-                        4f);
+                new Vector3(-1.8f, 0.4f, 2.1f),
+                new Vector3(-0.5f, 0.7f, 2.3f),
+                new Vector3(0.8f, 0.2f, 2.5f),
+                new Vector3(2.0f, 0.9f, 2.7f)
+            };
+            Quaternion[] rotations = new Quaternion[positions.Length];
+            Vector3[] scales = new Vector3[positions.Length];
+            for (int index = 0; index < positions.Length; index++)
+            {
+                GameObject frame = new GameObject($"Frame{index + 1}");
+                createdObjects.Add(frame);
+                frame.transform.position = positions[index];
+                frame.transform.rotation = Quaternion.Euler(
+                    index * 7f,
+                    index * 13f,
+                    index * -5f);
+                frame.transform.localScale = new Vector3(
+                    0.7f + index * 0.1f,
+                    0.9f + index * 0.08f,
+                    1.1f + index * 0.06f);
+                rotations[index] = frame.transform.rotation;
+                scales[index] = frame.transform.lossyScale;
+                frames.Add(frame);
             }
 
-            Assert.That(offsets[0], Is.EqualTo(new Vector2(-1f, 2f)));
-            Assert.That(offsets[1], Is.EqualTo(new Vector2(1f, 2f)));
-            Assert.That(offsets[2], Is.EqualTo(new Vector2(-1f, -2f)));
-            Assert.That(offsets[3], Is.EqualTo(new Vector2(1f, -2f)));
+            CraftLivePad1TransferController.ParentBatchPreservingWorldPose(
+                parentObject.transform,
+                frames);
+
+            for (int index = 0; index < frames.Count; index++)
+            {
+                Assert.That(
+                    Vector3.Distance(
+                        frames[index].transform.position,
+                        positions[index]),
+                    Is.LessThan(0.0001f));
+                Assert.That(
+                    Quaternion.Angle(
+                        frames[index].transform.rotation,
+                        rotations[index]),
+                    Is.LessThan(0.01f));
+                Assert.That(
+                    Vector3.Distance(
+                        frames[index].transform.lossyScale,
+                        scales[index]),
+                    Is.LessThan(0.0001f));
+                Assert.That(
+                    frames[index].transform.parent,
+                    Is.SameAs(parentObject.transform));
+            }
+
+            for (int index = 1; index < frames.Count; index++)
+            {
+                float expectedDistance = Vector3.Distance(
+                    positions[0],
+                    positions[index]);
+                float actualDistance = Vector3.Distance(
+                    frames[0].transform.position,
+                    frames[index].transform.position);
+                Assert.That(
+                    actualDistance,
+                    Is.EqualTo(expectedDistance).Within(0.0001f));
+            }
+        }
+
+        [Test]
+        public void ResetRoomForNextGroup_AdvancesTransferIdentity()
+        {
+            CraftLiveMaterialDefinition material =
+                CreateMaterial("ore", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(material));
+            QueueMaterial(session, material, CraftLiveSlotId.Top);
+            QueueMaterial(session, material, CraftLiveSlotId.Right);
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            int previousGeneration = session.State.groupGeneration;
+            int previousQueueSerial = session.State.transferQueueSerial;
+            int previousBatchSerial = session.State.transferBatchSerial;
+
+            session.ResetRoomForNextGroup();
+
+            Assert.That(
+                session.State.groupGeneration,
+                Is.EqualTo(previousGeneration + 1));
+            Assert.That(
+                session.State.transferQueueSerial,
+                Is.EqualTo(previousQueueSerial));
+            Assert.That(
+                session.State.transferBatchSerial,
+                Is.EqualTo(previousBatchSerial));
+
+            session.State.weaponSelectionConfirmed = true;
+            QueueMaterial(session, material, CraftLiveSlotId.Top);
+            Assert.That(
+                session.State.transferQueue[0].serial,
+                Is.GreaterThan(previousQueueSerial));
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            Assert.That(
+                session.State.transferBatchSerial,
+                Is.GreaterThan(previousBatchSerial));
+        }
+
+        [Test]
+        public void CheckedTransferTransitions_RejectStaleIdentity()
+        {
+            CraftLiveMaterialDefinition material =
+                CreateMaterial("ore", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(material));
+            QueueMaterial(session, material, CraftLiveSlotId.Top);
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            int generation = session.State.groupGeneration;
+            int serial = session.State.placement.transferSerial;
+
+            long revision = session.State.revision;
+            Assert.That(
+                session.MarkTransferLaunching(generation + 1, serial),
+                Is.False);
+            Assert.That(
+                session.MarkTransferLaunching(generation, serial + 1),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.MarkTransferLaunching(generation, serial),
+                Is.True);
+
+            revision = session.State.revision;
+            Assert.That(
+                session.MarkTransferArriving(generation + 1, serial),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.MarkTransferArriving(generation, serial),
+                Is.True);
+
+            revision = session.State.revision;
+            Assert.That(
+                session.CompleteCurrentPlacement(generation, serial + 1),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.CompleteCurrentPlacement(generation, serial),
+                Is.True);
+
+            revision = session.State.revision;
+            Assert.That(
+                session.PublishCurrentStatsToPad3(
+                    generation + 1,
+                    serial),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.PublishCurrentStatsToPad3(generation, serial),
+                Is.True);
+
+            revision = session.State.revision;
+            Assert.That(
+                session.ContinueAfterPlacement(generation, serial + 1),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.ContinueAfterPlacement(generation, serial),
+                Is.True);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+            Assert.That(session.State.placement.transferSerial, Is.Zero);
+            Assert.That(session.State.slots.top, Is.EqualTo("ore"));
+            Assert.That(session.State.transferQueue, Has.Count.EqualTo(1));
+
+            revision = session.State.revision;
+            Assert.That(
+                session.MarkTransferLaunching(generation, serial),
+                Is.False);
+            Assert.That(
+                session.PublishCurrentStatsToPad3(generation, serial),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(session.State.transferQueue, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ApplyRemoteState_RejectsOldGenerationAndKeepsCounters()
+        {
+            CraftLiveMaterialDefinition material =
+                CreateMaterial("ore", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveCatalog catalog = CreateCatalog(material);
+            CraftLiveSession session = CreateSession(catalog);
+            QueueMaterial(session, material, CraftLiveSlotId.Top);
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            session.ResetRoomForNextGroup();
+
+            int generation = session.State.groupGeneration;
+            int queueSerial = session.State.transferQueueSerial;
+            int batchSerial = session.State.transferBatchSerial;
+            long revision = session.State.revision;
+
+            CraftLiveRoomState oldGroup = CraftLiveRoomState.Create(catalog);
+            oldGroup.groupGeneration = generation - 1;
+            oldGroup.revision = revision + 100;
+            oldGroup.transferQueueSerial = 0;
+            oldGroup.transferBatchSerial = 0;
+            session.ApplyRemoteState(oldGroup);
+
+            Assert.That(session.State.groupGeneration, Is.EqualTo(generation));
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(session.State.transferQueueSerial, Is.EqualTo(queueSerial));
+            Assert.That(session.State.transferBatchSerial, Is.EqualTo(batchSerial));
+
+            CraftLiveRoomState currentGroup = session.State.Clone();
+            currentGroup.revision = revision + 1;
+            currentGroup.transferQueueSerial = 0;
+            currentGroup.transferBatchSerial = 0;
+            session.ApplyRemoteState(currentGroup);
+
+            Assert.That(session.State.revision, Is.EqualTo(revision + 1));
+            Assert.That(session.State.transferQueueSerial, Is.EqualTo(queueSerial));
+            Assert.That(session.State.transferBatchSerial, Is.EqualTo(batchSerial));
+        }
+
+        [Test]
+        public void CheckedPreviewCompletion_RejectsStaleIdentity()
+        {
+            CraftLiveMaterialDefinition material =
+                CreateMaterial("ore", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(material));
+            QueueMaterial(session, material, CraftLiveSlotId.Top);
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            int generation = session.State.groupGeneration;
+            int serial = session.State.placement.transferSerial;
+            Assert.That(
+                session.MarkTransferLaunching(generation, serial),
+                Is.True);
+            Assert.That(
+                session.MarkTransferArriving(generation, serial),
+                Is.True);
+
+            long revision = session.State.revision;
+            Assert.That(
+                session.CompleteTransferPreviewWithoutPlacement(
+                    generation + 1,
+                    serial),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(revision));
+            Assert.That(
+                session.CompleteTransferPreviewWithoutPlacement(
+                    generation,
+                    serial),
+                Is.True);
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+            Assert.That(session.State.slots.top, Is.Empty);
         }
 
         [Test]
@@ -500,6 +749,7 @@ namespace CraftOrigin.CraftLiveTests
                     BindingFlags.NonPublic);
             Assert.That(awake, Is.Not.Null);
             awake.Invoke(session, null);
+            session.State.weaponSelectionConfirmed = true;
             return session;
         }
 

@@ -47,8 +47,12 @@ namespace CraftOrigin.CraftLive
         private readonly Dictionary<CraftLiveSlotId, string>
             displayedMaterialIds =
                 new Dictionary<CraftLiveSlotId, string>();
+        private int observedGroupGeneration = -1;
+        private int handledTransferGeneration = -1;
         private int handledTransferSerial = -1;
+        private int activeTransferGeneration = -1;
         private int activeTransferSerial = -1;
+        private bool isResettingTransferLifecycle;
         private Coroutine receiveRoutine;
         private Coroutine localAutoStartRoutine;
         private GameObject activeTransferVisual;
@@ -86,21 +90,7 @@ namespace CraftOrigin.CraftLive
                 session.StateChanged -= Refresh;
             }
 
-            if (receiveRoutine != null)
-            {
-                StopCoroutine(receiveRoutine);
-                receiveRoutine = null;
-            }
-
-            if (localAutoStartRoutine != null)
-            {
-                StopCoroutine(localAutoStartRoutine);
-                localAutoStartRoutine = null;
-            }
-
-            DestroySafely(activeTransferVisual);
-            activeTransferVisual = null;
-            activeTransferSerial = -1;
+            ResetTransferLifecycle(-1, true);
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -119,10 +109,20 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        public bool IsReceivingTransfer(int transferSerial)
+        public bool IsReceivingTransfer(
+            int groupGeneration,
+            int transferSerial)
         {
             return receiveRoutine != null &&
+                   activeTransferGeneration == groupGeneration &&
                    activeTransferSerial == transferSerial;
+        }
+
+        public bool IsReceivingTransfer(int transferSerial)
+        {
+            return IsReceivingTransfer(
+                observedGroupGeneration,
+                transferSerial);
         }
 
         public bool IsReceivingAnyTransfer => receiveRoutine != null;
@@ -147,9 +147,19 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            session.BeginSingleTransfer();
-            session.MarkTransferLaunching();
-            session.MarkTransferArriving();
+            if (!session.BeginSingleTransfer())
+            {
+                return;
+            }
+
+            int groupGeneration = session.State.groupGeneration;
+            int transferSerial = session.State.placement.transferSerial;
+            session.MarkTransferLaunching(
+                groupGeneration,
+                transferSerial);
+            session.MarkTransferArriving(
+                groupGeneration,
+                transferSerial);
         }
 #endif
 
@@ -168,7 +178,19 @@ namespace CraftOrigin.CraftLive
 
         private void Refresh(CraftLiveRoomState state)
         {
-            if (state == null || bindings == null)
+            if (state == null)
+            {
+                return;
+            }
+
+            if (observedGroupGeneration != state.groupGeneration)
+            {
+                ResetTransferLifecycle(
+                    state.groupGeneration,
+                    true);
+            }
+
+            if (bindings == null)
             {
                 return;
             }
@@ -191,15 +213,24 @@ namespace CraftOrigin.CraftLive
 
             if (state.placement.status ==
                     CraftLivePlacementStatus.Pad2Arriving &&
-                state.placement.transferSerial !=
-                    handledTransferSerial &&
+                (state.groupGeneration !=
+                     handledTransferGeneration ||
+                 state.placement.transferSerial !=
+                     handledTransferSerial) &&
                 receiveRoutine == null)
             {
+                handledTransferGeneration =
+                    state.groupGeneration;
                 handledTransferSerial =
                     state.placement.transferSerial;
+                activeTransferGeneration =
+                    handledTransferGeneration;
                 activeTransferSerial = handledTransferSerial;
                 receiveRoutine = StartCoroutine(
-                    Receive(state.Clone()));
+                    ReceiveGuarded(
+                        state.Clone(),
+                        activeTransferGeneration,
+                        activeTransferSerial));
             }
         }
 
@@ -249,170 +280,321 @@ namespace CraftOrigin.CraftLive
                     localStageDelay);
             }
 
-            session.MarkTransferLaunching();
+            CraftLiveRoomState transfer = session.State;
+            int groupGeneration = transfer.groupGeneration;
+            int transferSerial = transfer.placement.transferSerial;
+            if (!session.MarkTransferLaunching(
+                    groupGeneration,
+                    transferSerial))
+            {
+                localAutoStartRoutine = null;
+                yield break;
+            }
             if (localStageDelay > 0f)
             {
                 yield return new WaitForSecondsRealtime(
                     localStageDelay);
             }
 
-            session.MarkTransferArriving();
+            session.MarkTransferArriving(
+                groupGeneration,
+                transferSerial);
             localAutoStartRoutine = null;
         }
 #endif
 
-        private IEnumerator Receive(CraftLiveRoomState snapshot)
+        private IEnumerator ReceiveGuarded(
+            CraftLiveRoomState snapshot,
+            int groupGeneration,
+            int transferSerial)
         {
-            if (arrivalDelay > 0f)
+            // Make sure StartCoroutine has assigned receiveRoutine before any
+            // checked state mutation can synchronously invoke Refresh.
+            yield return null;
+            try
             {
-                yield return new WaitForSecondsRealtime(
-                    arrivalDelay);
-            }
-
-            CraftLiveMaterialDefinition material =
-                session.Catalog != null
-                    ? session.Catalog.FindMaterial(
-                        snapshot.placement.materialId)
-                    : null;
-            CraftLiveSlotId slot =
-                snapshot.placement.confirmedSlot;
-            Transform target = GetSlotAnchor(slot);
-            if (material == null || target == null)
-            {
-                session.CompleteCurrentPlacement();
-                FinishReceive(
-                    snapshot.placement.transferSerial,
-                    true);
-                yield break;
-            }
-
-            onArrivalStarted?.Invoke(slot);
-            onThemeColorChanged?.Invoke(material.EffectColor);
-            Vector3 start = ResolveArrivalPosition(slot);
-            Vector3 displayTarget = ResolveDisplayPosition(
-                slot,
-                target);
-            Quaternion displayRotation = ResolveDisplayRotation(
-                slot,
-                target);
-            float materialSize = ResolveMaterialSize(slot, 0.58f);
-            Vector3 transformPoint =
-                Vector3.Lerp(start, displayTarget, 0.5f);
-            transformPoint += ResolveSurfaceNormal() *
-                              arrivalArcHeight * 0.5f;
-
-            GameObject ticket = CreateVisual(
-                material.TransferTicketPrefab,
-                fallbackTicketPrefab,
-                PrimitiveType.Cube,
-                start,
-                Quaternion.identity,
-                null,
-                ResolveWorldVisualSize(0.42f),
-                0f,
-                false);
-            activeTransferVisual = ticket;
-            ApplyGlowColor(ticket, material.EffectColor);
-            yield return AnimateTicket(
-                ticket.transform,
-                start,
-                transformPoint);
-            DestroySafely(ticket);
-
-            GameObject materialVisual = CreateVisual(
-                material.WorldPrefab,
-                fallbackMaterialPrefab,
-                ResolvePrimitive(material.MaterialForm),
-                transformPoint,
-                displayRotation,
-                null,
-                ResolveWorldVisualSize(materialSize),
-                material.Pad2PreviewRollDegrees,
-                true);
-            activeTransferVisual = materialVisual;
-            ApplyMaterialColor(
-                materialVisual,
-                material.EffectColor);
-            yield return AnimateLanding(
-                materialVisual.transform,
-                transformPoint,
-                slot,
-                target,
-                material.MaterialForm);
-
-            if (material.PlacementEffectPrefab != null)
-            {
-                GameObject effect = Instantiate(
-                    material.PlacementEffectPrefab,
-                    displayTarget,
-                    displayRotation);
-                Destroy(effect, 5f);
-            }
-
-            CraftLiveAudio.PlayMaterialLanding(
-                material,
-                GetComponent<AudioSource>());
-
-            DestroySafely(materialVisual);
-            activeTransferVisual = null;
-            session.CompleteCurrentPlacement();
-            onPlacementCompleted?.Invoke(slot);
-            if (publishStatsAfterArrival)
-            {
-                if (statusPublishDelay > 0f)
+                if (arrivalDelay > 0f)
                 {
                     yield return new WaitForSecondsRealtime(
-                        statusPublishDelay);
+                        arrivalDelay);
                 }
 
-                session.PublishCurrentStatsToPad3();
-            }
-
-            CraftLiveLiquidFlowController flowController =
-                FindAnyObjectByType<CraftLiveLiquidFlowController>();
-            int transferSerial = snapshot.placement.transferSerial;
-            if (flowController != null)
-            {
-                // CompleteCurrentPlacement starts the groove light through
-                // StateChanged. Do not advance the batch until that material's
-                // full light pass has finished, so every queued item repeats
-                // the same place-then-flow sequence as the first one.
-                yield return null;
-                float waited = 0f;
-                float timeout = Mathf.Max(8f, completionHoldSeconds);
-                while (!flowController.HasCompletedFlow(transferSerial) &&
-                       waited < timeout)
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.Pad2Arriving))
                 {
-                    waited += Time.unscaledDeltaTime;
+                    yield break;
+                }
+
+                CraftLiveMaterialDefinition material =
+                    session.Catalog != null
+                        ? session.Catalog.FindMaterial(
+                            snapshot.placement.materialId)
+                        : null;
+                CraftLiveSlotId slot =
+                    snapshot.placement.confirmedSlot;
+                Transform target = GetSlotAnchor(slot);
+                if (material == null || target == null)
+                {
+                    if (session.CompleteCurrentPlacement(
+                            groupGeneration,
+                            transferSerial))
+                    {
+                        session.PublishCurrentStatsToPad3(
+                            groupGeneration,
+                            transferSerial);
+                        session.ContinueAfterPlacement(
+                            groupGeneration,
+                            transferSerial);
+                    }
+                    yield break;
+                }
+
+                onArrivalStarted?.Invoke(slot);
+                onThemeColorChanged?.Invoke(material.EffectColor);
+                Vector3 start = ResolveArrivalPosition(slot);
+                Vector3 displayTarget = ResolveDisplayPosition(
+                    slot,
+                    target);
+                Quaternion displayRotation = ResolveDisplayRotation(
+                    slot,
+                    target);
+                float materialSize = ResolveMaterialSize(slot, 0.58f);
+                Vector3 transformPoint =
+                    Vector3.Lerp(start, displayTarget, 0.5f);
+                transformPoint += ResolveSurfaceNormal() *
+                                  arrivalArcHeight * 0.5f;
+
+                GameObject ticket = CreateVisual(
+                    material.TransferTicketPrefab,
+                    fallbackTicketPrefab,
+                    PrimitiveType.Cube,
+                    start,
+                    Quaternion.identity,
+                    null,
+                    ResolveWorldVisualSize(0.42f),
+                    0f,
+                    false);
+                activeTransferVisual = ticket;
+                ApplyGlowColor(ticket, material.EffectColor);
+                yield return AnimateTicket(
+                    ticket.transform,
+                    start,
+                    transformPoint);
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.Pad2Arriving))
+                {
+                    yield break;
+                }
+                DestroySafely(ticket);
+                activeTransferVisual = null;
+
+                GameObject materialVisual = CreateVisual(
+                    material.WorldPrefab,
+                    fallbackMaterialPrefab,
+                    ResolvePrimitive(material.MaterialForm),
+                    transformPoint,
+                    displayRotation,
+                    null,
+                    ResolveWorldVisualSize(materialSize),
+                    material.Pad2PreviewRollDegrees,
+                    true);
+                activeTransferVisual = materialVisual;
+                ApplyMaterialColor(
+                    materialVisual,
+                    material.EffectColor);
+                yield return AnimateLanding(
+                    materialVisual.transform,
+                    transformPoint,
+                    slot,
+                    target,
+                    material.MaterialForm);
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.Pad2Arriving))
+                {
+                    yield break;
+                }
+
+                if (material.PlacementEffectPrefab != null)
+                {
+                    GameObject effect = Instantiate(
+                        material.PlacementEffectPrefab,
+                        displayTarget,
+                        displayRotation);
+                    Destroy(effect, 5f);
+                }
+
+                CraftLiveAudio.PlayMaterialLanding(
+                    material,
+                    GetComponent<AudioSource>());
+
+                DestroySafely(materialVisual);
+                activeTransferVisual = null;
+                if (!session.CompleteCurrentPlacement(
+                        groupGeneration,
+                        transferSerial))
+                {
+                    yield break;
+                }
+
+                onPlacementCompleted?.Invoke(slot);
+                if (publishStatsAfterArrival)
+                {
+                    if (statusPublishDelay > 0f)
+                    {
+                        yield return new WaitForSecondsRealtime(
+                            statusPublishDelay);
+                    }
+
+                    session.PublishCurrentStatsToPad3(
+                        groupGeneration,
+                        transferSerial);
+                }
+
+                CraftLiveLiquidFlowController flowController =
+                    GetComponent<CraftLiveLiquidFlowController>();
+                if (flowController == null)
+                {
+                    flowController = FindAnyObjectByType<
+                        CraftLiveLiquidFlowController>();
+                }
+
+                if (flowController != null)
+                {
+                    // CompleteCurrentPlacement starts the groove light through
+                    // StateChanged. Keep this serial active until its own light
+                    // pass finishes; a later generation can never satisfy it.
                     yield return null;
+                    float waited = 0f;
+                    float timeout = Mathf.Max(8f, completionHoldSeconds);
+                    while (IsCurrentTransfer(
+                               groupGeneration,
+                               transferSerial,
+                               CraftLivePlacementStatus.PlacementComplete) &&
+                           !flowController.HasCompletedFlow(
+                               groupGeneration,
+                               transferSerial) &&
+                           waited < timeout)
+                    {
+                        waited += Time.unscaledDeltaTime;
+                        yield return null;
+                    }
+                }
+                else if (completionHoldSeconds > 0f)
+                {
+                    yield return new WaitForSecondsRealtime(
+                        completionHoldSeconds);
+                }
+
+                if (IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.PlacementComplete))
+                {
+                    session.ContinueAfterPlacement(
+                        groupGeneration,
+                        transferSerial);
                 }
             }
-            else if (completionHoldSeconds > 0f)
+            finally
             {
-                yield return new WaitForSecondsRealtime(completionHoldSeconds);
-            }
+                if (activeTransferGeneration == groupGeneration &&
+                    activeTransferSerial == transferSerial)
+                {
+                    DestroySafely(activeTransferVisual);
+                    activeTransferVisual = null;
+                    activeTransferGeneration = -1;
+                    activeTransferSerial = -1;
+                    receiveRoutine = null;
 
-            FinishReceive(transferSerial, true);
+                    // If the state never left Arriving, the attempt was
+                    // interrupted. Release the handled key so it can retry.
+                    if (IsCurrentTransfer(
+                            groupGeneration,
+                            transferSerial,
+                            CraftLivePlacementStatus.Pad2Arriving))
+                    {
+                        handledTransferGeneration = -1;
+                        handledTransferSerial = -1;
+                    }
+                }
+
+                if (!isResettingTransferLifecycle &&
+                    isActiveAndEnabled && session != null &&
+                    session.State != null &&
+                    session.State.groupGeneration ==
+                        observedGroupGeneration)
+                {
+                    Refresh(session.State);
+                }
+            }
         }
 
-        private void FinishReceive(
+        private bool IsCurrentTransfer(
+            int groupGeneration,
             int transferSerial,
-            bool continueBatch)
+            CraftLivePlacementStatus expectedStatus)
         {
-            receiveRoutine = null;
-            activeTransferSerial = -1;
-            if (continueBatch && session != null)
-            {
-                session.ContinueAfterPlacement(transferSerial);
-            }
+            CraftLiveRoomState current =
+                session != null ? session.State : null;
+            return current != null &&
+                   current.groupGeneration == groupGeneration &&
+                   current.placement != null &&
+                   current.placement.transferSerial == transferSerial &&
+                   current.placement.status == expectedStatus;
+        }
 
-            // ContinueAfterPlacement can synchronously expose the next state,
-            // and a remote Pad1 update may already have reached Pad2 while the
-            // previous coroutine was occupied. Re-evaluate after clearing the
-            // guard so the third/fourth arrival cannot be missed.
-            if (isActiveAndEnabled && session != null)
+        private void ResetTransferLifecycle(
+            int groupGeneration,
+            bool clearPlacedVisuals)
+        {
+            // Assign first so a disposed coroutine cannot re-admit its old
+            // generation from a finally block.
+            isResettingTransferLifecycle = true;
+            try
             {
-                Refresh(session.State);
+                observedGroupGeneration = groupGeneration;
+                if (receiveRoutine != null)
+                {
+                    Coroutine staleRoutine = receiveRoutine;
+                    receiveRoutine = null;
+                    StopCoroutine(staleRoutine);
+                }
+
+                if (localAutoStartRoutine != null)
+                {
+                    Coroutine staleAutoStart = localAutoStartRoutine;
+                    localAutoStartRoutine = null;
+                    StopCoroutine(staleAutoStart);
+                }
+
+                DestroySafely(activeTransferVisual);
+                activeTransferVisual = null;
+                handledTransferGeneration = -1;
+                handledTransferSerial = -1;
+                activeTransferGeneration = -1;
+                activeTransferSerial = -1;
+
+                if (!clearPlacedVisuals)
+                {
+                    return;
+                }
+
+                foreach (GameObject visual in placedVisuals.Values)
+                {
+                    DestroySafely(visual);
+                }
+                placedVisuals.Clear();
+                displayedMaterialIds.Clear();
+            }
+            finally
+            {
+                isResettingTransferLifecycle = false;
             }
         }
 

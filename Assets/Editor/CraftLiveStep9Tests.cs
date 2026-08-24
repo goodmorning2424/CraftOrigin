@@ -9,7 +9,7 @@ namespace CraftOrigin.CraftLiveEditor.Tests
     public sealed class CraftLiveStep9Tests
     {
         [Test]
-        public void CompareVersion_PrefersRevisionThenTimestamp()
+        public void CompareVersion_PrefersGenerationThenRevisionThenTimestamp()
         {
             CraftLiveRoomState older = new CraftLiveRoomState
             {
@@ -26,6 +26,19 @@ namespace CraftOrigin.CraftLiveEditor.Tests
                 revision = 4,
                 updatedAtUnixMs = 300
             };
+            CraftLiveRoomState nextGeneration = new CraftLiveRoomState
+            {
+                groupGeneration = 1,
+                revision = 0,
+                updatedAtUnixMs = 1
+            };
+            CraftLiveRoomState delayedPreviousGeneration =
+                new CraftLiveRoomState
+                {
+                    groupGeneration = 0,
+                    revision = 999,
+                    updatedAtUnixMs = 999
+                };
 
             Assert.That(
                 CraftLiveRoomTransport.CompareVersion(
@@ -36,6 +49,11 @@ namespace CraftOrigin.CraftLiveEditor.Tests
                 CraftLiveRoomTransport.CompareVersion(
                     newerTimestamp,
                     older),
+                Is.GreaterThan(0));
+            Assert.That(
+                CraftLiveRoomTransport.CompareVersion(
+                    nextGeneration,
+                    delayedPreviousGeneration),
                 Is.GreaterThan(0));
             Assert.That(
                 CraftLiveRoomTransport.CompareVersion(null, older),

@@ -39,6 +39,7 @@ namespace CraftOrigin.CraftLive
             materialId = string.Empty;
             hasCandidateSlot = false;
             hasConfirmedSlot = false;
+            transferSerial = 0;
             statusChangedAtUnixMs = 0;
         }
     }
@@ -214,11 +215,12 @@ namespace CraftOrigin.CraftLive
     [Serializable]
     public sealed class CraftLiveRoomState
     {
-        public const int CurrentSchemaVersion = 6;
+        public const int CurrentSchemaVersion = 7;
 
         public int schemaVersion = CurrentSchemaVersion;
         public long revision;
         public long updatedAtUnixMs;
+        [Min(0)] public int groupGeneration;
         public string selectedMaterialId;
         public List<string> registeredMaterialIds = new List<string>();
 
@@ -342,6 +344,7 @@ namespace CraftOrigin.CraftLive
                 Math.Max(0L, sessionEndsAtUnixMs);
             selectedFinalResultSerial =
                 Mathf.Max(0, selectedFinalResultSerial);
+            groupGeneration = Mathf.Max(0, groupGeneration);
             lastRegistrationDelta =
                 Mathf.Clamp(lastRegistrationDelta, 0, 1);
             transferBatchRemaining = Mathf.Clamp(

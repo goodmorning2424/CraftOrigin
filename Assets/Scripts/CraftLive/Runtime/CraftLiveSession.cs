@@ -100,6 +100,26 @@ namespace CraftOrigin.CraftLive
             }
 
             remoteState.Normalize(catalog);
+            if (state != null)
+            {
+                // A delayed response from the previous group must never
+                // revive its placement flow. Within one generation, reject a
+                // lower revision and retain the highest issued counters so a
+                // cached state cannot make transfer identities reusable.
+                if (remoteState.groupGeneration < state.groupGeneration ||
+                    (remoteState.groupGeneration == state.groupGeneration &&
+                     remoteState.revision < state.revision))
+                {
+                    return;
+                }
+
+                remoteState.transferQueueSerial = Mathf.Max(
+                    remoteState.transferQueueSerial,
+                    state.transferQueueSerial);
+                remoteState.transferBatchSerial = Mathf.Max(
+                    remoteState.transferBatchSerial,
+                    state.transferBatchSerial);
+            }
             state = remoteState;
             if (ShouldRestartExpiredEmptySession(state))
             {
@@ -124,11 +144,24 @@ namespace CraftOrigin.CraftLive
         private void RestartExpiredEmptySession()
         {
             long previousRevision = state.revision;
+            int previousGeneration = state.groupGeneration;
+            int previousTransferQueueSerial =
+                state.transferQueueSerial;
+            int previousTransferBatchSerial =
+                state.transferBatchSerial;
             long now = UnixNowMs();
             long durationMs = Mathf.RoundToInt(
                 (rules != null ? rules.SessionDurationSeconds : 300f) *
                 1000f);
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
+            next.groupGeneration = IncrementGeneration(
+                previousGeneration);
+            next.transferQueueSerial = Mathf.Max(
+                0,
+                previousTransferQueueSerial);
+            next.transferBatchSerial = Mathf.Max(
+                0,
+                previousTransferBatchSerial);
             next.sessionStartedAtUnixMs = now;
             next.sessionEndsAtUnixMs = now + durationMs;
             next.sessionPhase = CraftLiveSessionPhase.Playing;
@@ -393,6 +426,17 @@ namespace CraftOrigin.CraftLive
             return BeginTransferBatch(1);
         }
 
+        public bool IsCurrentTransfer(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            return state != null &&
+                   state.placement != null &&
+                   state.groupGeneration == expectedGroupGeneration &&
+                   state.placement.transferSerial ==
+                       expectedTransferSerial;
+        }
+
         public bool BeginAllQueuedTransfers()
         {
             return BeginTransferBatch(
@@ -474,8 +518,17 @@ namespace CraftOrigin.CraftLive
 
         public void MarkTransferLaunching()
         {
-            if (state.placement.status ==
-                    CraftLivePlacementStatus.Idle &&
+            if (state == null || state.placement == null)
+            {
+                return;
+            }
+
+            // Legacy callers used this parameterless method to launch the
+            // first queued item directly from Idle. Keep that compatibility
+            // here, but never expose it through the identity-checked overload:
+            // a late callback for a completed transfer must not start the next
+            // queued material.
+            if (state.placement.status == CraftLivePlacementStatus.Idle &&
                 state.transferQueue != null &&
                 state.transferQueue.Count > 0)
             {
@@ -491,9 +544,25 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            MarkTransferLaunching(
+                state.groupGeneration,
+                state.placement.transferSerial);
+        }
+
+        public bool MarkTransferLaunching(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial))
+            {
+                return false;
+            }
+
             if (state.placement.status != CraftLivePlacementStatus.Pad1Loading)
             {
-                return;
+                return false;
             }
 
             Mutate(next =>
@@ -502,13 +571,35 @@ namespace CraftOrigin.CraftLive
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
                 next.message = "転送中";
             });
+            return true;
         }
 
         public void MarkTransferArriving()
         {
-            if (state.placement.status != CraftLivePlacementStatus.Pad1Launching)
+            if (state == null || state.placement == null)
             {
                 return;
+            }
+
+            MarkTransferArriving(
+                state.groupGeneration,
+                state.placement.transferSerial);
+        }
+
+        public bool MarkTransferArriving(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial))
+            {
+                return false;
+            }
+
+            if (state.placement.status != CraftLivePlacementStatus.Pad1Launching)
+            {
+                return false;
             }
 
             Mutate(next =>
@@ -517,14 +608,36 @@ namespace CraftOrigin.CraftLive
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
                 next.message = "素材が到着します";
             });
+            return true;
         }
 
         public void CompleteTransferPreviewWithoutPlacement()
         {
+            if (state == null || state.placement == null)
+            {
+                return;
+            }
+
+            CompleteTransferPreviewWithoutPlacement(
+                state.groupGeneration,
+                state.placement.transferSerial);
+        }
+
+        public bool CompleteTransferPreviewWithoutPlacement(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial))
+            {
+                return false;
+            }
+
             if (state.placement.status !=
                 CraftLivePlacementStatus.Pad2Arriving)
             {
-                return;
+                return false;
             }
 
             Mutate(next =>
@@ -548,14 +661,36 @@ namespace CraftOrigin.CraftLive
                         : "次の素材を選んでください";
                 }
             });
+            return true;
         }
 
         public void CompleteCurrentPlacement()
         {
+            if (state == null || state.placement == null)
+            {
+                return;
+            }
+
+            CompleteCurrentPlacement(
+                state.groupGeneration,
+                state.placement.transferSerial);
+        }
+
+        public bool CompleteCurrentPlacement(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial))
+            {
+                return false;
+            }
+
             if (state.placement.status != CraftLivePlacementStatus.Pad2Arriving ||
                 !state.placement.hasConfirmedSlot)
             {
-                return;
+                return false;
             }
 
             Mutate(next =>
@@ -567,20 +702,38 @@ namespace CraftOrigin.CraftLive
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
                 next.message = "配置完了";
             });
+            return true;
         }
 
         public void ContinueAfterPlacement()
         {
+            if (state == null || state.placement == null)
+            {
+                return;
+            }
+
             ContinueAfterPlacement(
-                state != null ? state.placement.transferSerial : -1);
+                state.groupGeneration,
+                state.placement.transferSerial);
         }
 
         public bool ContinueAfterPlacement(int expectedTransferSerial)
         {
-            if (state == null ||
+            return state != null &&
+                   ContinueAfterPlacement(
+                       state.groupGeneration,
+                       expectedTransferSerial);
+        }
+
+        public bool ContinueAfterPlacement(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial) ||
                 state.placement.status !=
-                    CraftLivePlacementStatus.PlacementComplete ||
-                state.placement.transferSerial != expectedTransferSerial)
+                    CraftLivePlacementStatus.PlacementComplete)
             {
                 return false;
             }
@@ -664,12 +817,31 @@ namespace CraftOrigin.CraftLive
 
         public void PublishCurrentStatsToPad3()
         {
-            if (state == null)
+            if (state == null || state.placement == null)
             {
                 return;
             }
 
+            PublishCurrentStatsToPad3(
+                state.groupGeneration,
+                state.placement.transferSerial);
+        }
+
+        public bool PublishCurrentStatsToPad3(
+            int expectedGroupGeneration,
+            int expectedTransferSerial)
+        {
+            if (!IsCurrentTransfer(
+                    expectedGroupGeneration,
+                    expectedTransferSerial) ||
+                state.placement.status !=
+                    CraftLivePlacementStatus.PlacementComplete)
+            {
+                return false;
+            }
+
             Mutate(next => PublishStatsToPad3(next));
+            return true;
         }
 
         public bool StartSynthesis()
@@ -952,7 +1124,20 @@ namespace CraftOrigin.CraftLive
         /// </summary>
         public void ResetRoomForNextGroup()
         {
+            if (state == null)
+            {
+                return;
+            }
+
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
+            next.groupGeneration = IncrementGeneration(
+                state.groupGeneration);
+            next.transferQueueSerial = Mathf.Max(
+                0,
+                state.transferQueueSerial);
+            next.transferBatchSerial = Mathf.Max(
+                0,
+                state.transferBatchSerial);
             next.message =
                 "次のグループを開始します。武器を選んでください。";
             next.revision = state.revision + 1;
@@ -1000,6 +1185,14 @@ namespace CraftOrigin.CraftLive
                 ? state.craft.mixBonus
                 : 0f;
             return CraftLiveCalculator.CalculateStats(state, catalog, rules, bonus);
+        }
+
+        private static int IncrementGeneration(int current)
+        {
+            int normalized = Mathf.Max(0, current);
+            return normalized < int.MaxValue
+                ? normalized + 1
+                : int.MaxValue;
         }
 
         private static void ActivateNextQueuedTransfer(

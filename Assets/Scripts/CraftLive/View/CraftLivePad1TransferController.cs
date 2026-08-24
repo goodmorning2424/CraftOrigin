@@ -12,6 +12,18 @@ namespace CraftOrigin.CraftLive
         IDragHandler,
         IEndDragHandler
     {
+        private struct QueuedWorldPose
+        {
+            public Vector3 Position;
+            public Quaternion Rotation;
+
+            public QueuedWorldPose(Vector3 position, Quaternion rotation)
+            {
+                Position = position;
+                Rotation = rotation;
+            }
+        }
+
         [Header("References")]
         [SerializeField] private CraftLiveSession session;
         [SerializeField] private CraftLivePad1Bindings bindings;
@@ -129,6 +141,10 @@ namespace CraftOrigin.CraftLive
             new Dictionary<int, GameObject>();
         private readonly Dictionary<int, Coroutine> queueArrivalRoutines =
             new Dictionary<int, Coroutine>();
+        private readonly Dictionary<int, GameObject> queueArrivalMergeModels =
+            new Dictionary<int, GameObject>();
+        private readonly Dictionary<int, QueuedWorldPose> capturedLaunchPoses =
+            new Dictionary<int, QueuedWorldPose>();
         private readonly HashSet<int> prelaunchedTransferSerials =
             new HashSet<int>();
         private readonly List<GameObject> activeBatchTickets =
@@ -155,6 +171,7 @@ namespace CraftOrigin.CraftLive
         private float pullStartX;
         private float pullAmount;
         private int handledTransferSerial = -1;
+        private int observedGroupGeneration = -1;
         private Coroutine launchRoutine;
         private Coroutine cameraTurnRoutine;
         private bool cameraTurning;
@@ -229,6 +246,13 @@ namespace CraftOrigin.CraftLive
                 session.StateChanged -= Refresh;
             }
 
+            ResetRuntimeTransferState();
+            observedGroupGeneration = -1;
+        }
+
+        private void ResetRuntimeTransferState()
+        {
+            pulling = false;
             if (launchRoutine != null)
             {
                 StopCoroutine(launchRoutine);
@@ -249,7 +273,15 @@ namespace CraftOrigin.CraftLive
                 }
             }
             queueArrivalRoutines.Clear();
+            foreach (GameObject mergeModel in
+                     queueArrivalMergeModels.Values)
+            {
+                DestroySafely(mergeModel);
+            }
+            queueArrivalMergeModels.Clear();
+            capturedLaunchPoses.Clear();
             prelaunchedTransferSerials.Clear();
+            handledTransferSerial = -1;
 
             if (activeBatchGroup != null)
             {
@@ -270,6 +302,11 @@ namespace CraftOrigin.CraftLive
 
             DestroySafely(activeTicket);
             activeTicket = null;
+            foreach (GameObject visual in queueVisuals.Values)
+            {
+                DestroySafely(visual);
+            }
+            queueVisuals.Clear();
             DestroySafely(pendingMergeModel);
             pendingMergeModel = null;
             pendingMergeMaterialId = string.Empty;
@@ -323,17 +360,46 @@ namespace CraftOrigin.CraftLive
 
         private bool TryLaunchSelectedMode()
         {
-            if (!CanOperateSpring(session != null ? session.State : null))
+            CraftLiveRoomState current = session != null
+                ? session.State
+                : null;
+            if (!CanOperateSpring(current))
             {
                 return false;
             }
 
+            // BeginTransferBatch removes the first entry before publishing its
+            // Pad1Loading state. Capture every queued frame now, while the
+            // exact formation the player sees is still intact.
+            if (!CaptureQueuedFormation(current))
+            {
+                // StateChanged normally creates every queued frame before the
+                // spring can be used. Recover once if a very fast interaction
+                // arrived in the same frame; never start a batch with a
+                // partially captured formation because missing frames would
+                // otherwise be recreated on top of each other.
+                RefreshQueueVisuals(current);
+                if (!CaptureQueuedFormation(current))
+                {
+                    capturedLaunchPoses.Clear();
+                    return false;
+                }
+            }
+            bool started;
             if (ShouldForceLaunchAll() || launchAll)
             {
-                return session.BeginAllQueuedTransfers();
+                started = session.BeginAllQueuedTransfers();
+            }
+            else
+            {
+                started = session.BeginSingleTransfer();
             }
 
-            return session.BeginSingleTransfer();
+            if (!started)
+            {
+                capturedLaunchPoses.Clear();
+            }
+            return started;
         }
 
         public void OnBeginDrag(PointerEventData eventData)
@@ -607,6 +673,16 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            if (observedGroupGeneration < 0)
+            {
+                observedGroupGeneration = state.groupGeneration;
+            }
+            else if (observedGroupGeneration != state.groupGeneration)
+            {
+                observedGroupGeneration = state.groupGeneration;
+                ResetRuntimeTransferState();
+            }
+
             if (state.placement.status == CraftLivePlacementStatus.Idle &&
                 launchRoutine == null)
             {
@@ -624,7 +700,19 @@ namespace CraftOrigin.CraftLive
                 ClaimQueuedTicket(state.placement.transferSerial);
             }
 
-            RefreshQueueVisuals(state);
+            // During an all-item physical launch the first entry has already
+            // been removed from state.transferQueue. Repacking here would move
+            // the other frames forward before LaunchPhysicalBatch can group
+            // them, producing the visible one-frame jump/overlap.
+            bool deferPhysicalBatchRefresh =
+                shouldStartLaunch &&
+                usingPhysicalLauncher &&
+                state.transferBatchRemaining > 0 &&
+                HasCompleteCapturedBatchFormation(state);
+            if (!deferPhysicalBatchRefresh)
+            {
+                RefreshQueueVisuals(state);
+            }
             int queueCount = state.transferQueue != null
                 ? state.transferQueue.Count
                 : 0;
@@ -643,20 +731,37 @@ namespace CraftOrigin.CraftLive
                         state.placement.transferSerial);
                 launchRoutine = StartCoroutine(
                     alreadyLaunched
-                        ? CompletePrelaunchedTransfer()
+                        ? CompletePrelaunchedTransfer(state.Clone())
                         : Launch(state.Clone()));
             }
         }
 
-        private IEnumerator CompletePrelaunchedTransfer()
+        private IEnumerator CompletePrelaunchedTransfer(
+            CraftLiveRoomState snapshot)
         {
-            session.MarkTransferLaunching();
+            int generation = snapshot.groupGeneration;
+            int transferSerial = snapshot.placement.transferSerial;
+            if (!session.MarkTransferLaunching(
+                    generation,
+                    transferSerial))
+            {
+                FinishLaunchRoutine();
+                yield break;
+            }
             yield return null;
-            session.MarkTransferArriving();
+            if (!session.MarkTransferArriving(
+                    generation,
+                    transferSerial))
+            {
+                FinishLaunchRoutine();
+                yield break;
+            }
             if (resetAfterStandaloneLaunch &&
                 FindAnyObjectByType<CraftLivePad2TransferReceiver>() == null)
             {
-                session.CompleteTransferPreviewWithoutPlacement();
+                session.CompleteTransferPreviewWithoutPlacement(
+                    generation,
+                    transferSerial);
             }
 
             FinishLaunchRoutine();
@@ -713,7 +818,18 @@ namespace CraftOrigin.CraftLive
                 activeTicket.transform.position = seat;
             }
 
-            session.MarkTransferLaunching();
+            int generation = snapshot.groupGeneration;
+            int transferSerial = snapshot.placement.transferSerial;
+            if (!session.MarkTransferLaunching(
+                    generation,
+                    transferSerial))
+            {
+                DestroySafely(activeTicket);
+                activeTicket = null;
+                RestoreMechanism();
+                FinishLaunchRoutine();
+                yield break;
+            }
             if (usingPhysicalLauncher)
             {
                 yield return AnimatePhysicalImpact();
@@ -764,12 +880,21 @@ namespace CraftOrigin.CraftLive
             DestroySafely(activeTicket);
             activeTicket = null;
             RestoreMechanism();
-            session.MarkTransferArriving();
+            if (!session.MarkTransferArriving(
+                    generation,
+                    transferSerial))
+            {
+                yield return AnimateCamera(false);
+                FinishLaunchRoutine();
+                yield break;
+            }
             yield return AnimateCamera(false);
             if (resetAfterStandaloneLaunch &&
                 FindAnyObjectByType<CraftLivePad2TransferReceiver>() == null)
             {
-                session.CompleteTransferPreviewWithoutPlacement();
+                session.CompleteTransferPreviewWithoutPlacement(
+                    generation,
+                    transferSerial);
             }
 
             FinishLaunchRoutine();
@@ -804,27 +929,18 @@ namespace CraftOrigin.CraftLive
                 yield break;
             }
 
-            // Keep every frame in one rigid group. Previously each frame had
-            // its own seat, curve and velocity, so timing differences made a
-            // four-item volley stretch, overlap and occasionally appear to
-            // leave only one frame moving. Repacking them around the shared
-            // pivot also prevents the front queue item from flying ahead.
+            // Keep every frame in one rigid group while retaining the exact
+            // world-space formation visible before the spring was released.
+            // Rebuilding a grid here caused the launch-time formation jump.
             activeBatchGroup = new GameObject("PhysicalFrameBatch");
             activeBatchGroup.transform.SetPositionAndRotation(
-                ResolveBatchCenter(batchObjects),
+                batchObjects[0].transform.position,
                 Quaternion.identity);
-            foreach (GameObject ticket in batchObjects)
-            {
-                if (ticket != null)
-                {
-                    ticket.transform.SetParent(
-                        activeBatchGroup.transform,
-                        true);
-                }
-            }
+            ParentBatchPreservingWorldPose(
+                activeBatchGroup.transform,
+                batchObjects);
 
             Transform batch = activeBatchGroup.transform;
-            ArrangeRigidBatch(batchObjects, batch.position);
             Vector3 batchStart = batch.position;
             Vector3 railUp = ResolveCameraUp().normalized;
             Vector3 baseSeat = launcherSeat != null
@@ -851,7 +967,20 @@ namespace CraftOrigin.CraftLive
 
             onLoadingStarted?.Invoke();
             yield return AnimateLoad(batch, batchStart, baseSeat);
-            session.MarkTransferLaunching();
+            int generation = snapshot.groupGeneration;
+            int transferSerial = snapshot.placement.transferSerial;
+            if (!session.MarkTransferLaunching(
+                    generation,
+                    transferSerial))
+            {
+                DestroySafely(activeBatchGroup);
+                activeBatchGroup = null;
+                activeBatchTickets.Clear();
+                activeTicket = null;
+                RestoreMechanism();
+                FinishLaunchRoutine();
+                yield break;
+            }
             yield return AnimatePhysicalImpact();
             PlayLaunchSound();
             onLaunched?.Invoke();
@@ -887,110 +1016,76 @@ namespace CraftOrigin.CraftLive
             activeTicket = null;
             RestoreMechanism();
             cameraTurning = false;
-            session.MarkTransferArriving();
+            if (!session.MarkTransferArriving(
+                    generation,
+                    transferSerial))
+            {
+                yield return AnimateCamera(false);
+                FinishLaunchRoutine();
+                yield break;
+            }
             yield return AnimateCamera(false);
             if (resetAfterStandaloneLaunch &&
                 FindAnyObjectByType<CraftLivePad2TransferReceiver>() == null)
             {
-                session.CompleteTransferPreviewWithoutPlacement();
+                session.CompleteTransferPreviewWithoutPlacement(
+                    generation,
+                    transferSerial);
             }
 
             FinishLaunchRoutine();
         }
 
-        private void ArrangeRigidBatch(
-            List<GameObject> tickets,
-            Vector3 center)
+        public static void ParentBatchPreservingWorldPose(
+            Transform parent,
+            IReadOnlyList<GameObject> tickets)
         {
-            if (tickets == null || tickets.Count == 0)
+            if (parent == null || tickets == null)
             {
                 return;
             }
 
-            Vector3 travel = physicalLaunchDirection.sqrMagnitude > 0.0001f
-                ? physicalLaunchDirection.normalized
-                : Vector3.right;
-            Vector3 up = ResolveCameraUp().normalized;
-            float travelExtent = batchTrainSpacing * 0.5f;
-            float upExtent = batchTrainSpacing * 0.5f;
-            foreach (GameObject ticket in tickets)
-            {
-                travelExtent = Mathf.Max(
-                    travelExtent,
-                    ResolveProjectedExtent(
-                        ticket,
-                        travel,
-                        batchTrainSpacing * 0.5f));
-                upExtent = Mathf.Max(
-                    upExtent,
-                    ResolveProjectedExtent(
-                        ticket,
-                        up,
-                        batchTrainSpacing * 0.5f));
-            }
-
-            float horizontalSpacing =
-                travelExtent * 2f + physicalFrameGap;
-            float verticalSpacing =
-                upExtent * 2f + physicalFrameGap;
             for (int index = 0; index < tickets.Count; index++)
             {
-                if (tickets[index] == null)
+                GameObject ticket = tickets[index];
+                if (ticket == null)
                 {
                     continue;
                 }
 
-                Vector2 offset = ResolveBatchGridOffset(
-                    index,
-                    tickets.Count,
-                    horizontalSpacing,
-                    verticalSpacing);
-                tickets[index].transform.position =
-                    center + travel * offset.x + up * offset.y;
+                Transform ticketTransform = ticket.transform;
+                Vector3 worldPosition = ticketTransform.position;
+                Quaternion worldRotation = ticketTransform.rotation;
+                Vector3 worldScale = ticketTransform.lossyScale;
+                ticketTransform.SetParent(parent, true);
+                ticketTransform.SetPositionAndRotation(
+                    worldPosition,
+                    worldRotation);
+                SetWorldScale(ticketTransform, worldScale);
             }
         }
 
-        private static Vector3 ResolveBatchCenter(
-            List<GameObject> tickets)
+        private static void SetWorldScale(
+            Transform target,
+            Vector3 worldScale)
         {
-            Vector3 total = Vector3.zero;
-            int count = 0;
-            if (tickets != null)
+            if (target == null || target.parent == null)
             {
-                foreach (GameObject ticket in tickets)
-                {
-                    if (ticket == null)
-                    {
-                        continue;
-                    }
-
-                    total += ticket.transform.position;
-                    count++;
-                }
+                return;
             }
 
-            return count > 0 ? total / count : Vector3.zero;
-        }
-
-        public static Vector2 ResolveBatchGridOffset(
-            int index,
-            int count,
-            float horizontalSpacing,
-            float verticalSpacing)
-        {
-            int safeCount = Mathf.Max(1, count);
-            int columns = safeCount == 1 ? 1 : 2;
-            int row = Mathf.Max(0, index) / columns;
-            int column = Mathf.Max(0, index) % columns;
-            int rowCount = Mathf.CeilToInt(safeCount / (float)columns);
-            int itemsInRow = Mathf.Min(
-                columns,
-                safeCount - row * columns);
-            float x = (column - (itemsInRow - 1) * 0.5f) *
-                      Mathf.Max(0f, horizontalSpacing);
-            float y = ((rowCount - 1) * 0.5f - row) *
-                      Mathf.Max(0f, verticalSpacing);
-            return new Vector2(x, y);
+            Vector3 actualWorldScale = target.lossyScale;
+            Vector3 localScale = target.localScale;
+            target.localScale = new Vector3(
+                Mathf.Abs(actualWorldScale.x) > 0.0001f
+                    ? localScale.x * worldScale.x / actualWorldScale.x
+                    : localScale.x,
+                Mathf.Abs(actualWorldScale.y) > 0.0001f
+                    ? localScale.y * worldScale.y / actualWorldScale.y
+                    : localScale.y,
+                Mathf.Abs(actualWorldScale.z) > 0.0001f
+                    ? localScale.z * worldScale.z / actualWorldScale.z
+                    : localScale.z);
         }
 
         public static float[] ResolveBatchTrainOffsets(
@@ -1018,6 +1113,7 @@ namespace CraftOrigin.CraftLive
         private void FinishLaunchRoutine()
         {
             launchRoutine = null;
+            capturedLaunchPoses.Clear();
 
             // Pad2 can finish placing the first item while this controller is
             // still restoring the camera. In that case the next batch item is
@@ -1043,6 +1139,9 @@ namespace CraftOrigin.CraftLive
             List<GameObject> tickets = new List<GameObject>();
             if (activeTicket != null)
             {
+                RestoreCapturedPose(
+                    snapshot.placement.transferSerial,
+                    activeTicket);
                 tickets.Add(activeTicket);
             }
 
@@ -1068,6 +1167,13 @@ namespace CraftOrigin.CraftLive
                     StopCoroutine(arrivalRoutine);
                 }
                 queueArrivalRoutines.Remove(entry.serial);
+                if (queueArrivalMergeModels.TryGetValue(
+                        entry.serial,
+                        out GameObject mergeModel))
+                {
+                    DestroySafely(mergeModel);
+                    queueArrivalMergeModels.Remove(entry.serial);
+                }
 
                 queueVisuals.TryGetValue(
                     entry.serial,
@@ -1087,6 +1193,7 @@ namespace CraftOrigin.CraftLive
                     ticket = CreateTicket(material, position);
                 }
 
+                RestoreCapturedPose(entry.serial, ticket);
                 ticket.transform.SetParent(null, true);
                 tickets.Add(ticket);
                 prelaunchedTransferSerials.Add(entry.serial);
@@ -1232,6 +1339,79 @@ namespace CraftOrigin.CraftLive
             }
         }
 
+        private bool CaptureQueuedFormation(CraftLiveRoomState state)
+        {
+            capturedLaunchPoses.Clear();
+            if (state == null || state.transferQueue == null)
+            {
+                return false;
+            }
+
+            foreach (CraftLiveTransferQueueEntry entry in state.transferQueue)
+            {
+                if (entry == null ||
+                    !queueVisuals.TryGetValue(
+                        entry.serial,
+                    out GameObject visual) ||
+                    visual == null)
+                {
+                    capturedLaunchPoses.Clear();
+                    return false;
+                }
+
+                capturedLaunchPoses[entry.serial] =
+                    new QueuedWorldPose(
+                        visual.transform.position,
+                        visual.transform.rotation);
+            }
+
+            return capturedLaunchPoses.Count == state.transferQueue.Count;
+        }
+
+        private bool HasCompleteCapturedBatchFormation(
+            CraftLiveRoomState state)
+        {
+            if (state == null || state.placement == null ||
+                !capturedLaunchPoses.ContainsKey(
+                    state.placement.transferSerial))
+            {
+                return false;
+            }
+
+            int additionalCount = Mathf.Min(
+                state.transferBatchRemaining,
+                state.transferQueue != null
+                    ? state.transferQueue.Count
+                    : 0);
+            for (int index = 0; index < additionalCount; index++)
+            {
+                CraftLiveTransferQueueEntry entry =
+                    state.transferQueue[index];
+                if (entry == null ||
+                    !capturedLaunchPoses.ContainsKey(entry.serial))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void RestoreCapturedPose(int serial, GameObject visual)
+        {
+            if (visual == null ||
+                !capturedLaunchPoses.TryGetValue(
+                    serial,
+                    out QueuedWorldPose pose))
+            {
+                return;
+            }
+
+            visual.transform.SetPositionAndRotation(
+                pose.Position,
+                pose.Rotation);
+        }
+
         private void ClaimQueuedTicket(int serial)
         {
             if (!queueVisuals.TryGetValue(serial, out GameObject visual) ||
@@ -1248,7 +1428,15 @@ namespace CraftOrigin.CraftLive
                 StopCoroutine(arrivalRoutine);
             }
             queueArrivalRoutines.Remove(serial);
+            if (queueArrivalMergeModels.TryGetValue(
+                    serial,
+                    out GameObject mergeModel))
+            {
+                DestroySafely(mergeModel);
+                queueArrivalMergeModels.Remove(serial);
+            }
             queueVisuals.Remove(serial);
+            RestoreCapturedPose(serial, visual);
             visual.transform.SetParent(null, true);
             activeTicket = visual;
         }
@@ -1899,6 +2087,11 @@ namespace CraftOrigin.CraftLive
                     if ((source != null || mergeModel != null) &&
                         queueArrivalDuration > 0f)
                     {
+                        if (mergeModel != null)
+                        {
+                            queueArrivalMergeModels[entry.serial] =
+                                mergeModel;
+                        }
                         visual.transform.position = source != null
                             ? source.position
                             : ResolveRendererCenter(mergeModel);
@@ -1918,6 +2111,7 @@ namespace CraftOrigin.CraftLive
                                 visual.transform,
                                 true);
                             DestroySafely(mergeModel);
+                            queueArrivalMergeModels.Remove(entry.serial);
                         }
                     }
                 }
@@ -1947,6 +2141,13 @@ namespace CraftOrigin.CraftLive
                     StopCoroutine(routine);
                 }
                 queueArrivalRoutines.Remove(serial);
+                if (queueArrivalMergeModels.TryGetValue(
+                        serial,
+                        out GameObject mergeModel))
+                {
+                    DestroySafely(mergeModel);
+                    queueArrivalMergeModels.Remove(serial);
+                }
                 queueVisuals.Remove(serial);
             }
         }
@@ -2120,6 +2321,7 @@ namespace CraftOrigin.CraftLive
                     visual.localScale = finalScale;
                 }
                 queueArrivalRoutines.Remove(serial);
+                queueArrivalMergeModels.Remove(serial);
                 yield break;
             }
 
@@ -2227,6 +2429,7 @@ namespace CraftOrigin.CraftLive
                 DestroySafely(mergeModel);
             }
             queueArrivalRoutines.Remove(serial);
+            queueArrivalMergeModels.Remove(serial);
         }
 
         private Vector3 ResolveCameraUp()

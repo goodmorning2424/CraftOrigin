@@ -29,9 +29,6 @@ namespace CraftOrigin.CraftLive
         private sealed class PersistentFill
         {
             public GameObject Root;
-            public GameObject Rim;
-            public Material RimMaterial;
-            public Mesh RimMesh;
             public readonly List<GameObject> Trail =
                 new List<GameObject>();
         }
@@ -55,14 +52,30 @@ namespace CraftOrigin.CraftLive
             persistentMaterialIds =
                 new Dictionary<CraftLiveSlotId, string>();
 
+        private int observedGroupGeneration = -1;
+        private int handledTransferGeneration = -1;
         private int handledTransferSerial = -1;
+        private int activeTransferGeneration = -1;
+        private int activeTransferSerial = -1;
+        private int completedTransferGeneration = -1;
         private int completedTransferSerial = -1;
+        private bool isResettingFlowLifecycle;
         private Coroutine flowRoutine;
+
+        public bool HasCompletedFlow(
+            int groupGeneration,
+            int transferSerial)
+        {
+            return transferSerial > 0 &&
+                   completedTransferGeneration == groupGeneration &&
+                   completedTransferSerial == transferSerial;
+        }
 
         public bool HasCompletedFlow(int transferSerial)
         {
-            return transferSerial > 0 &&
-                   completedTransferSerial == transferSerial;
+            return HasCompletedFlow(
+                observedGroupGeneration,
+                transferSerial);
         }
 
         private void Awake()
@@ -88,14 +101,7 @@ namespace CraftOrigin.CraftLive
                 session.StateChanged -= Refresh;
             }
 
-            if (flowRoutine != null)
-            {
-                StopCoroutine(flowRoutine);
-                flowRoutine = null;
-            }
-
-            ClearDrops();
-            ClearPersistentFills();
+            ResetFlowLifecycle(-1);
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -175,11 +181,18 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            if (observedGroupGeneration != state.groupGeneration)
+            {
+                ResetFlowLifecycle(state.groupGeneration);
+            }
+
             bool shouldStartFlow =
                 state.placement.status ==
                     CraftLivePlacementStatus.PlacementComplete &&
-                state.placement.transferSerial !=
-                    handledTransferSerial &&
+                (state.groupGeneration !=
+                     handledTransferGeneration ||
+                 state.placement.transferSerial !=
+                     handledTransferSerial) &&
                 flowRoutine == null;
 
             RefreshPersistentFills(
@@ -194,13 +207,94 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            handledTransferGeneration = state.groupGeneration;
             handledTransferSerial =
                 state.placement.transferSerial;
+            activeTransferGeneration = handledTransferGeneration;
+            activeTransferSerial = handledTransferSerial;
             flowRoutine = StartCoroutine(
-                Flow(state.Clone()));
+                FlowGuarded(
+                    state.Clone(),
+                    activeTransferGeneration,
+                    activeTransferSerial));
         }
 
-        private IEnumerator Flow(CraftLiveRoomState snapshot)
+        private IEnumerator FlowGuarded(
+            CraftLiveRoomState snapshot,
+            int groupGeneration,
+            int transferSerial)
+        {
+            // Allow flowRoutine to receive the Coroutine handle before any
+            // checked publish synchronously invokes Refresh.
+            yield return null;
+            bool completed = false;
+            try
+            {
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.PlacementComplete))
+                {
+                    yield break;
+                }
+
+                yield return Flow(
+                    snapshot,
+                    groupGeneration,
+                    transferSerial);
+                completed = IsCurrentTransfer(
+                    groupGeneration,
+                    transferSerial,
+                    CraftLivePlacementStatus.PlacementComplete);
+                if (completed)
+                {
+                    completedTransferGeneration = groupGeneration;
+                    completedTransferSerial = transferSerial;
+                }
+            }
+            finally
+            {
+                ClearDrops();
+                if (!completed)
+                {
+                    // Never leave a half-revealed groove behind when a newer
+                    // state overtakes this transfer. Refresh rebuilds it from
+                    // authoritative slot state when the material was placed.
+                    RemovePersistentFill(
+                        snapshot.placement.confirmedSlot);
+                }
+
+                if (activeTransferGeneration == groupGeneration &&
+                    activeTransferSerial == transferSerial)
+                {
+                    activeTransferGeneration = -1;
+                    activeTransferSerial = -1;
+                    flowRoutine = null;
+                    if (!completed && IsCurrentTransfer(
+                            groupGeneration,
+                            transferSerial,
+                            CraftLivePlacementStatus.PlacementComplete))
+                    {
+                        handledTransferGeneration = -1;
+                        handledTransferSerial = -1;
+                    }
+                }
+
+                if (!isResettingFlowLifecycle &&
+                    isActiveAndEnabled && session != null &&
+                    session.State != null &&
+                    session.State.groupGeneration ==
+                        observedGroupGeneration)
+                {
+                    Refresh(session.State);
+                }
+            }
+        }
+
+        private IEnumerator Flow(
+            CraftLiveRoomState snapshot,
+            int groupGeneration,
+            int transferSerial)
         {
             CraftLiveMaterialDefinition material =
                 session.Catalog != null
@@ -217,10 +311,9 @@ namespace CraftOrigin.CraftLive
                 slot == null ||
                 center == null)
             {
-                session.PublishCurrentStatsToPad3();
-                completedTransferSerial =
-                    snapshot.placement.transferSerial;
-                flowRoutine = null;
+                session.PublishCurrentStatsToPad3(
+                    groupGeneration,
+                    transferSerial);
                 yield break;
             }
 
@@ -229,7 +322,6 @@ namespace CraftOrigin.CraftLive
                 slotId,
                 out Vector3 flowStart,
                 out Vector3 flowEnd);
-            float padScale = ResolvePadScale();
             Vector3 surfaceNormal = ResolveSurfaceNormal();
             ResolveTrailDimensions(
                 slotId,
@@ -259,7 +351,15 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < totalDuration)
             {
-                elapsed += Time.deltaTime;
+                if (!IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.PlacementComplete))
+                {
+                    yield break;
+                }
+
+                elapsed += Time.unscaledDeltaTime;
                 for (int i = 0; i < activeDrops.Count; i++)
                 {
                     GameObject drop = activeDrops[i];
@@ -280,10 +380,11 @@ namespace CraftOrigin.CraftLive
                         0f,
                         surfaceNormal);
                     float scale =
-                        Mathf.Sin(t * Mathf.PI) * 0.08f +
+                        Mathf.Sin(t * Mathf.PI) *
+                            ResolveWorldLength(0.08f) +
                         trailWidth;
                     drop.transform.localScale =
-                        Vector3.one * scale * padScale;
+                        Vector3.one * scale;
                 }
 
                 RevealPersistentFill(
@@ -296,19 +397,10 @@ namespace CraftOrigin.CraftLive
 
             RevealPersistentFill(fill, 1f);
             ClearDrops();
-            session.PublishCurrentStatsToPad3();
+            session.PublishCurrentStatsToPad3(
+                groupGeneration,
+                transferSerial);
             onFlowCompleted?.Invoke();
-            completedTransferSerial =
-                snapshot.placement.transferSerial;
-            flowRoutine = null;
-            // A new PlacementComplete state can arrive while the previous
-            // flow coroutine is still active. Re-check the latest state after
-            // releasing the routine so that the next material's light pass is
-            // never lost.
-            if (isActiveAndEnabled && session != null)
-            {
-                Refresh(session.State);
-            }
         }
 
         private void RefreshPersistentFills(
@@ -390,16 +482,6 @@ namespace CraftOrigin.CraftLive
             // time, which made later trails sink into the workbench or vanish.
             fill.Root.transform.SetParent(null, false);
             fill.Root.AddComponent<CraftLiveGeneratedRuntimeVisual>();
-            fill.Rim = CreateRimGlow(
-                fill.Root.transform,
-                slot,
-                color,
-                out fill.RimMaterial,
-                out fill.RimMesh);
-            if (fill.Rim != null)
-            {
-                fill.Rim.SetActive(revealAll);
-            }
 
             int samples = Mathf.Max(4, trailSampleCount);
             for (int i = 0; i < samples; i++)
@@ -445,10 +527,6 @@ namespace CraftOrigin.CraftLive
             int visible = VisibleTrailSegments(
                 fill.Trail.Count,
                 normalizedProgress);
-            if (fill.Rim != null)
-            {
-                fill.Rim.SetActive(normalizedProgress >= 0.98f);
-            }
 
             for (int i = 0; i < fill.Trail.Count; i++)
             {
@@ -459,170 +537,14 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        private GameObject CreateRimGlow(
-            Transform parent,
-            CraftLiveSlotId slot,
-            Color color,
-            out Material rimMaterial,
-            out Mesh rimMesh)
-        {
-            rimMaterial = null;
-            rimMesh = null;
-            if (bindings == null || parent == null)
-            {
-                return null;
-            }
-
-            Vector3 localCenter;
-            Quaternion localRotation;
-            Vector3 localSize;
-            if (TryResolveGuidePose(
-                    CraftLivePad2AlignmentGuideKind.Pool,
-                    slot,
-                    out CraftLivePad2GuidePose poolPose))
-            {
-                localCenter = poolPose.LocalPosition;
-                localRotation = poolPose.LocalRotation;
-                localSize = poolPose.LocalScale;
-            }
-            else
-            {
-                Transform anchor = GetSlotAnchor(slot);
-                if (anchor == null)
-                {
-                    return null;
-                }
-
-                localCenter = bindings.transform.InverseTransformPoint(
-                    anchor.position);
-                localRotation =
-                    Quaternion.Inverse(bindings.transform.rotation) *
-                    anchor.rotation;
-                localSize = new Vector3(1.05f, 1.05f, 0.04f);
-            }
-
-            GameObject rimRoot = new GameObject("SlotRimGlow");
-            rimRoot.transform.SetParent(parent, false);
-            rimRoot.transform.SetPositionAndRotation(
-                bindings.transform.TransformPoint(localCenter),
-                bindings.transform.rotation * localRotation);
-            const int rimSegments = 96;
-            float radiusX = Mathf.Max(0.05f, localSize.x * 0.5f);
-            float radiusY = Mathf.Max(0.05f, localSize.y * 0.5f);
-            float rimWidth = Mathf.Max(
-                0.035f,
-                Mathf.Min(localSize.x, localSize.y) * 0.07f);
-            rimMesh = CreateEllipseRingMesh(
-                radiusX,
-                radiusY,
-                rimWidth,
-                rimSegments);
-            MeshFilter filter = rimRoot.AddComponent<MeshFilter>();
-            filter.sharedMesh = rimMesh;
-            MeshRenderer renderer =
-                rimRoot.AddComponent<MeshRenderer>();
-            rimMaterial = CreateGlowMaterial(color);
-            renderer.sharedMaterial = rimMaterial;
-
-            return rimRoot;
-        }
-
-        private static Mesh CreateEllipseRingMesh(
-            float radiusX,
-            float radiusY,
-            float width,
-            int segmentCount)
-        {
-            int segments = Mathf.Max(16, segmentCount);
-            float innerRadiusX = Mathf.Max(0.01f, radiusX - width);
-            float innerRadiusY = Mathf.Max(0.01f, radiusY - width);
-            Vector3[] vertices = new Vector3[segments * 4];
-            int[] triangles = new int[segments * 12];
-
-            for (int i = 0; i < segments; i++)
-            {
-                float angle0 = i / (float)segments *
-                               Mathf.PI * 2f;
-                float angle1 = (i + 1) / (float)segments *
-                               Mathf.PI * 2f;
-                int vertex = i * 4;
-                vertices[vertex] = new Vector3(
-                    Mathf.Cos(angle0) * radiusX,
-                    Mathf.Sin(angle0) * radiusY,
-                    0f);
-                vertices[vertex + 1] = new Vector3(
-                    Mathf.Cos(angle1) * radiusX,
-                    Mathf.Sin(angle1) * radiusY,
-                    0f);
-                vertices[vertex + 2] = new Vector3(
-                    Mathf.Cos(angle0) * innerRadiusX,
-                    Mathf.Sin(angle0) * innerRadiusY,
-                    0f);
-                vertices[vertex + 3] = new Vector3(
-                    Mathf.Cos(angle1) * innerRadiusX,
-                    Mathf.Sin(angle1) * innerRadiusY,
-                    0f);
-
-                int triangle = i * 12;
-                triangles[triangle] = vertex;
-                triangles[triangle + 1] = vertex + 1;
-                triangles[triangle + 2] = vertex + 2;
-                triangles[triangle + 3] = vertex + 1;
-                triangles[triangle + 4] = vertex + 3;
-                triangles[triangle + 5] = vertex + 2;
-                triangles[triangle + 6] = vertex + 2;
-                triangles[triangle + 7] = vertex + 1;
-                triangles[triangle + 8] = vertex;
-                triangles[triangle + 9] = vertex + 2;
-                triangles[triangle + 10] = vertex + 3;
-                triangles[triangle + 11] = vertex + 1;
-            }
-
-            Mesh mesh = new Mesh
-            {
-                name = "Pad2ContinuousRimMesh",
-                vertices = vertices,
-                triangles = triangles
-            };
-            mesh.RecalculateBounds();
-            return mesh;
-        }
-
-        private static Material CreateGlowMaterial(Color color)
-        {
-            Material material =
-                CraftLiveForgeUITheme.CreateCompatibleUnlitMaterial(
-                    "Pad2RimGlowMaterial");
-            if (material == null)
-            {
-                return null;
-            }
-            Color hdrColor = color * 2.5f;
-            hdrColor.a = color.a;
-            if (material.HasProperty("_BaseColor"))
-            {
-                material.SetColor("_BaseColor", hdrColor);
-            }
-
-            if (material.HasProperty("_Color"))
-            {
-                material.SetColor("_Color", hdrColor);
-            }
-
-            if (material.HasProperty("_EmissionColor"))
-            {
-                material.EnableKeyword("_EMISSION");
-                material.SetColor("_EmissionColor", hdrColor);
-            }
-
-            return material;
-        }
-
         private void ResolveFlowPath(
             CraftLiveSlotId slot,
             out Vector3 start,
             out Vector3 end)
         {
+            float padScale = ResolvePadScale();
+            Vector3 surfaceLift =
+                ResolveSurfaceNormal() * surfaceOffset * padScale;
             if (TryResolveGuidePose(
                     CraftLivePad2AlignmentGuideKind.FlowStart,
                     slot,
@@ -636,6 +558,8 @@ namespace CraftOrigin.CraftLive
                     startPose.LocalPosition);
                 end = bindings.transform.TransformPoint(
                     endPose.LocalPosition);
+                start += surfaceLift;
+                end += surfaceLift;
                 return;
             }
 
@@ -643,9 +567,6 @@ namespace CraftOrigin.CraftLive
             Transform center = bindings != null
                 ? bindings.LiquidFlowRoot
                 : null;
-            float padScale = ResolvePadScale();
-            Vector3 surfaceLift =
-                ResolveSurfaceNormal() * surfaceOffset * padScale;
             start = slotAnchor != null
                 ? slotAnchor.position + surfaceLift
                 : transform.position;
@@ -661,18 +582,39 @@ namespace CraftOrigin.CraftLive
             out float width,
             out float depth)
         {
+            float localWidth;
+            float localDepth;
             if (TryResolveGuidePose(
                     CraftLivePad2AlignmentGuideKind.FlowWidth,
                     slot,
                     out CraftLivePad2GuidePose pose))
             {
-                width = Mathf.Max(0.02f, pose.LocalScale.y);
-                depth = Mathf.Max(0.005f, pose.LocalScale.z);
-                return;
+                localWidth = Mathf.Max(0.02f, pose.LocalScale.y);
+                localDepth = Mathf.Max(0.005f, pose.LocalScale.z);
+            }
+            else
+            {
+                localWidth = trailRadius;
+                localDepth = trailRadius * 0.35f;
             }
 
-            width = trailRadius;
-            depth = trailRadius * 0.35f;
+            Vector2 world = ScaleTrailDimensionsToWorld(
+                localWidth,
+                localDepth,
+                ResolvePadScale());
+            width = world.x;
+            depth = world.y;
+        }
+
+        public static Vector2 ScaleTrailDimensionsToWorld(
+            float localWidth,
+            float localDepth,
+            float padScale)
+        {
+            float scale = Mathf.Max(0.0001f, Mathf.Abs(padScale));
+            return new Vector2(
+                Mathf.Max(0f, localWidth) * scale,
+                Mathf.Max(0f, localDepth) * scale);
         }
 
         private bool TryResolveGuidePose(
@@ -754,6 +696,55 @@ namespace CraftOrigin.CraftLive
                         Mathf.Abs(scale.z))));
         }
 
+        private float ResolveWorldLength(float localLength)
+        {
+            return Mathf.Max(0f, localLength) * ResolvePadScale();
+        }
+
+        private bool IsCurrentTransfer(
+            int groupGeneration,
+            int transferSerial,
+            CraftLivePlacementStatus expectedStatus)
+        {
+            CraftLiveRoomState current =
+                session != null ? session.State : null;
+            return current != null &&
+                   current.groupGeneration == groupGeneration &&
+                   current.placement != null &&
+                   current.placement.transferSerial == transferSerial &&
+                   current.placement.status == expectedStatus;
+        }
+
+        private void ResetFlowLifecycle(int groupGeneration)
+        {
+            // Set the generation first so a stopped coroutine can never
+            // re-admit visuals or completion state from the previous group.
+            isResettingFlowLifecycle = true;
+            try
+            {
+                observedGroupGeneration = groupGeneration;
+                if (flowRoutine != null)
+                {
+                    Coroutine staleRoutine = flowRoutine;
+                    flowRoutine = null;
+                    StopCoroutine(staleRoutine);
+                }
+
+                ClearDrops();
+                ClearPersistentFills();
+                handledTransferGeneration = -1;
+                handledTransferSerial = -1;
+                activeTransferGeneration = -1;
+                activeTransferSerial = -1;
+                completedTransferGeneration = -1;
+                completedTransferSerial = -1;
+            }
+            finally
+            {
+                isResettingFlowLifecycle = false;
+            }
+        }
+
         private Vector3 ResolveSurfaceNormal()
         {
             if (bindings == null)
@@ -773,8 +764,6 @@ namespace CraftOrigin.CraftLive
                     slot,
                     out PersistentFill fill))
             {
-                DestroySafely(fill.RimMaterial);
-                DestroySafely(fill.RimMesh);
                 DestroySafely(fill.Root);
                 persistentFills.Remove(slot);
             }
@@ -788,8 +777,6 @@ namespace CraftOrigin.CraftLive
             {
                 if (fill != null)
                 {
-                    DestroySafely(fill.RimMaterial);
-                    DestroySafely(fill.RimMesh);
                     DestroySafely(fill.Root);
                 }
             }

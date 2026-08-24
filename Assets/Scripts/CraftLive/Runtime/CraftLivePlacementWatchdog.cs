@@ -9,6 +9,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0.5f)] private float completionTimeoutSeconds = 3f;
 
         private CraftLivePlacementStatus observedStatus;
+        private int observedGroupGeneration = -1;
         private int observedSerial = -1;
         private float observedAt;
 
@@ -28,9 +29,12 @@ namespace CraftOrigin.CraftLive
             }
 
             CraftLivePlacementFlow placement = session.State.placement;
-            if (placement.status != observedStatus ||
+            int groupGeneration = session.State.groupGeneration;
+            if (groupGeneration != observedGroupGeneration ||
+                placement.status != observedStatus ||
                 placement.transferSerial != observedSerial)
             {
+                observedGroupGeneration = groupGeneration;
                 observedStatus = placement.status;
                 observedSerial = placement.transferSerial;
                 observedAt = Time.realtimeSinceStartup;
@@ -43,13 +47,17 @@ namespace CraftOrigin.CraftLive
             {
                 if (placement.status == CraftLivePlacementStatus.Pad1Loading)
                 {
-                    session.MarkTransferLaunching();
+                    session.MarkTransferLaunching(
+                        groupGeneration,
+                        placement.transferSerial);
                     return;
                 }
 
                 if (placement.status == CraftLivePlacementStatus.Pad1Launching)
                 {
-                    session.MarkTransferArriving();
+                    session.MarkTransferArriving(
+                        groupGeneration,
+                        placement.transferSerial);
                     return;
                 }
             }
@@ -63,12 +71,16 @@ namespace CraftOrigin.CraftLive
                     elapsed >= stageTimeoutSeconds)
                 {
                     if (receiver != null &&
-                        receiver.IsReceivingAnyTransfer)
+                        receiver.IsReceivingTransfer(
+                            groupGeneration,
+                            placement.transferSerial))
                     {
                         return;
                     }
 
-                    session.CompleteCurrentPlacement();
+                    session.CompleteCurrentPlacement(
+                        groupGeneration,
+                        placement.transferSerial);
                     return;
                 }
 
@@ -77,6 +89,7 @@ namespace CraftOrigin.CraftLive
                 {
                     if (receiver != null &&
                         receiver.IsReceivingTransfer(
+                            groupGeneration,
                             placement.transferSerial))
                     {
                         // The receiver owns the place -> light -> continue
@@ -89,12 +102,15 @@ namespace CraftOrigin.CraftLive
                         FindAnyObjectByType<
                             CraftLiveLiquidFlowController>();
                     bool flowFinished = flow == null ||
-                        flow.HasCompletedFlow(placement.transferSerial);
+                        flow.HasCompletedFlow(
+                            groupGeneration,
+                            placement.transferSerial);
                     bool recoveryTimeoutReached = elapsed >=
                         completionTimeoutSeconds + stageTimeoutSeconds;
                     if (flowFinished || recoveryTimeoutReached)
                     {
                         session.ContinueAfterPlacement(
+                            groupGeneration,
                             placement.transferSerial);
                     }
                 }
