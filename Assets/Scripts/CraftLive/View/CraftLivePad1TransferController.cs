@@ -222,7 +222,8 @@ namespace CraftOrigin.CraftLive
         {
             ResolveReferences();
             ResolvePhysicalLauncherReferences();
-            launchAll = ShouldForceLaunchAll() || launchAllByDefault;
+            launchAll = CraftLiveSession.MultiMaterialTransferEnabled &&
+                        (ShouldForceLaunchAll() || launchAllByDefault);
         }
 
         private void OnEnable()
@@ -323,6 +324,13 @@ namespace CraftOrigin.CraftLive
 
         public void SetSingleMode()
         {
+            if (!CraftLiveSession.MultiMaterialTransferEnabled)
+            {
+                launchAll = false;
+                PublishMode();
+                return;
+            }
+
             if (ShouldForceLaunchAll())
             {
                 launchAll = true;
@@ -336,12 +344,19 @@ namespace CraftOrigin.CraftLive
 
         public void SetAllMode()
         {
-            launchAll = true;
+            launchAll = CraftLiveSession.MultiMaterialTransferEnabled;
             PublishMode();
         }
 
         public void ToggleLaunchMode()
         {
+            if (!CraftLiveSession.MultiMaterialTransferEnabled)
+            {
+                launchAll = false;
+                PublishMode();
+                return;
+            }
+
             if (ShouldForceLaunchAll())
             {
                 launchAll = true;
@@ -368,16 +383,14 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            // BeginTransferBatch removes the first entry before publishing its
-            // Pad1Loading state. Capture every queued frame now, while the
-            // exact formation the player sees is still intact.
+            // Capture the next queued frame before BeginSingleTransfer removes
+            // it from the queue. The full-formation branch remains available
+            // behind the temporary multi-transfer feature gate.
             if (!CaptureQueuedFormation(current))
             {
-                // StateChanged normally creates every queued frame before the
+                // StateChanged normally creates the queued frame before the
                 // spring can be used. Recover once if a very fast interaction
-                // arrived in the same frame; never start a batch with a
-                // partially captured formation because missing frames would
-                // otherwise be recreated on top of each other.
+                // arrived in the same frame.
                 RefreshQueueVisuals(current);
                 if (!CaptureQueuedFormation(current))
                 {
@@ -386,7 +399,8 @@ namespace CraftOrigin.CraftLive
                 }
             }
             bool started;
-            if (ShouldForceLaunchAll() || launchAll)
+            if (CraftLiveSession.MultiMaterialTransferEnabled &&
+                (ShouldForceLaunchAll() || launchAll))
             {
                 started = session.BeginAllQueuedTransfers();
             }
@@ -1342,9 +1356,29 @@ namespace CraftOrigin.CraftLive
         private bool CaptureQueuedFormation(CraftLiveRoomState state)
         {
             capturedLaunchPoses.Clear();
-            if (state == null || state.transferQueue == null)
+            if (state == null || state.transferQueue == null ||
+                state.transferQueue.Count == 0)
             {
                 return false;
+            }
+
+            if (!CraftLiveSession.MultiMaterialTransferEnabled)
+            {
+                CraftLiveTransferQueueEntry first = state.transferQueue[0];
+                if (first == null ||
+                    !queueVisuals.TryGetValue(
+                        first.serial,
+                        out GameObject firstVisual) ||
+                    firstVisual == null)
+                {
+                    return false;
+                }
+
+                capturedLaunchPoses[first.serial] =
+                    new QueuedWorldPose(
+                        firstVisual.transform.position,
+                        firstVisual.transform.rotation);
+                return true;
             }
 
             foreach (CraftLiveTransferQueueEntry entry in state.transferQueue)
@@ -2702,6 +2736,11 @@ namespace CraftOrigin.CraftLive
 
         private void PublishMode()
         {
+            if (!CraftLiveSession.MultiMaterialTransferEnabled)
+            {
+                launchAll = false;
+            }
+
             if (ShouldForceLaunchAll())
             {
                 launchAll = true;
@@ -2719,7 +2758,8 @@ namespace CraftOrigin.CraftLive
 
         private bool ShouldForceLaunchAll()
         {
-            return usingPhysicalLauncher &&
+            return CraftLiveSession.MultiMaterialTransferEnabled &&
+                   usingPhysicalLauncher &&
                    forceLaunchAllWithPhysicalLauncher;
         }
 

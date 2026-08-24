@@ -8,6 +8,11 @@ namespace CraftOrigin.CraftLive
     [DefaultExecutionOrder(-300)]
     public sealed class CraftLiveSession : MonoBehaviour
     {
+        // Temporary safety gate. Keep the batch implementation available for
+        // later repair, but every public launch path currently transfers one
+        // material per spring operation.
+        public static bool MultiMaterialTransferEnabled => false;
+
         [SerializeField] private CraftLiveCatalog catalog;
         [SerializeField] private CraftLiveRules rules;
         [SerializeField] private string roomId = "001";
@@ -100,6 +105,10 @@ namespace CraftOrigin.CraftLive
             }
 
             remoteState.Normalize(catalog);
+            if (!MultiMaterialTransferEnabled)
+            {
+                remoteState.transferBatchRemaining = 0;
+            }
             if (state != null)
             {
                 // A delayed response from the previous group must never
@@ -439,10 +448,7 @@ namespace CraftOrigin.CraftLive
 
         public bool BeginAllQueuedTransfers()
         {
-            return BeginTransferBatch(
-                state != null && state.transferQueue != null
-                    ? state.transferQueue.Count
-                    : 0);
+            return BeginSingleTransfer();
         }
 
         public bool BeginTransferBatch(int requestedCount)
@@ -462,10 +468,12 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            int count = Mathf.Clamp(
-                requestedCount,
-                1,
-                state.transferQueue.Count);
+            int count = MultiMaterialTransferEnabled
+                ? Mathf.Clamp(
+                    requestedCount,
+                    1,
+                    state.transferQueue.Count)
+                : 1;
             Mutate(next =>
             {
                 next.transferBatchSerial++;
@@ -642,7 +650,8 @@ namespace CraftOrigin.CraftLive
 
             Mutate(next =>
             {
-                if (next.transferBatchRemaining > 0 &&
+                if (MultiMaterialTransferEnabled &&
+                    next.transferBatchRemaining > 0 &&
                     next.transferQueue.Count > 0)
                 {
                     next.transferBatchRemaining--;
@@ -740,7 +749,8 @@ namespace CraftOrigin.CraftLive
 
             Mutate(next =>
             {
-                if (next.transferBatchRemaining > 0 &&
+                if (MultiMaterialTransferEnabled &&
+                    next.transferBatchRemaining > 0 &&
                     next.transferQueue.Count > 0)
                 {
                     next.transferBatchRemaining--;

@@ -104,7 +104,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void AllTransfer_ProcessesQueuedItemsInOrder()
+        public void AllTransferEntryPoint_IsTemporarilyLimitedToOneItem()
         {
             CraftLiveMaterialDefinition oreA =
                 CreateMaterial(
@@ -133,7 +133,7 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo("oreA"));
             Assert.That(
                 session.State.transferBatchRemaining,
-                Is.EqualTo(1));
+                Is.Zero);
 
             CompleteActiveTransfer(session);
 
@@ -142,8 +142,12 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo("oreA"));
             Assert.That(
                 session.State.placement.status,
-                Is.EqualTo(
-                    CraftLivePlacementStatus.Pad1Loading));
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+            Assert.That(
+                session.State.transferQueue,
+                Has.Count.EqualTo(1));
+
+            Assert.That(session.BeginSingleTransfer(), Is.True);
             Assert.That(
                 session.State.placement.materialId,
                 Is.EqualTo("oreB"));
@@ -160,7 +164,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void AllTransfer_FourItemsCompleteWithoutStopping()
+        public void RepeatedSingleTransfers_ProcessFourItemsInOrder()
         {
             CraftLiveMaterialDefinition[] materials =
             {
@@ -183,9 +187,13 @@ namespace CraftOrigin.CraftLiveTests
                 QueueMaterial(session, materials[index], slots[index]);
             }
 
-            Assert.That(session.BeginAllQueuedTransfers(), Is.True);
             for (int index = 0; index < materials.Length; index++)
             {
+                Assert.That(
+                    index == 0
+                        ? session.BeginAllQueuedTransfers()
+                        : session.BeginSingleTransfer(),
+                    Is.True);
                 Assert.That(
                     session.State.placement.status,
                     Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
@@ -196,6 +204,9 @@ namespace CraftOrigin.CraftLiveTests
                 Assert.That(
                     session.State.slots.Get(slots[index]),
                     Is.EqualTo(materials[index].MaterialId));
+                Assert.That(
+                    session.State.placement.status,
+                    Is.EqualTo(CraftLivePlacementStatus.Idle));
             }
 
             Assert.That(
@@ -524,9 +535,12 @@ namespace CraftOrigin.CraftLiveTests
                 Is.True);
             Assert.That(
                 session.State.placement.status,
-                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
             Assert.That(
-                session.State.placement.materialId,
+                session.State.transferQueue,
+                Has.Count.EqualTo(1));
+            Assert.That(
+                session.State.transferQueue[0].materialId,
                 Is.EqualTo(second.MaterialId));
         }
 
