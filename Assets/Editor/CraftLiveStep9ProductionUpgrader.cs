@@ -88,6 +88,15 @@ namespace CraftOrigin.CraftLiveEditor
                 PlayerSettings.WebGL.compressionFormat ==
                     WebGLCompressionFormat.Brotli,
                 "WebGL compression is Brotli.");
+            report.Check(
+                PlayerSettings.WebGL.nameFilesAsHashes,
+                "WebGL build files use content hashes to prevent stale cache mixing.");
+            report.Check(
+                PlayerSettings.WebGL.initialMemorySize >= 256,
+                "Initial WebGL heap is at least 256 MB for iPad startup.");
+            report.Check(
+                PlayerSettings.WebGL.maximumMemorySize <= 1024,
+                "Maximum WebGL heap stays within the mobile-safe 1 GB limit.");
 
             string templatePath =
                 "Assets/WebGLTemplates/CraftLive/index.html";
@@ -188,6 +197,12 @@ namespace CraftOrigin.CraftLiveEditor
             PlayerSettings.WebGL.decompressionFallback = true;
             PlayerSettings.WebGL.compressionFormat =
                 WebGLCompressionFormat.Brotli;
+            PlayerSettings.WebGL.nameFilesAsHashes = true;
+            PlayerSettings.WebGL.memorySize = 256;
+            PlayerSettings.WebGL.initialMemorySize = 256;
+            PlayerSettings.WebGL.maximumMemorySize = 1024;
+            PlayerSettings.WebGL.memoryGrowthMode =
+                WebGLMemoryGrowthMode.Geometric;
         }
 
         private static void UpgradeBootstrapScene()

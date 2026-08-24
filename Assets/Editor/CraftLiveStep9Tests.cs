@@ -147,6 +147,8 @@ namespace CraftOrigin.CraftLiveEditor.Tests
 
             StringAssert.Contains("viewport-fit=cover", template);
             StringAssert.Contains("devicePixelRatio", template);
+            StringAssert.Contains("isIPad ? 1.5 : 2", template);
+            StringAssert.Contains("recoverFromStaleBuild", template);
             StringAssert.Contains("isSecureContext", bridge);
             StringAssert.Contains("BarcodeDetector", bridge);
         }

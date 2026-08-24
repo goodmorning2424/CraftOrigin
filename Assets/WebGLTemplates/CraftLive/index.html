@@ -27,6 +27,22 @@
       const loading = document.querySelector("#unity-loading");
       const progress = document.querySelector("#unity-progress");
       const status = document.querySelector("#unity-status");
+      const recoveryParameter = "build-refresh";
+
+      function recoverFromStaleBuild(error) {
+        const message = String(error || "");
+        const isBuildRuntimeFailure =
+          /memory access out of bounds|wasm|failed to fetch|load/i.test(message);
+        const currentUrl = new URL(window.location.href);
+        if (!isBuildRuntimeFailure ||
+            currentUrl.searchParams.has(recoveryParameter)) {
+          return false;
+        }
+
+        currentUrl.searchParams.set(recoveryParameter, Date.now().toString());
+        window.location.replace(currentUrl.toString());
+        return true;
+      }
 
       function showStatus(message, kind, persistent) {
         const item = document.createElement("div");
@@ -47,6 +63,9 @@
       window.addEventListener("online", () => {
         showStatus("通信が復帰しました。", "success", false);
       });
+      window.addEventListener("error", event => {
+        recoverFromStaleBuild(event.message || event.error);
+      });
       window.addEventListener("contextmenu", event => event.preventDefault());
       document.addEventListener(
         "touchmove",
@@ -55,6 +74,8 @@
 
       const buildUrl = "Build";
       const loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      const isIPad = /iPad/i.test(navigator.userAgent) ||
+        (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       const config = {
         arguments: [],
         dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
@@ -74,7 +95,9 @@
         productVersion: {{{ JSON.stringify(PRODUCT_VERSION) }}},
         // Preserve crisp world-space text on Retina iPads while keeping the
         // render buffer bounded and predictable.
-        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+        devicePixelRatio: Math.min(
+          window.devicePixelRatio || 1,
+          isIPad ? 1.5 : 2),
         autoSyncPersistentDataPath: true,
         showBanner: (message, type) => {
           showStatus(message, type, type === "error");
@@ -96,15 +119,19 @@
           window.craftLiveUnityInstance = unityInstance;
         }).catch(error => {
           loading.hidden = true;
-          showStatus(String(error), "error", true);
+          if (!recoverFromStaleBuild(error)) {
+            showStatus(String(error), "error", true);
+          }
         });
       };
       script.onerror = () => {
         loading.hidden = true;
-        showStatus(
-          "ゲームの読み込みに失敗しました。通信と配信設定を確認してください。",
-          "error",
-          true);
+        if (!recoverFromStaleBuild("failed to load Unity loader")) {
+          showStatus(
+            "ゲームの読み込みに失敗しました。通信と配信設定を確認してください。",
+            "error",
+            true);
+        }
       };
       document.body.appendChild(script);
     </script>
