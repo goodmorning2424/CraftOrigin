@@ -48,6 +48,51 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expected));
         }
 
+        [TestCase(CraftLiveMaterialCategory.Upgrade, "パワーアップ")]
+        [TestCase(CraftLiveMaterialCategory.Skill, "スキル")]
+        [TestCase(CraftLiveMaterialCategory.Attribute, "タイプ")]
+        public void GalleryWall_BuildsIndependentNameplateForEveryTier(
+            CraftLiveMaterialCategory category,
+            string label)
+        {
+            GameObject parent = new GameObject("HeaderLayer");
+            createdObjects.Add(parent);
+            GameObject wallObject = new GameObject("Wall");
+            createdObjects.Add(wallObject);
+            CraftLiveGalleryWallView wall =
+                wallObject.AddComponent<CraftLiveGalleryWallView>();
+            GameObject headerObject = new GameObject("Header");
+            headerObject.transform.SetParent(parent.transform, false);
+            TextMesh header = headerObject.AddComponent<TextMesh>();
+            header.text = label;
+            header.anchor = TextAnchor.MiddleCenter;
+            SetField(wall, "category", category);
+            SetField(wall, "headerText", header);
+
+            MethodInfo ensure = typeof(CraftLiveGalleryWallView).GetMethod(
+                "EnsureHeaderNameplate",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(ensure, Is.Not.Null);
+            ensure.Invoke(wall, new object[] { null });
+
+            FieldInfo generatedField =
+                typeof(CraftLiveGalleryWallView).GetField(
+                    "generatedHeaderNameplate",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(generatedField, Is.Not.Null);
+            GameObject nameplate =
+                generatedField.GetValue(wall) as GameObject;
+            Assert.That(nameplate, Is.Not.Null);
+            Assert.That(nameplate.activeSelf, Is.True);
+            Assert.That(
+                nameplate.transform.parent,
+                Is.EqualTo(parent.transform));
+            Assert.That(
+                nameplate.transform.IsChildOf(header.transform),
+                Is.False);
+            Assert.That(nameplate.transform.childCount, Is.EqualTo(7));
+        }
+
         [Test]
         public void Presentation_UpgradeDetailsContainThreeStats()
         {

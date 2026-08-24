@@ -168,9 +168,10 @@ namespace CraftOrigin.CraftLive
             if (headerText != null)
             {
                 headerText.text = header ?? string.Empty;
-                MoveSpecialHeaderInFrontOfWall(
-                    owner != null ? owner.TargetCamera : Camera.main);
-                EnsureHeaderNameplate();
+                Camera targetCamera =
+                    owner != null ? owner.TargetCamera : Camera.main;
+                MoveHeaderInFrontOfWall(targetCamera);
+                EnsureHeaderNameplate(targetCamera);
             }
 
             if (emptyStateRoot != null)
@@ -239,12 +240,10 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        private void EnsureHeaderNameplate()
+        private void EnsureHeaderNameplate(Camera targetCamera)
         {
-            bool needsNameplate =
-                category == CraftLiveMaterialCategory.Skill ||
-                category == CraftLiveMaterialCategory.Attribute;
-            if (!needsNameplate || headerText == null)
+            // All three gallery tiers use the same independent nameplate.
+            if (headerText == null)
             {
                 if (generatedHeaderNameplate != null)
                 {
@@ -259,36 +258,48 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            Bounds textBounds = textRenderer.localBounds;
-            float width = Mathf.Clamp(
-                textBounds.size.x * 1.08f,
-                1.25f,
-                2.25f);
-            float height = Mathf.Clamp(
-                textBounds.size.y * 1.28f,
-                0.54f,
-                0.72f);
+            Bounds textBounds = textRenderer.bounds;
+            float width = Mathf.Max(
+                textBounds.size.x * 1.16f,
+                textBounds.size.y * 2.8f);
+            float height = Mathf.Max(
+                textBounds.size.y * 1.5f,
+                0.08f);
+            width = Mathf.Min(
+                width,
+                ResolveMaximumNameplateWidth(
+                    targetCamera,
+                    textBounds.center,
+                    width));
 
             if (generatedHeaderNameplate == null)
             {
                 generatedHeaderNameplate = new GameObject(
                     "Generated_WoodHeaderNameplate");
-                generatedHeaderNameplate.transform.SetParent(
-                    headerText.transform,
-                    false);
                 generatedHeaderNameplate.AddComponent<
                     CraftLiveGeneratedRuntimeVisual>();
             }
 
             Transform root = generatedHeaderNameplate.transform;
-            // TextMesh.localBounds has a baseline-dependent Y offset. Using
-            // that center placed the plate below the visible label. The
-            // authored header transform is already the desired screen
-            // position, so the plate must stay centered on its origin just
-            // like the background of a world-space button.
-            root.localPosition = Vector3.zero;
-            root.localRotation = Quaternion.identity;
+            // Do not inherit the large authored TextMesh scale. Build the
+            // plate as a sibling with a world scale of one, centered on the
+            // renderer's actual world bounds. This keeps all three tiers the
+            // same visual construction without oversized geometry.
+            root.SetParent(null, true);
             root.localScale = Vector3.one;
+            root.rotation = headerText.transform.rotation;
+            Vector3 towardCamera = ResolveTowardCamera(
+                targetCamera,
+                textBounds.center);
+            float textClearance = ResolveDepthClearance(
+                targetCamera,
+                textBounds.center,
+                0.0012f,
+                0.035f,
+                0.22f);
+            root.position =
+                textBounds.center - towardCamera * textClearance;
+            root.SetParent(headerText.transform.parent, true);
             ClearNameplateParts(root);
 
             Color wood = new Color(0.43f, 0.20f, 0.075f);
@@ -298,57 +309,53 @@ namespace CraftOrigin.CraftLive
             CreateNameplatePart(
                 root,
                 "WoodShadow",
-                new Vector3(0.025f, -0.035f, 0.075f),
-                new Vector3(width, height, 0.08f),
+                new Vector3(width * 0.012f, -height * 0.08f, -0.025f),
+                new Vector3(width, height, 0.07f),
                 darkWood);
             CreateNameplatePart(
                 root,
                 "WoodFace",
-                new Vector3(0f, 0f, 0.045f),
+                new Vector3(0f, 0f, 0f),
                 new Vector3(width * 0.96f, height * 0.9f, 0.055f),
                 wood);
             CreateNameplatePart(
                 root,
                 "InsetWoodFace",
-                new Vector3(0f, 0f, 0.027f),
-                new Vector3(width * 0.86f, height * 0.66f, 0.025f),
+                new Vector3(0f, 0f, 0.035f),
+                new Vector3(width * 0.86f, height * 0.66f, 0.018f),
                 innerWood);
             float railWidth = width * 0.82f;
             CreateNameplatePart(
                 root,
                 "TopBrassInlay",
-                new Vector3(0f, height * 0.31f, 0.012f),
-                new Vector3(railWidth, 0.045f, 0.018f),
+                new Vector3(0f, height * 0.31f, 0.052f),
+                new Vector3(railWidth, height * 0.055f, 0.012f),
                 brass);
             CreateNameplatePart(
                 root,
                 "BottomBrassInlay",
-                new Vector3(0f, -height * 0.31f, 0.012f),
-                new Vector3(railWidth, 0.045f, 0.018f),
+                new Vector3(0f, -height * 0.31f, 0.052f),
+                new Vector3(railWidth, height * 0.055f, 0.012f),
                 brass);
             CreateNameplatePart(
                 root,
                 "LeftBrassCap",
-                new Vector3(-width * 0.42f, 0f, 0.022f),
-                new Vector3(0.055f, height * 0.56f, 0.02f),
+                new Vector3(-width * 0.42f, 0f, 0.052f),
+                new Vector3(width * 0.018f, height * 0.56f, 0.012f),
                 brass);
             CreateNameplatePart(
                 root,
                 "RightBrassCap",
-                new Vector3(width * 0.42f, 0f, 0.022f),
-                new Vector3(0.055f, height * 0.56f, 0.02f),
+                new Vector3(width * 0.42f, 0f, 0.052f),
+                new Vector3(width * 0.018f, height * 0.56f, 0.012f),
                 brass);
             headerText.color = Color.white;
             generatedHeaderNameplate.SetActive(true);
         }
 
-        private void MoveSpecialHeaderInFrontOfWall(Camera targetCamera)
+        private void MoveHeaderInFrontOfWall(Camera targetCamera)
         {
-            bool needsNameplate =
-                category == CraftLiveMaterialCategory.Skill ||
-                category == CraftLiveMaterialCategory.Attribute;
-            if (!needsNameplate ||
-                headerText == null ||
+            if (headerText == null ||
                 targetCamera == null ||
                 hasAppliedHeaderDepthOffset)
             {
@@ -358,14 +365,76 @@ namespace CraftOrigin.CraftLive
             // The authored labels share almost the same depth as the shelf.
             // Move the complete text/nameplate pair toward the camera once so
             // the plate cannot z-fight with or intersect the wooden shelf.
-            Vector3 towardCamera =
-                targetCamera.transform.position - headerText.transform.position;
+            Vector3 towardCamera = ResolveTowardCamera(
+                targetCamera,
+                headerText.transform.position);
             if (towardCamera.sqrMagnitude > 0.0001f)
             {
+                float forwardDistance = ResolveDepthClearance(
+                    targetCamera,
+                    headerText.transform.position,
+                    0.012f,
+                    0.3f,
+                    1.8f);
                 headerText.transform.position +=
-                    towardCamera.normalized * 0.16f;
+                    towardCamera * forwardDistance;
                 hasAppliedHeaderDepthOffset = true;
             }
+        }
+
+        private static Vector3 ResolveTowardCamera(
+            Camera targetCamera,
+            Vector3 position)
+        {
+            if (targetCamera == null)
+            {
+                return Vector3.zero;
+            }
+
+            Vector3 direction =
+                targetCamera.transform.position - position;
+            return direction.sqrMagnitude > 0.0001f
+                ? direction.normalized
+                : -targetCamera.transform.forward;
+        }
+
+        private static float ResolveDepthClearance(
+            Camera targetCamera,
+            Vector3 position,
+            float distanceRatio,
+            float minimum,
+            float maximum)
+        {
+            float distance = targetCamera != null
+                ? Vector3.Distance(targetCamera.transform.position, position)
+                : minimum;
+            return Mathf.Clamp(
+                distance * distanceRatio,
+                minimum,
+                maximum);
+        }
+
+        private static float ResolveMaximumNameplateWidth(
+            Camera targetCamera,
+            Vector3 position,
+            float fallback)
+        {
+            if (targetCamera == null)
+            {
+                return fallback;
+            }
+
+            float depth = targetCamera.WorldToScreenPoint(position).z;
+            if (depth <= 0f)
+            {
+                return fallback;
+            }
+
+            Vector3 left = targetCamera.ViewportToWorldPoint(
+                new Vector3(0.06f, 0.5f, depth));
+            Vector3 right = targetCamera.ViewportToWorldPoint(
+                new Vector3(0.94f, 0.5f, depth));
+            return Vector3.Distance(left, right);
         }
 
         private static void ClearNameplateParts(Transform root)
