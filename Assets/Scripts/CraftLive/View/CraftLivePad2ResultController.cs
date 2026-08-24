@@ -205,75 +205,92 @@ namespace CraftOrigin.CraftLive
         {
             generatedPanel = CreatePanel("Generated_StartScreen");
 
-            GameObject forgeGlow = CreateDecorativePart(
-                generatedPanel.transform,
-                "ForgeGlow",
-                new Vector3(0f, 0.55f, -0.44f),
-                new Vector3(3.5f, 2.9f, 0.09f),
-                new Color(0.38f, 0.075f, 0.018f),
-                0.28f,
-                0.12f,
-                0.32f);
-            forgeGlow.transform.localRotation =
-                Quaternion.Euler(0f, 0f, 45f);
-
-            GameObject blade = CreateDecorativePart(
-                generatedPanel.transform,
-                "ForgingBlade",
-                new Vector3(-0.72f, 0.65f, -0.56f),
-                new Vector3(0.32f, 4.35f, 0.16f),
-                CraftLiveForgeUITheme.Iron,
-                0.035f,
-                0.92f,
-                0.5f);
-            blade.transform.localRotation =
-                Quaternion.Euler(0f, 0f, 42f);
-            GameObject hammerHandle = CreateDecorativePart(
-                generatedPanel.transform,
-                "ForgeHammerHandle",
-                new Vector3(0.68f, 0.42f, -0.57f),
-                new Vector3(0.3f, 3.75f, 0.18f),
-                new Color(0.28f, 0.12f, 0.045f),
-                0f,
-                0.12f,
-                0.2f);
-            hammerHandle.transform.localRotation =
-                Quaternion.Euler(0f, 0f, -43f);
-            GameObject hammerHead = CreateDecorativePart(
-                generatedPanel.transform,
-                "ForgeHammerHead",
-                new Vector3(-0.72f, 1.8f, -0.59f),
-                new Vector3(1.55f, 0.62f, 0.24f),
-                CraftLiveForgeUITheme.Iron,
-                0.025f,
-                0.94f,
-                0.38f);
-            hammerHead.transform.localRotation =
-                Quaternion.Euler(0f, 0f, -43f);
-
+            Color carvedWood = new Color(0.44f, 0.19f, 0.065f);
+            Color carvedInset = new Color(0.19f, 0.065f, 0.018f);
+            Color carvedHighlight = new Color(0.62f, 0.31f, 0.11f);
             CreateDecorativePart(
                 generatedPanel.transform,
-                "AnvilTop",
-                new Vector3(0f, -0.85f, -0.61f),
-                new Vector3(3.65f, 0.55f, 0.28f),
-                CraftLiveForgeUITheme.Iron,
-                0.02f,
-                0.94f,
-                0.35f);
+                "CarvedWoodPlaqueShadow",
+                new Vector3(0.06f, 0.35f, -0.39f),
+                new Vector3(5.35f, 4.15f, 0.16f),
+                new Color(0.10f, 0.03f, 0.01f),
+                0f,
+                0.08f,
+                0.18f);
             CreateDecorativePart(
                 generatedPanel.transform,
-                "AnvilBase",
-                new Vector3(0f, -1.35f, -0.58f),
-                new Vector3(2.05f, 0.75f, 0.32f),
-                CraftLiveForgeUITheme.DeepIron,
+                "CarvedWoodPlaque",
+                new Vector3(0f, 0.42f, -0.5f),
+                new Vector3(5.15f, 3.95f, 0.13f),
+                carvedWood,
+                0.015f,
+                0.1f,
+                0.27f);
+
+            for (int i = 0; i < 5; i++)
+            {
+                float y = -0.95f + i * 0.68f;
+                float xOffset = i % 2 == 0 ? -0.18f : 0.22f;
+                CreateDecorativePart(
+                    generatedPanel.transform,
+                    $"CarvedWoodGrain_{i}",
+                    new Vector3(xOffset, y + 0.42f, -0.58f),
+                    new Vector3(4.35f - i * 0.13f, 0.055f, 0.025f),
+                    carvedInset,
+                    0f,
+                    0.05f,
+                    0.16f);
+            }
+
+            GameObject hammerHandleGroove = CreateDecorativePart(
+                generatedPanel.transform,
+                "CarvedHammerHandleGroove",
+                new Vector3(0.36f, 0.05f, -0.63f),
+                new Vector3(0.58f, 2.95f, 0.055f),
+                carvedInset,
                 0f,
-                0.88f,
-                0.24f);
+                0.04f,
+                0.12f);
+            hammerHandleGroove.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject hammerHandleCut = CreateDecorativePart(
+                generatedPanel.transform,
+                "CarvedHammerHandleHighlight",
+                new Vector3(0.29f, 0.10f, -0.67f),
+                new Vector3(0.24f, 2.55f, 0.035f),
+                carvedHighlight,
+                0f,
+                0.04f,
+                0.18f);
+            hammerHandleCut.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject hammerHeadGroove = CreateDecorativePart(
+                generatedPanel.transform,
+                "CarvedHammerHeadGroove",
+                new Vector3(-0.58f, 1.24f, -0.64f),
+                new Vector3(2.25f, 0.82f, 0.06f),
+                carvedInset,
+                0f,
+                0.05f,
+                0.12f);
+            hammerHeadGroove.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject hammerHeadCut = CreateDecorativePart(
+                generatedPanel.transform,
+                "CarvedHammerHeadHighlight",
+                new Vector3(-0.62f, 1.20f, -0.68f),
+                new Vector3(1.88f, 0.43f, 0.035f),
+                carvedHighlight,
+                0f,
+                0.05f,
+                0.18f);
+            hammerHeadCut.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
 
             GameObject start = CreateButton(
                 generatedPanel.transform,
                 "Start",
-                "スタート",
+                "クラフト開始",
                 new Vector3(0f, -2.62f, -0.7f),
                 CraftLiveForgeUITheme.Ember,
                 new Vector3(3.85f, 0.92f, 0.25f));

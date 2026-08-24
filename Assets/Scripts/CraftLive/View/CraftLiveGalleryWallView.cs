@@ -258,13 +258,13 @@ namespace CraftOrigin.CraftLive
 
             Bounds textBounds = textRenderer.localBounds;
             float width = Mathf.Clamp(
-                textBounds.size.x * 1.24f,
-                1.15f,
-                3.25f);
+                textBounds.size.x * 1.32f,
+                1.35f,
+                3.4f);
             float height = Mathf.Clamp(
-                textBounds.size.y * 1.55f,
-                0.58f,
-                0.94f);
+                textBounds.size.y * 1.72f,
+                0.68f,
+                1.02f);
 
             if (generatedHeaderNameplate == null)
             {
@@ -278,16 +278,19 @@ namespace CraftOrigin.CraftLive
             }
 
             Transform root = generatedHeaderNameplate.transform;
-            root.localPosition = new Vector3(
-                textBounds.center.x,
-                textBounds.center.y,
-                0f);
+            // TextMesh.localBounds has a baseline-dependent Y offset. Using
+            // that center placed the plate below the visible label. The
+            // authored header transform is already the desired screen
+            // position, so the plate must stay centered on its origin just
+            // like the background of a world-space button.
+            root.localPosition = Vector3.zero;
             root.localRotation = Quaternion.identity;
             root.localScale = Vector3.one;
             ClearNameplateParts(root);
 
-            Color wood = new Color(0.30f, 0.13f, 0.045f);
-            Color darkWood = new Color(0.12f, 0.045f, 0.018f);
+            Color wood = new Color(0.43f, 0.20f, 0.075f);
+            Color innerWood = new Color(0.32f, 0.12f, 0.035f);
+            Color darkWood = new Color(0.12f, 0.04f, 0.012f);
             Color brass = CraftLiveForgeUITheme.Brass;
             CreateNameplatePart(
                 root,
@@ -301,6 +304,12 @@ namespace CraftOrigin.CraftLive
                 new Vector3(0f, 0f, 0.045f),
                 new Vector3(width * 0.96f, height * 0.9f, 0.055f),
                 wood);
+            CreateNameplatePart(
+                root,
+                "InsetWoodFace",
+                new Vector3(0f, 0f, 0.027f),
+                new Vector3(width * 0.86f, height * 0.66f, 0.025f),
+                innerWood);
             float railWidth = width * 0.82f;
             CreateNameplatePart(
                 root,
@@ -314,6 +323,19 @@ namespace CraftOrigin.CraftLive
                 new Vector3(0f, -height * 0.31f, 0.012f),
                 new Vector3(railWidth, 0.045f, 0.018f),
                 brass);
+            CreateNameplatePart(
+                root,
+                "LeftBrassCap",
+                new Vector3(-width * 0.42f, 0f, 0.022f),
+                new Vector3(0.055f, height * 0.56f, 0.02f),
+                brass);
+            CreateNameplatePart(
+                root,
+                "RightBrassCap",
+                new Vector3(width * 0.42f, 0f, 0.022f),
+                new Vector3(0.055f, height * 0.56f, 0.02f),
+                brass);
+            headerText.color = Color.white;
             generatedHeaderNameplate.SetActive(true);
         }
 
