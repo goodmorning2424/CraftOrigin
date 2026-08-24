@@ -651,6 +651,42 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void MaterialHologram_RequiresCompatibleOpenSlot()
+        {
+            CraftLiveMaterialDefinition material =
+                ScriptableObject.CreateInstance<
+                    CraftLiveMaterialDefinition>();
+            createdObjects.Add(material);
+            SetField(material, "materialId", "slot_guard_material");
+            SetField(
+                material,
+                "category",
+                CraftLiveMaterialCategory.Upgrade);
+
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                sessionPhase = CraftLiveSessionPhase.Playing,
+                weaponSelectionConfirmed = true
+            };
+            state.Normalize(null);
+
+            Assert.That(
+                CraftLivePad1GalleryController.
+                    CanBeginMaterialPlacement(state, material),
+                Is.True);
+
+            state.slots.top = "used";
+            state.slots.left = "used";
+            state.slots.right = "used";
+            state.slots.bottom = "used";
+
+            Assert.That(
+                CraftLivePad1GalleryController.
+                    CanBeginMaterialPlacement(state, material),
+                Is.False);
+        }
+
+        [Test]
         public void PaintingSelection_SecondSelectionReturnsToIdle()
         {
             CraftLiveMaterialDefinition material =
@@ -738,7 +774,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void PaintingSelection_WithoutConfirmedWeaponOpensPreview()
+        public void PaintingSelection_WithoutConfirmedWeaponKeepsHologramClosed()
         {
             CraftLiveMaterialDefinition material =
                 ScriptableObject.CreateInstance<
@@ -798,7 +834,16 @@ namespace CraftOrigin.CraftLiveTests
             InvokeMethod(preview, "OnDisable");
             InvokeMethod(preview, "OnEnable");
 
-            controller.SelectMaterial(material);
+            GameObject paintingObject = new GameObject("Painting");
+            createdObjects.Add(paintingObject);
+            CraftLiveMaterialPaintingView painting =
+                paintingObject.AddComponent<
+                    CraftLiveMaterialPaintingView>();
+            painting.Bind(controller, material);
+            painting.Refresh(session.State, session);
+
+            Assert.That(painting.Interactable, Is.False);
+            painting.Select();
             preview.Refresh(session.State);
 
             Assert.That(session.State.weaponSelectionConfirmed, Is.False);
@@ -808,7 +853,7 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(CraftLivePlacementStatus.Idle));
             Assert.That(
                 preview.DisplayedMaterialId,
-                Is.EqualTo(material.MaterialId));
+                Is.Empty);
         }
 
         [Test]

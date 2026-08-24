@@ -54,6 +54,25 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expected));
         }
 
+        [TestCase(CraftLiveRole.MaterialPad, "1", true)]
+        [TestCase(CraftLiveRole.MaterialPad, "true", true)]
+        [TestCase(CraftLiveRole.MaterialPad, "0", false)]
+        [TestCase(CraftLiveRole.MaterialPad, "off", false)]
+        [TestCase(CraftLiveRole.WorkbenchPad, "1", false)]
+        [TestCase(CraftLiveRole.QrPad, "1", false)]
+        [TestCase(CraftLiveRole.HologramPad, "1", false)]
+        public void LaunchQuery_ResetIsOwnedByPad1Only(
+            CraftLiveRole role,
+            string value,
+            bool expected)
+        {
+            Assert.That(
+                CraftLiveLaunchQuery.ShouldResetRoomOnLaunch(
+                    role,
+                    value),
+                Is.EqualTo(expected));
+        }
+
         [TestCase(
             CraftLiveRole.MaterialPad,
             "Pad1_MaterialGallery")]

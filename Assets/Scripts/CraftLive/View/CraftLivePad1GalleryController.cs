@@ -218,26 +218,54 @@ namespace CraftOrigin.CraftLive
                 GetComponent<CraftLivePad1MaterialPreview>();
             preview?.SetSelectionAnchor(material, selectionAnchor);
 
-            if (CanBeginMaterialPlacement(session.State))
+            if (CanBeginMaterialPlacement(session.State, material))
             {
                 session.SelectMaterial(material);
                 return;
             }
 
-            // Browsing the painting is independent from starting Pad 2
-            // placement. In particular, a newly-started craft has no
-            // confirmed weapon yet, but Pad 1 must still show the material.
-            preview?.DisplayMaterial(material);
+            // Never expand a details hologram without entering the exact
+            // placement state that makes Pad 2 guides visible. Previously
+            // this preview-only path made the hologram appear while the
+            // authoritative state stayed Idle, so no placement guide could
+            // be selected.
+            preview?.ClearPreview();
         }
 
         public static bool CanBeginMaterialPlacement(
-            CraftLiveRoomState state)
+            CraftLiveRoomState state,
+            CraftLiveMaterialDefinition material)
         {
             return state != null &&
+                   material != null &&
                    state.sessionPhase == CraftLiveSessionPhase.Playing &&
                    state.weaponSelectionConfirmed &&
                    state.placement != null &&
-                   state.placement.status == CraftLivePlacementStatus.Idle;
+                   state.placement.status == CraftLivePlacementStatus.Idle &&
+                   HasCompatibleOpenSlot(state, material);
+        }
+
+        private static bool HasCompatibleOpenSlot(
+            CraftLiveRoomState state,
+            CraftLiveMaterialDefinition material)
+        {
+            return CanUseOpenSlot(state, material, CraftLiveSlotId.Top) ||
+                   CanUseOpenSlot(state, material, CraftLiveSlotId.Left) ||
+                   CanUseOpenSlot(state, material, CraftLiveSlotId.Right) ||
+                   CanUseOpenSlot(state, material, CraftLiveSlotId.Bottom) ||
+                   CanUseOpenSlot(state, material, CraftLiveSlotId.Skill) ||
+                   CanUseOpenSlot(
+                       state,
+                       material,
+                       CraftLiveSlotId.Attribute);
+        }
+
+        private static bool CanUseOpenSlot(
+            CraftLiveRoomState state,
+            CraftLiveMaterialDefinition material,
+            CraftLiveSlotId slot)
+        {
+            return material.CanUseIn(slot) && state.CanReserveSlot(slot);
         }
 
         public Transform FindMaterialAnchor(string materialId)

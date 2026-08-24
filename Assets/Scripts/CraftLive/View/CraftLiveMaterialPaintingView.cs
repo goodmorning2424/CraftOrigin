@@ -186,8 +186,9 @@ namespace CraftOrigin.CraftLive
             bool selected = state.selectedMaterialId == material.MaterialId;
             interactable =
                 unlocked &&
-                (state.placement.status == CraftLivePlacementStatus.Idle ||
-                 selected);
+                (selected ||
+                 CraftLivePad1GalleryController.
+                     CanBeginMaterialPlacement(state, material));
 
             onSelectedChanged?.Invoke(selected);
             onLockedChanged?.Invoke(!unlocked);
