@@ -475,6 +475,12 @@ namespace CraftOrigin.CraftLiveTests
             SetField(sword, "weaponType", CraftLiveWeaponType.Sword);
             CraftLiveWeaponDefinition secret =
                 CreateWeapon(CraftLiveCalculator.SecretPikopikoWeaponId);
+            SetField(secret, "baseStats", new CraftLiveStats
+            {
+                attackRate = 10f,
+                defenseRate = 20f,
+                evasionRate = 30f
+            });
             CraftLiveWeaponDefinition bare =
                 CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
             CraftLiveMaterialDefinition evasion = CreateMaterial(
@@ -508,6 +514,14 @@ namespace CraftOrigin.CraftLiveTests
                 CraftLiveCalculator.ResolveResultWeapon(state, catalog)
                     .WeaponId,
                 Is.EqualTo(CraftLiveCalculator.SecretPikopikoWeaponId));
+            CraftLiveResultState result = CraftLiveCalculator.BuildResult(
+                state, catalog, null, 123L);
+            Assert.That(result.stats.attackRate, Is.EqualTo(10f));
+            Assert.That(result.stats.defenseRate, Is.EqualTo(20f));
+            Assert.That(result.stats.evasionRate, Is.EqualTo(30f));
+            Assert.That(result.attackMaterialCount, Is.Zero);
+            Assert.That(result.defenseMaterialCount, Is.Zero);
+            Assert.That(result.evasionMaterialCount, Is.Zero);
         }
 
         [Test]

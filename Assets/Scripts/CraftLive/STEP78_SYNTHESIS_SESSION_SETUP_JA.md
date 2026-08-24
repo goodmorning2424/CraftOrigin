@@ -67,8 +67,11 @@ Pad2単独で到着確認を行う。
 3. メニューから`Debug/Expire Session Now`を実行する
 4. Pad2に完成武器一覧が表示されることを確認する
 5. 1本をタップする
-6. `CL-XXXX-XXXX`形式のコードが表示されることを確認する
+6. `XXXXXX`形式の6文字コードが表示されることを確認する
 7. Pad4にも選択武器とコードが共有されることを確認する
+
+当日の武器判別には`WEAPON_CODE_GUIDE_JA.md`を印刷して使用する。
+コードは武器、属性、スキル、攻撃・防御・回避素材数を順番に表す。
 
 実際の終了時間は`CraftLiveRules`の`Session Duration Seconds`を使う。
 

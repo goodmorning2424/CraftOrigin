@@ -186,6 +186,9 @@ namespace CraftOrigin.CraftLive
         public string skillDescription;
         public CraftLiveSkillEffect skillEffect;
         public CraftLiveStats stats;
+        [Min(0)] public int attackMaterialCount;
+        [Min(0)] public int defenseMaterialCount;
+        [Min(0)] public int evasionMaterialCount;
         public string rank;
         public long completedAtUnixMs;
         public int resultSerial;
@@ -199,6 +202,9 @@ namespace CraftOrigin.CraftLive
             skillId = skillId ?? string.Empty;
             skillName = skillName ?? string.Empty;
             skillDescription = skillDescription ?? string.Empty;
+            attackMaterialCount = Mathf.Clamp(attackMaterialCount, 0, 4);
+            defenseMaterialCount = Mathf.Clamp(defenseMaterialCount, 0, 4);
+            evasionMaterialCount = Mathf.Clamp(evasionMaterialCount, 0, 4);
             rank = rank ?? string.Empty;
             elementEffect = elementEffect.Sanitize();
             skillEffect = skillEffect.Sanitize();

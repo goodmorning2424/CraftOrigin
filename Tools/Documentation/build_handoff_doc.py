@@ -515,7 +515,7 @@ SCRIPT_DESCRIPTIONS = {
     "CraftLiveTypes": "共有Enum、Stats、属性/スキル効果、スロット補助。JSON/Sceneの値契約を定義する。",
     "CraftLiveRoomState": "RoomState schema v5、転送・配置・合成・結果・履歴・最終選択を保持し、旧schemaをNormalizeする。",
     "CraftLiveCalculator": "武器基礎値、4基礎スロット補正、合成ランクボーナスから最終ステータスを計算する。",
-    "CraftLiveWeaponCode": "room/武器/属性/スキル/serial/timestampをFNV-1aでハッシュしCLコードを生成する。",
+    "CraftLiveWeaponCode": "武器/属性/スキル/攻撃・防御・回避素材数を6文字へ直接符号化し、オフラインで復号する。",
     "CraftLiveCatalog": "素材と武器のScriptableObject一覧。ID検索と定義参照の入口。",
     "CraftLiveMaterialDefinition": "素材ID、表示、カテゴリ、QR要否、Prefab/Icon、能力値・演出参照を定義する。",
     "CraftLiveWeaponDefinition": "武器ID、名称、種類、基礎能力、作業台/ホログラムPrefab、プレビュー値を定義する。",
@@ -927,7 +927,7 @@ def add_scenes(doc, scenes):
     add_bullets(doc, [
         "Hologram rotate=true、30°/s、属性色反映ON、emission 2。表示Prefab未設定時はworkbenchPrefabへfallback。",
         "Calibration：画面180×240mm、角度45°、視距離80mm、位置/回転0、scale 1。端末/ミラー筐体変更時は再計測。",
-        "履歴最大12件から最終選択し、CL-XXXX-XXXX形式のコードを表示する。",
+        "履歴最大12件から最終選択し、XXXXXX形式の6文字コードを表示する。",
     ])
 
     doc.add_heading("無効Sceneの扱い", level=2)
@@ -1027,7 +1027,7 @@ def add_pads_detail(doc):
             "current resultまたは選択履歴の武器Prefabを表示。hologramPrefabが空ならworkbenchPrefabを使用。",
             "30°/s回転、属性色とemissionを適用。Calibrationで物理表示面へ合わせる。",
             "セッション終了後、最大12件の完成履歴から1件を選択。",
-            "room|weaponId|attributeId|skillId|serial|timestampをFNV-1aで処理し、曖昧文字を除いたalphabetでCL-XXXX-XXXXを生成。",
+            "6文字で武器、属性、スキル、攻撃・防御・回避素材数を直接表す。ルーム、時刻、serial、hashは含まない。",
         ]),
     ]
     for title, bullets in pad_sections:
@@ -1089,7 +1089,7 @@ def add_rules_calc(doc):
         ("rank thresholds", "31 / 61 / 91", "Success / Great / Superの境界。"),
         ("rank bonuses", "+5 / +10 / +15", "攻防避すべてへ加算。"),
         ("maxStat", "100", "最終値をclamp。"),
-        ("codePrefix", "CL", "CL-XXXX-XXXX。"),
+        ("codePrefix", "CL", "旧形式との互換用。現行コードには使用しない。"),
     ], [2700, 2200, 4460], font_size=8.0)
     doc.add_heading("ステータス計算", level=2)
     add_bullets(doc, [
@@ -1264,7 +1264,7 @@ def add_handoff_sop(doc):
         (6, "合成", "必要な構成で液体→ハンマー6打。", "Power/Rank/Stats/resultが一致。"),
         (7, "履歴", "2本以上作成。", "履歴保持、次武器でslot reset、登録は保持。"),
         (8, "時間", "300秒経過またはfinal selectionへ。", "Pad4で履歴選択可能。"),
-        (9, "最終", "1件選び確定。", "CL-XXXX-XXXX表示、全PadでFinished同期。"),
+        (9, "最終", "1件選び確定。", "6文字コード表示、全PadでFinished同期。"),
         (10, "障害", "1台をoffline→復帰。", "Degraded/Offline表示、復帰後revisionと表示が収束。"),
     ]
     add_table(doc, ["#", "区分", "操作", "合格条件"], smoke, [500, 1200, 3900, 3760], font_size=7.4)

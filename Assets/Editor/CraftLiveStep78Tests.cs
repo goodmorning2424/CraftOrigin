@@ -41,19 +41,95 @@ namespace CraftOrigin.CraftLiveTests
         {
             CraftLiveResultState result = new CraftLiveResultState
             {
-                resultSerial = 3,
-                weaponId = "sword",
-                completedAtUnixMs = 123456789
+                weaponId = "weapon_bigsword_sword",
+                elementEffect = new CraftLiveElementEffect
+                {
+                    type = CraftLiveElementType.Fire
+                },
+                skillEffect = new CraftLiveSkillEffect
+                {
+                    type = CraftLiveSkillType.DoubleStrike
+                },
+                attackMaterialCount = 2,
+                defenseMaterialCount = 1,
+                evasionMaterialCount = 1
             };
-            string first =
-                CraftLiveWeaponCode.Generate("CL", "001", result);
+            string first = CraftLiveWeaponCode.Generate(result);
             Assert.That(
                 first,
-                Is.EqualTo(
-                    CraftLiveWeaponCode.Generate(
-                        "CL", "001", result)));
-            Assert.That(first, Does.Match(
-                "^CL-[2-9A-HJ-NP-Z]{4}-[2-9A-HJ-NP-Z]{4}$"));
+                Is.EqualTo("2FD211"));
+            Assert.That(first, Is.EqualTo(
+                CraftLiveWeaponCode.Generate(result)));
+        }
+
+        [TestCase("2NN400", "weapon_bigsword_sword")]
+        [TestCase("3NN040", "weapon_fude_staff")]
+        [TestCase("4NN004", "weapon_katate_sword")]
+        [TestCase("5FN000", "weapon_kaziki")]
+        [TestCase("6CL000", "weapon_kobushi")]
+        [TestCase("7TD000", "weapon_pikopiko_sword")]
+        [TestCase("8NH121", "weapon_staff")]
+        [TestCase("9NB211", "weapon_rapier")]
+        public void WeaponCode_FirstCharacterIdentifiesWeapon(
+            string code,
+            string expectedWeaponId)
+        {
+            Assert.That(
+                CraftLiveWeaponCode.TryGetWeaponId(
+                    code,
+                    out string weaponId),
+                Is.True);
+            Assert.That(weaponId, Is.EqualTo(expectedWeaponId));
+        }
+
+        [TestCase("")]
+        [TestCase("2FN40")]
+        [TestCase("2ZN400")]
+        [TestCase("2FX400")]
+        [TestCase("2FN500")]
+        [TestCase("2FN441")]
+        [TestCase("5FN100")]
+        [TestCase("XFN400")]
+        public void WeaponCode_RejectsInvalidCode(string code)
+        {
+            Assert.That(
+                CraftLiveWeaponCode.TryGetWeaponId(
+                    code,
+                    out string weaponId),
+                Is.False);
+            Assert.That(weaponId, Is.Empty);
+        }
+
+        [Test]
+        public void WeaponCode_DecodesAllCompositionData()
+        {
+            Assert.That(
+                CraftLiveWeaponCode.TryDecode(
+                    "2FD211",
+                    out CraftLiveWeaponCodeData data),
+                Is.True);
+            Assert.That(data.weaponId,
+                Is.EqualTo("weapon_bigsword_sword"));
+            Assert.That(data.attribute,
+                Is.EqualTo(CraftLiveElementType.Fire));
+            Assert.That(data.skill,
+                Is.EqualTo(CraftLiveSkillType.DoubleStrike));
+            Assert.That(data.attackMaterialCount, Is.EqualTo(2));
+            Assert.That(data.defenseMaterialCount, Is.EqualTo(1));
+            Assert.That(data.evasionMaterialCount, Is.EqualTo(1));
+        }
+
+        [Test]
+        public void WeaponCode_SecretWeaponForcesUpgradeCountsToZero()
+        {
+            CraftLiveResultState result = new CraftLiveResultState
+            {
+                weaponId = CraftLiveCalculator.SecretPikopikoWeaponId,
+                attackMaterialCount = 4
+            };
+            Assert.That(
+                CraftLiveWeaponCode.Generate(result),
+                Is.EqualTo("7NN000"));
         }
 
         [TestCase(0f, "00:00")]
@@ -120,7 +196,7 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(CraftLiveSessionPhase.Finished));
             Assert.That(
                 setup.session.State.finalWeaponCode,
-                Does.StartWith("CL-"));
+                Does.Match("^[2-9][NFCT][NLDHB][0-4]{3}$"));
         }
 
         [Test]

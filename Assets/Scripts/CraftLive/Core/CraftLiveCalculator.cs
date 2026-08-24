@@ -169,6 +169,8 @@ namespace CraftOrigin.CraftLive
             string weaponName = weapon != null
                 ? weapon.DisplayName
                 : string.Empty;
+            bool secretWeapon = weapon != null &&
+                IsSecretWeaponId(weapon.WeaponId);
             if (attribute != null &&
                 !string.IsNullOrWhiteSpace(attribute.AttributeDisplayName))
             {
@@ -206,11 +208,23 @@ namespace CraftOrigin.CraftLive
                 skillEffect = skill != null
                     ? skill.SkillEffect
                     : new CraftLiveSkillEffect(),
-                stats = CalculateStats(
-                    StateWithWeapon(state, weapon),
-                    catalog,
-                    rules,
-                    rank.Bonus),
+                stats = secretWeapon
+                    ? weapon.BaseStats.Clamp(
+                        rules != null ? rules.MaximumStat : 100f)
+                    : CalculateStats(
+                        StateWithWeapon(state, weapon),
+                        catalog,
+                        rules,
+                        rank.Bonus),
+                attackMaterialCount = secretWeapon
+                    ? 0
+                    : CountPlacedUpgrade(state, "ore_attack"),
+                defenseMaterialCount = secretWeapon
+                    ? 0
+                    : CountPlacedUpgrade(state, "ore_defence"),
+                evasionMaterialCount = secretWeapon
+                    ? 0
+                    : CountPlacedUpgrade(state, "ore_evasion"),
                 rank = rank.Name,
                 completedAtUnixMs = completedAtUnixMs,
                 resultSerial = GetNextResultSerial(state)
@@ -222,6 +236,27 @@ namespace CraftOrigin.CraftLive
             return weaponId == SecretPikopikoWeaponId ||
                    weaponId == SecretKazikiWeaponId ||
                    weaponId == SecretBareHandsWeaponId;
+        }
+
+        private static int CountPlacedUpgrade(
+            CraftLiveRoomState state,
+            string materialId)
+        {
+            if (state == null || state.slots == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            foreach (CraftLiveSlotId slot in BaseStatSlots)
+            {
+                if (state.slots.Get(slot) == materialId)
+                {
+                    count++;
+                }
+            }
+
+            return count;
         }
 
         public static CraftLiveWeaponDefinition ResolveResultWeapon(

@@ -1113,13 +1113,7 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            string prefix = rules != null
-                ? rules.WeaponCodePrefix
-                : "CL";
-            string code = CraftLiveWeaponCode.Generate(
-                prefix,
-                roomId,
-                selected);
+            string code = CraftLiveWeaponCode.Generate(selected);
             Mutate(next =>
             {
                 next.selectedFinalResultSerial =
