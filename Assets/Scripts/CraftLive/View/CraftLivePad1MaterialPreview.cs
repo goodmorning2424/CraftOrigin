@@ -47,8 +47,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private bool createFallbackHologram = true;
         [SerializeField] private Color hologramColor =
             new Color(0.08f, 0.72f, 0.82f, 1f);
-        [SerializeField, Range(0.05f, 0.8f)]
-        private float hologramPanelOpacity = 0.2f;
+        [SerializeField, Range(0.05f, 1f)]
+        [Tooltip("素材説明ホログラム背景の不透明度です。0.9でわずかに透けつつ文字を読みやすくします。")]
+        private float hologramPanelOpacity = 0.9f;
         [SerializeField, Range(0.5f, 6f)]
         private float hologramBorderGlow = 2.8f;
         [SerializeField, Range(0.005f, 0.08f)]
@@ -2908,7 +2909,7 @@ namespace CraftOrigin.CraftLive
             hologramPanelOpacity = Mathf.Clamp(
                 hologramPanelOpacity,
                 0.05f,
-                0.8f);
+                1f);
             hologramBorderGlow = Mathf.Clamp(
                 hologramBorderGlow,
                 0.5f,
