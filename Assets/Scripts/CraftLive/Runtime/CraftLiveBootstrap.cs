@@ -298,7 +298,7 @@ namespace CraftOrigin.CraftLive
                     CraftLiveConnectionSetupScreen>();
             }
 
-            setup.Configure(session, transport, role);
+            setup.Configure(session, transport, role, targetCamera);
         }
 
 #if UNITY_EDITOR

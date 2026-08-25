@@ -31,7 +31,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(0.6f, 1f)]
         private float lowerNameplateHeightScale = 0.82f;
         [SerializeField, Range(0f, 0.2f)]
-        private float lowerNameplateLeftShiftRatio = 0.055f;
+        private float lowerNameplateLeftShiftRatio = 0.07f;
 
         [Header("Scrolling")]
         [SerializeField, Min(0.1f)] private float itemSpacing = 2.35f;

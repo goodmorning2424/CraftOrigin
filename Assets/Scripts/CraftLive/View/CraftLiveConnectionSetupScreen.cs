@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CraftOrigin.CraftLive
@@ -19,6 +20,7 @@ namespace CraftOrigin.CraftLive
         private CraftLiveSession session;
         private CraftLiveRoomTransport transport;
         private CraftLiveRole role;
+        private Camera presentationCamera;
         private Transform displayRoot;
         private GameObject generatedScreen;
         private readonly Renderer[] statusDots = new Renderer[4];
@@ -31,16 +33,25 @@ namespace CraftOrigin.CraftLive
         private bool generationCaptured;
         private bool started;
         private float nextRefreshTime;
+        private readonly Dictionary<Renderer, bool>
+            hiddenPresentationRenderers =
+                new Dictionary<Renderer, bool>();
+
+        private const float SetupCameraDistance = 2f;
+        private const float SetupDesignWidth = 7.7f;
+        private const float SetupDesignHeight = 10.6f;
 
         public void Configure(
             CraftLiveSession targetSession,
             CraftLiveRoomTransport targetTransport,
-            CraftLiveRole targetRole)
+            CraftLiveRole targetRole,
+            Camera targetCamera = null)
         {
             Unsubscribe();
             session = targetSession;
             transport = targetTransport;
             role = targetRole;
+            presentationCamera = targetCamera;
             ResolveDisplayRoot();
             Subscribe();
             Build();
@@ -55,6 +66,22 @@ namespace CraftOrigin.CraftLive
         private void OnDisable()
         {
             Unsubscribe();
+            RestoreUnderlyingPresentation();
+        }
+
+        private void OnDestroy()
+        {
+            RestoreUnderlyingPresentation();
+            DestroySafely(generatedScreen);
+        }
+
+        private void LateUpdate()
+        {
+            if (!started && generatedScreen != null &&
+                generatedScreen.activeSelf)
+            {
+                HideUnderlyingPresentation();
+            }
         }
 
         private void Update()
@@ -120,17 +147,14 @@ namespace CraftOrigin.CraftLive
         private void Build()
         {
             DestroySafely(generatedScreen);
-            if (displayRoot == null)
+            if (displayRoot == null && presentationCamera == null)
             {
                 return;
             }
 
             generatedScreen = new GameObject(
                 "Generated_ConnectionSetupScreen");
-            generatedScreen.transform.SetParent(displayRoot, false);
-            generatedScreen.transform.localPosition = Vector3.zero;
-            generatedScreen.transform.localRotation = Quaternion.identity;
-            generatedScreen.transform.localScale = Vector3.one * 0.72f;
+            ConfigureScreenTransform(generatedScreen.transform);
             generatedScreen.AddComponent<CraftLiveGeneratedRuntimeVisual>();
 
             CreatePart(
@@ -213,9 +237,9 @@ namespace CraftOrigin.CraftLive
                 button.AddListener(StartGroup);
                 startText = CreateText(
                     "StartLabel",
-                    "4台の接続を待っています",
+                    "未接続の端末があってもスタートできます",
                     new Vector3(0f, -3.2f, -0.9f),
-                    0.038f,
+                    0.031f,
                     Color.white);
             }
             else
@@ -227,6 +251,98 @@ namespace CraftOrigin.CraftLive
                     0.038f,
                     CraftLiveForgeUITheme.Brass);
             }
+
+            HideUnderlyingPresentation();
+        }
+
+        private void ConfigureScreenTransform(Transform screen)
+        {
+            if (presentationCamera == null)
+            {
+                screen.SetParent(displayRoot, false);
+                screen.localPosition = Vector3.zero;
+                screen.localRotation = Quaternion.identity;
+                screen.localScale = Vector3.one * 0.72f;
+                return;
+            }
+
+            // The pad UI roots use different authored rotations and scales.
+            // Keeping setup on the shared camera makes it the same upright,
+            // full-screen gate for every role without moving scene anchors.
+            screen.SetParent(presentationCamera.transform, false);
+            screen.localPosition = new Vector3(
+                0f,
+                0f,
+                SetupCameraDistance);
+            screen.localRotation = Quaternion.identity;
+            screen.localScale = Vector3.one *
+                ResolveCameraFacingScale(
+                    presentationCamera,
+                    SetupCameraDistance);
+        }
+
+        public static float ResolveCameraFacingScale(
+            Camera targetCamera,
+            float distance)
+        {
+            if (targetCamera == null)
+            {
+                return 0.72f;
+            }
+
+            float aspect = targetCamera.aspect > 0.01f
+                ? targetCamera.aspect
+                : 0.75f;
+            float visibleHeight = targetCamera.orthographic
+                ? targetCamera.orthographicSize * 2f
+                : 2f * Mathf.Max(0.1f, distance) *
+                  Mathf.Tan(targetCamera.fieldOfView *
+                            0.5f * Mathf.Deg2Rad);
+            float visibleWidth = visibleHeight * aspect;
+            const float viewportMargin = 0.9f;
+            return Mathf.Max(
+                0.01f,
+                Mathf.Min(
+                    visibleWidth * viewportMargin / SetupDesignWidth,
+                    visibleHeight * viewportMargin / SetupDesignHeight));
+        }
+
+        private void HideUnderlyingPresentation()
+        {
+            Renderer[] renderers =
+                GetComponentsInChildren<Renderer>(true);
+            foreach (Renderer targetRenderer in renderers)
+            {
+                if (targetRenderer == null ||
+                    (generatedScreen != null &&
+                     targetRenderer.transform.IsChildOf(
+                         generatedScreen.transform)))
+                {
+                    continue;
+                }
+
+                if (!hiddenPresentationRenderers.ContainsKey(targetRenderer))
+                {
+                    hiddenPresentationRenderers[targetRenderer] =
+                        targetRenderer.enabled;
+                }
+
+                targetRenderer.enabled = false;
+            }
+        }
+
+        private void RestoreUnderlyingPresentation()
+        {
+            foreach (KeyValuePair<Renderer, bool> entry in
+                     hiddenPresentationRenderers)
+            {
+                if (entry.Key != null)
+                {
+                    entry.Key.enabled = entry.Value;
+                }
+            }
+
+            hiddenPresentationRenderers.Clear();
         }
 
         private void Refresh()
@@ -252,10 +368,12 @@ namespace CraftOrigin.CraftLive
                  session.State.groupGeneration > setupGeneration))
             {
                 generatedScreen.SetActive(false);
+                RestoreUnderlyingPresentation();
                 return;
             }
 
             generatedScreen.SetActive(true);
+            HideUnderlyingPresentation();
             for (int i = 0; i < Roles.Length; i++)
             {
                 bool connected = transport != null &&
@@ -281,8 +399,8 @@ namespace CraftOrigin.CraftLive
             }
 
             bool allConnected = transport != null &&
-                                transport.AreAllPadsConnected() &&
-                                generationCaptured;
+                                transport.AreAllPadsConnected();
+            bool canStart = session != null && !started;
             if (connectionText != null)
             {
                 connectionText.text = transport == null
@@ -296,14 +414,14 @@ namespace CraftOrigin.CraftLive
             {
                 if (startCollider != null)
                 {
-                    startCollider.enabled = allConnected;
+                    startCollider.enabled = canStart;
                 }
 
                 if (startRenderer != null)
                 {
                     CraftLiveForgeUITheme.ApplyForgeSurface(
                         startRenderer,
-                        allConnected
+                        canStart
                             ? CraftLiveForgeUITheme.Ember
                             : new Color(0.24f, 0.19f, 0.17f));
                 }
@@ -312,7 +430,7 @@ namespace CraftOrigin.CraftLive
                 {
                     startText.text = allConnected
                         ? "ゲームを最初からスタート"
-                        : "4台の接続を待っています";
+                        : "未接続ありでもゲームをスタート";
                 }
             }
         }
@@ -320,14 +438,13 @@ namespace CraftOrigin.CraftLive
         private void StartGroup()
         {
             if (role != CraftLiveRole.WorkbenchPad ||
-                session == null ||
-                transport == null ||
-                !transport.AreAllPadsConnected())
+                session == null)
             {
                 return;
             }
 
             started = true;
+            RestoreUnderlyingPresentation();
             session.RestartGroupFromConnectionSetup();
             Refresh();
         }
