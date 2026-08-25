@@ -70,10 +70,15 @@ namespace CraftOrigin.CraftLive
                 if (placement.status == CraftLivePlacementStatus.Pad2Arriving &&
                     elapsed >= stageTimeoutSeconds)
                 {
+                    // The arrival animation is presentation only. Give it one
+                    // extra stage window, but never let a stalled WebGL frame,
+                    // renderer or coroutine hold the authoritative slot
+                    // reservation forever.
                     if (receiver != null &&
                         receiver.IsReceivingTransfer(
                             groupGeneration,
-                            placement.transferSerial))
+                            placement.transferSerial) &&
+                        elapsed < stageTimeoutSeconds * 2f)
                     {
                         return;
                     }

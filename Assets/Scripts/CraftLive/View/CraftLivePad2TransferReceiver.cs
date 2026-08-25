@@ -721,7 +721,10 @@ namespace CraftOrigin.CraftLive
             Quaternion startRotation = ticket.rotation;
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                // Transfer authority and watchdogs use real time. Keep the
+                // presentation on the same clock so a zero/paused time scale
+                // cannot leave a material half-submerged and uncommitted.
+                elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(elapsed / duration);
                 Vector3 position =
                     Vector3.LerpUnclamped(start, end, t);
@@ -758,7 +761,7 @@ namespace CraftOrigin.CraftLive
                 target);
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(elapsed / duration);
                 float eased =
                     1f - Mathf.Pow(1f - t, 3f);

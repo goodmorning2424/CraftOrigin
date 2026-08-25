@@ -1,9 +1,10 @@
+using System.Collections;
 using UnityEngine;
 
 namespace CraftOrigin.CraftLive
 {
     /// <summary>
-    /// Pad 1/3 companion for the Pad 2 start screen. Every pad observes the
+    /// Pad 1/3/4 companion for the Pad 2 start screen. Every pad observes the
     /// same room phase, so pressing the single Pad 2 start button dismisses
     /// all start screens through the normal synchronized session update.
     /// </summary>
@@ -11,8 +12,11 @@ namespace CraftOrigin.CraftLive
     {
         [SerializeField] private CraftLiveSession session;
         [SerializeField] private Transform displayRoot;
+        [SerializeField, Min(0.1f)] private float slideDuration = 0.85f;
+        [SerializeField, Min(1f)] private float slideDistance = 12f;
 
         private GameObject generatedScreen;
+        private Coroutine slideRoutine;
         private CraftLiveSessionPhase displayedPhase =
             (CraftLiveSessionPhase)(-1);
 
@@ -96,11 +100,20 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            bool wasShowing = generatedScreen != null &&
+                displayedPhase == CraftLiveSessionPhase.StartScreen;
             displayedPhase = phase;
             if (!ShouldShow(state))
             {
-                DestroySafely(generatedScreen);
-                generatedScreen = null;
+                if (wasShowing && isActiveAndEnabled)
+                {
+                    BeginSlideOut();
+                }
+                else if (slideRoutine == null)
+                {
+                    DestroySafely(generatedScreen);
+                    generatedScreen = null;
+                }
                 return;
             }
 
@@ -115,6 +128,12 @@ namespace CraftOrigin.CraftLive
 
         private void BuildScreen()
         {
+            if (slideRoutine != null)
+            {
+                StopCoroutine(slideRoutine);
+                slideRoutine = null;
+            }
+
             DestroySafely(generatedScreen);
             generatedScreen = new GameObject("Generated_SynchronizedStartScreen");
             generatedScreen.transform.SetParent(displayRoot, false);
@@ -127,11 +146,44 @@ namespace CraftOrigin.CraftLive
             Color inset = new Color(0.19f, 0.065f, 0.018f);
             Color highlight = new Color(0.62f, 0.31f, 0.11f);
 
+            // Match the Pad 2 start panel frame so all four devices present a
+            // single continuous forge wall before the authoritative button is
+            // pressed on Pad 2.
             CreatePart(
-                "FullScreenBackdrop",
-                new Vector3(0f, 0f, 0.18f),
-                new Vector3(7.5f, 10.4f, 0.2f),
+                "CastIronShadow",
+                new Vector3(0.08f, -0.1f, 0.08f),
+                new Vector3(7.48f, 7.86f, 0.22f),
                 CraftLiveForgeUITheme.DeepIron);
+            CreatePart(
+                "WalnutBacking",
+                Vector3.zero,
+                new Vector3(7.24f, 7.62f, 0.2f),
+                new Color(0.25f, 0.115f, 0.045f));
+            CreatePart(
+                "ForgedIronFace",
+                new Vector3(0f, 0f, -0.13f),
+                new Vector3(6.82f, 7.18f, 0.11f),
+                CraftLiveForgeUITheme.DeepIron);
+            CreatePart(
+                "TopBrassRail",
+                new Vector3(0f, 3.54f, -0.35f),
+                new Vector3(6.72f, 0.12f, 0.13f),
+                CraftLiveForgeUITheme.Brass);
+            CreatePart(
+                "BottomBrassRail",
+                new Vector3(0f, -3.54f, -0.35f),
+                new Vector3(6.72f, 0.12f, 0.13f),
+                CraftLiveForgeUITheme.Brass);
+            CreatePart(
+                "LeftIronRail",
+                new Vector3(-3.34f, 0f, -0.33f),
+                new Vector3(0.14f, 7.08f, 0.13f),
+                CraftLiveForgeUITheme.Iron);
+            CreatePart(
+                "RightIronRail",
+                new Vector3(3.34f, 0f, -0.33f),
+                new Vector3(0.14f, 7.08f, 0.13f),
+                CraftLiveForgeUITheme.Iron);
             CreatePart(
                 "CarvedWoodPlaqueShadow",
                 new Vector3(0.07f, 0.38f, -0.25f),
@@ -156,22 +208,74 @@ namespace CraftOrigin.CraftLive
                     inset);
             }
 
-            GameObject handle = CreatePart(
-                "CarvedHammerHandle",
-                new Vector3(0.34f, 0.08f, -0.58f),
-                new Vector3(0.5f, 2.85f, 0.05f),
+            GameObject handleGroove = CreatePart(
+                "CarvedHammerHandleGroove",
+                new Vector3(0.36f, 0.05f, -0.63f),
+                new Vector3(0.58f, 2.95f, 0.055f),
+                inset);
+            handleGroove.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject handleHighlight = CreatePart(
+                "CarvedHammerHandleHighlight",
+                new Vector3(0.29f, 0.10f, -0.67f),
+                new Vector3(0.24f, 2.55f, 0.035f),
                 highlight);
-            handle.transform.localRotation = Quaternion.Euler(0f, 0f, 37f);
-            GameObject head = CreatePart(
-                "CarvedHammerHead",
-                new Vector3(-0.6f, 1.24f, -0.59f),
-                new Vector3(2.18f, 0.72f, 0.055f),
+            handleHighlight.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject headGroove = CreatePart(
+                "CarvedHammerHeadGroove",
+                new Vector3(-0.58f, 1.24f, -0.64f),
+                new Vector3(2.25f, 0.82f, 0.06f),
+                inset);
+            headGroove.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
+            GameObject headHighlight = CreatePart(
+                "CarvedHammerHeadHighlight",
+                new Vector3(-0.62f, 1.20f, -0.68f),
+                new Vector3(1.88f, 0.43f, 0.035f),
                 highlight);
-            head.transform.localRotation = Quaternion.Euler(0f, 0f, 37f);
+            headHighlight.transform.localRotation =
+                Quaternion.Euler(0f, 0f, 37f);
 
-            // Pad 1 and Pad 3 are synchronized waiting displays only. The
+            // Pads 1, 3 and 4 are synchronized waiting displays only. The
             // single authoritative start button stays on Pad 2, preventing
             // staff from starting the group from an unintended station.
+        }
+
+        private void BeginSlideOut()
+        {
+            if (generatedScreen == null || slideRoutine != null)
+            {
+                return;
+            }
+
+            slideRoutine = StartCoroutine(SlideOut());
+        }
+
+        private IEnumerator SlideOut()
+        {
+            GameObject screen = generatedScreen;
+            Vector3 start = screen.transform.localPosition;
+            Vector3 end = start + Vector3.up * slideDistance;
+            float elapsed = 0f;
+            float duration = Mathf.Max(0.1f, slideDuration);
+            while (screen != null && elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float eased = t * t * (3f - 2f * t);
+                screen.transform.localPosition =
+                    Vector3.LerpUnclamped(start, end, eased);
+                yield return null;
+            }
+
+            DestroySafely(screen);
+            if (generatedScreen == screen)
+            {
+                generatedScreen = null;
+            }
+
+            slideRoutine = null;
         }
 
         private GameObject CreatePart(

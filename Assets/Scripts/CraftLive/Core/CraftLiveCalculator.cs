@@ -279,6 +279,7 @@ namespace CraftOrigin.CraftLive
             }
 
             if (selected != null &&
+                selected.WeaponType == CraftLiveWeaponType.Sword &&
                 HasFourMatchingBaseMaterials(
                     state,
                     catalog,
@@ -289,6 +290,7 @@ namespace CraftOrigin.CraftLive
             }
 
             if (selected != null &&
+                selected.WeaponType == CraftLiveWeaponType.Thrust &&
                 HasFourMatchingBaseMaterials(
                     state,
                     catalog,

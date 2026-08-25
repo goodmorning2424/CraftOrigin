@@ -21,6 +21,20 @@ namespace CraftOrigin.CraftLive
         private void Awake()
         {
             ResolveReferences();
+            EnsureSynchronizedStartScreen();
+        }
+
+        private void EnsureSynchronizedStartScreen()
+        {
+            CraftLiveSynchronizedStartScreen startScreen =
+                GetComponent<CraftLiveSynchronizedStartScreen>();
+            if (startScreen == null)
+            {
+                startScreen = gameObject.AddComponent<
+                    CraftLiveSynchronizedStartScreen>();
+            }
+
+            startScreen.Configure(bindings != null ? bindings.UiRoot : null);
         }
 
         private void OnEnable()

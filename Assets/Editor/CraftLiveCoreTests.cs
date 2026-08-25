@@ -569,6 +569,55 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void SecretWeapons_RequireOriginalWeaponTypeAndMaterialLayout()
+        {
+            CraftLiveWeaponDefinition thrust = CreateWeapon("thrust");
+            SetField(thrust, "weaponType", CraftLiveWeaponType.Thrust);
+            CraftLiveWeaponDefinition sword = CreateWeapon("sword");
+            SetField(sword, "weaponType", CraftLiveWeaponType.Sword);
+            CraftLiveWeaponDefinition pikopiko =
+                CreateWeapon(CraftLiveCalculator.SecretPikopikoWeaponId);
+            CraftLiveWeaponDefinition kaziki =
+                CreateWeapon(CraftLiveCalculator.SecretKazikiWeaponId);
+            CraftLiveMaterialDefinition evasion = CreateMaterial(
+                CraftLiveCalculator.SecretPikopikoMaterialId,
+                CraftLiveMaterialCategory.Upgrade);
+            CraftLiveMaterialDefinition attack = CreateMaterial(
+                CraftLiveCalculator.SecretKazikiMaterialId,
+                CraftLiveMaterialCategory.Upgrade);
+            CraftLiveCatalog catalog = CreateCatalog(
+                new List<CraftLiveMaterialDefinition> { evasion, attack },
+                new List<CraftLiveWeaponDefinition>
+                {
+                    thrust,
+                    sword,
+                    pikopiko,
+                    kaziki
+                });
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+
+            state.selectedWeaponId = thrust.WeaponId;
+            state.slots.top = evasion.MaterialId;
+            state.slots.right = evasion.MaterialId;
+            state.slots.left = evasion.MaterialId;
+            state.slots.bottom = evasion.MaterialId;
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(thrust.WeaponId));
+
+            state.selectedWeaponId = sword.WeaponId;
+            state.slots.top = attack.MaterialId;
+            state.slots.right = attack.MaterialId;
+            state.slots.left = attack.MaterialId;
+            state.slots.bottom = attack.MaterialId;
+            Assert.That(
+                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
+                    .WeaponId,
+                Is.EqualTo(sword.WeaponId));
+        }
+
+        [Test]
         public void SecretWeapon_BareHandsRequiresEverySlotEmpty()
         {
             CraftLiveWeaponDefinition sword = CreateWeapon("sword");
