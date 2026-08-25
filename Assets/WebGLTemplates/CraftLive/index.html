@@ -28,18 +28,74 @@
       const progress = document.querySelector("#unity-progress");
       const status = document.querySelector("#unity-status");
       const recoveryParameter = "build-refresh";
+      const recoveryAttemptParameter = "build-retry";
+      const recoveryStorageKey = "craft-live-build-recovery-attempts";
+      const maxRecoveryAttempts = 3;
+
+      function currentRecoveryAttempts() {
+        const urlAttempts = Number.parseInt(
+          new URL(window.location.href).searchParams.get(
+            recoveryAttemptParameter) || "0",
+          10);
+        if (Number.isFinite(urlAttempts) && urlAttempts > 0) {
+          return urlAttempts;
+        }
+
+        try {
+          const stored = Number.parseInt(
+            window.sessionStorage.getItem(recoveryStorageKey) || "0",
+            10);
+          return Number.isFinite(stored) ? stored : 0;
+        } catch (_) {
+          return 0;
+        }
+      }
+
+      function recordRecoveryAttempt(attempts) {
+        try {
+          window.sessionStorage.setItem(
+            recoveryStorageKey,
+            String(attempts));
+        } catch (_) {
+          // A cache-busted navigation still works when storage is unavailable.
+        }
+      }
+
+      function clearRecoveryAttempts() {
+        try {
+          window.sessionStorage.removeItem(recoveryStorageKey);
+        } catch (_) {
+          // Ignore storage restrictions in private browsing modes.
+        }
+      }
+
+      function withBuildCacheToken(path) {
+        const token = new URL(window.location.href)
+          .searchParams.get(recoveryParameter);
+        if (!token) {
+          return path;
+        }
+
+        const url = new URL(path, window.location.href);
+        url.searchParams.set(recoveryParameter, token);
+        return url.toString();
+      }
 
       function recoverFromStaleBuild(error) {
         const message = String(error || "");
         const isBuildRuntimeFailure =
           /memory access out of bounds|unknown data format|doctype|data format|wasm|failed to fetch|load/i.test(message);
         const currentUrl = new URL(window.location.href);
-        if (!isBuildRuntimeFailure ||
-            currentUrl.searchParams.has(recoveryParameter)) {
+        const attempts = currentRecoveryAttempts();
+        if (!isBuildRuntimeFailure || attempts >= maxRecoveryAttempts) {
           return false;
         }
 
+        recordRecoveryAttempt(attempts + 1);
         currentUrl.searchParams.set(recoveryParameter, Date.now().toString());
+        currentUrl.searchParams.set(
+          recoveryAttemptParameter,
+          String(attempts + 1));
         window.location.replace(currentUrl.toString());
         return true;
       }
@@ -73,21 +129,27 @@
         { passive: false });
 
       const buildUrl = "Build";
-      const loaderUrl = buildUrl + "/{{{ LOADER_FILENAME }}}";
+      const loaderUrl = withBuildCacheToken(
+        buildUrl + "/{{{ LOADER_FILENAME }}}");
       const isIPad = /iPad/i.test(navigator.userAgent) ||
         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
       const config = {
         arguments: [],
-        dataUrl: buildUrl + "/{{{ DATA_FILENAME }}}",
-        frameworkUrl: buildUrl + "/{{{ FRAMEWORK_FILENAME }}}",
+        dataUrl: withBuildCacheToken(
+          buildUrl + "/{{{ DATA_FILENAME }}}"),
+        frameworkUrl: withBuildCacheToken(
+          buildUrl + "/{{{ FRAMEWORK_FILENAME }}}"),
 #if USE_THREADS
-        workerUrl: buildUrl + "/{{{ WORKER_FILENAME }}}",
+        workerUrl: withBuildCacheToken(
+          buildUrl + "/{{{ WORKER_FILENAME }}}"),
 #endif
 #if USE_WASM
-        codeUrl: buildUrl + "/{{{ CODE_FILENAME }}}",
+        codeUrl: withBuildCacheToken(
+          buildUrl + "/{{{ CODE_FILENAME }}}"),
 #endif
 #if SYMBOLS_FILENAME
-        symbolsUrl: buildUrl + "/{{{ SYMBOLS_FILENAME }}}",
+        symbolsUrl: withBuildCacheToken(
+          buildUrl + "/{{{ SYMBOLS_FILENAME }}}"),
 #endif
         streamingAssetsUrl: "StreamingAssets",
         companyName: {{{ JSON.stringify(COMPANY_NAME) }}},
@@ -130,8 +192,10 @@
           const loadedUrl = new URL(window.location.href);
           if (loadedUrl.searchParams.has(recoveryParameter)) {
             loadedUrl.searchParams.delete(recoveryParameter);
+            loadedUrl.searchParams.delete(recoveryAttemptParameter);
             window.history.replaceState(null, "", loadedUrl.toString());
           }
+          clearRecoveryAttempts();
         }).catch(error => {
           loading.hidden = true;
           if (!recoverFromStaleBuild(error)) {
