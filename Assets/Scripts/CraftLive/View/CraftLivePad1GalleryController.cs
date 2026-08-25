@@ -14,6 +14,13 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private Camera targetCamera;
         [SerializeField] private CraftLiveGalleryWallSlider wallSlider;
 
+        [Header("Black Surround")]
+        [SerializeField] private bool createBlackSurround = true;
+        [SerializeField, Min(20f)] private float surroundWidth = 70f;
+        [SerializeField, Min(15f)] private float surroundHeight = 42f;
+        [SerializeField, Min(20f)] private float surroundDepth = 60f;
+        [SerializeField, Min(0.1f)] private float surroundThickness = 1f;
+
         [Header("Camera")]
         [SerializeField, Tooltip(
             "When disabled, the camera keeps the position authored in the scene hierarchy.")]
@@ -56,6 +63,7 @@ namespace CraftOrigin.CraftLive
                 new Dictionary<CraftLiveMaterialCategory, int>();
         private bool built;
         private int handledRegistrationSerial = -1;
+        private GameObject generatedBlackSurround;
 
         private struct ColumnLayout
         {
@@ -125,7 +133,107 @@ namespace CraftOrigin.CraftLive
 
         private void Start()
         {
+            EnsureBlackSurround();
             Rebuild();
+        }
+
+        private void EnsureBlackSurround()
+        {
+            if (!createBlackSurround || targetCamera == null ||
+                generatedBlackSurround != null)
+            {
+                return;
+            }
+
+            targetCamera.clearFlags = CameraClearFlags.SolidColor;
+            targetCamera.backgroundColor = Color.black;
+
+            generatedBlackSurround = new GameObject(
+                "Generated_Pad1BlackSurround");
+            generatedBlackSurround.transform.SetParent(transform, true);
+            generatedBlackSurround.AddComponent<
+                CraftLiveGeneratedRuntimeVisual>();
+
+            Transform cameraTransform = targetCamera.transform;
+            Vector3 forward = cameraTransform.forward.normalized;
+            Vector3 right = cameraTransform.right.normalized;
+            Vector3 up = cameraTransform.up.normalized;
+            Quaternion rotation = cameraTransform.rotation;
+            float halfWidth = surroundWidth * 0.5f;
+            float halfHeight = surroundHeight * 0.5f;
+            float halfDepth = surroundDepth * 0.5f;
+            Vector3 center = cameraTransform.position +
+                forward * halfDepth;
+
+            CreateBlackSurroundPart(
+                "FarWall",
+                cameraTransform.position + forward * surroundDepth,
+                rotation,
+                new Vector3(
+                    surroundWidth,
+                    surroundHeight,
+                    surroundThickness));
+            CreateBlackSurroundPart(
+                "Floor",
+                center - up * halfHeight,
+                rotation,
+                new Vector3(
+                    surroundWidth,
+                    surroundThickness,
+                    surroundDepth));
+            CreateBlackSurroundPart(
+                "Ceiling",
+                center + up * halfHeight,
+                rotation,
+                new Vector3(
+                    surroundWidth,
+                    surroundThickness,
+                    surroundDepth));
+            CreateBlackSurroundPart(
+                "LeftWall",
+                center - right * halfWidth,
+                rotation,
+                new Vector3(
+                    surroundThickness,
+                    surroundHeight,
+                    surroundDepth));
+            CreateBlackSurroundPart(
+                "RightWall",
+                center + right * halfWidth,
+                rotation,
+                new Vector3(
+                    surroundThickness,
+                    surroundHeight,
+                    surroundDepth));
+        }
+
+        private void CreateBlackSurroundPart(
+            string partName,
+            Vector3 position,
+            Quaternion rotation,
+            Vector3 scale)
+        {
+            GameObject part = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            part.name = partName;
+            part.transform.SetParent(
+                generatedBlackSurround.transform,
+                true);
+            part.transform.SetPositionAndRotation(position, rotation);
+            part.transform.localScale = scale;
+            DestroySafely(part.GetComponent<Collider>());
+            part.AddComponent<CraftLiveGeneratedRuntimeVisual>();
+
+            Renderer targetRenderer = part.GetComponent<Renderer>();
+            CraftLiveForgeUITheme.ApplyForgeSurface(
+                targetRenderer,
+                Color.black,
+                0f,
+                0f,
+                0f);
+            targetRenderer.shadowCastingMode =
+                UnityEngine.Rendering.ShadowCastingMode.Off;
+            targetRenderer.receiveShadows = false;
         }
 
         private void OnDisable()

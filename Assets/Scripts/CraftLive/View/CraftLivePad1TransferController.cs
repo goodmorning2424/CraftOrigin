@@ -107,11 +107,11 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0.05f)] private float launchDuration = 0.55f;
         [SerializeField, Min(0.1f)]
         [Tooltip("物理発射時の速度（ワールド単位/秒）です。直線と斜面で同じ速度を維持します。")]
-        private float physicalLaunchSpeed = 2.8f;
+        private float physicalLaunchSpeed = 3.2f;
         [SerializeField, Min(0f)] private float launchArcHeight = 1.1f;
         [SerializeField, Min(0f)]
         [Tooltip("Inspectorで設定する、発射方向へ傾く時間と元へ戻る時間（秒）です。0なら即時に切り替えます。")]
-        private float cameraShiftDuration = 0.18f;
+        private float cameraShiftDuration = 0.16f;
         [SerializeField, HideInInspector, Min(1f)]
         [Tooltip("旧設定です。カメラの旋回時間にはCamera Shift Durationを使用します。")]
         private float cameraRotationSpeed = 30f;
@@ -2216,8 +2216,14 @@ namespace CraftOrigin.CraftLive
             if (pusherPlate != null &&
                 TryGetRendererBounds(pusherPlate.gameObject, out Bounds bounds))
             {
+                // Bounds.center follows the plate while the spring is being
+                // compressed. Queue refreshes can arrive during a slow drag,
+                // so translate that center back to the captured rest pose.
+                // The waiting paintings must not move until launch commits.
+                Vector3 restBoundsCenter = bounds.center +
+                    (pusherRestPosition - pusherPlate.position);
                 front = Vector3.Dot(
-                            bounds.center,
+                            restBoundsCenter,
                             physicalLaunchDirection) +
                         ProjectBoundsExtent(
                             bounds.extents,

@@ -4176,6 +4176,11 @@ MonoBehaviour:
   paintingPrefab: {fileID: 7994097000653067451, guid: 0a3bd35eb995e8f46a58c98cc3691c23, type: 3}
   targetCamera: {fileID: 11987621}
   wallSlider: {fileID: 1760931049}
+  createBlackSurround: 1
+  surroundWidth: 70
+  surroundHeight: 42
+  surroundDepth: 60
+  surroundThickness: 1
   useAutomaticPortraitFraming: 0
   showLockedMaterials: 0
   applyDefaultLayout: 1
@@ -4248,9 +4253,9 @@ MonoBehaviour:
   impactDuration: 0.12
   grooveLaunchDuration: 0.24
   launchDuration: 0.55
-  physicalLaunchSpeed: 2.8
+  physicalLaunchSpeed: 3.2
   launchArcHeight: 1.1
-  cameraShiftDuration: 1.5
+  cameraShiftDuration: 1.32
   cameraRotationSpeed: 70
   cameraYawDegrees: 60
   animateCameraDuringLaunch: 1
