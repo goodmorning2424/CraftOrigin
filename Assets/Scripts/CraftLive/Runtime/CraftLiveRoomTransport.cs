@@ -120,6 +120,8 @@ namespace CraftOrigin.CraftLive
         private CraftLiveConnectionState connectionState =
             CraftLiveConnectionState.Connecting;
         private string connectionMessage = string.Empty;
+        private bool presencePublishingEnabled = true;
+        private bool hasEnabled;
 
         public bool IsRemoteMode =>
             useFirebase && !string.IsNullOrWhiteSpace(firebaseDatabaseUrl);
@@ -135,6 +137,8 @@ namespace CraftOrigin.CraftLive
         public long LastSuccessfulRequestUnixMs =>
             lastSuccessfulRequestUnixMs;
         public CraftLiveRoomPresence RoomPresence => roomPresence;
+        public bool IsPresencePublishing =>
+            presencePublishingEnabled && presenceCoroutine != null;
 
         public event Action<
             CraftLiveConnectionState,
@@ -151,6 +155,7 @@ namespace CraftOrigin.CraftLive
 
         private void OnEnable()
         {
+            hasEnabled = true;
             if (session == null)
             {
                 return;
@@ -170,11 +175,12 @@ namespace CraftOrigin.CraftLive
                 ConnectLocalRoom();
             }
 
-            presenceCoroutine = StartCoroutine(UpdatePadPresence());
+            StartPresencePublishingIfNeeded();
         }
 
         private void OnDisable()
         {
+            hasEnabled = false;
             if (session != null)
             {
                 session.LocalStateChanged -= HandleLocalStateChanged;
@@ -223,9 +229,42 @@ namespace CraftOrigin.CraftLive
                    IsRoleConnected(CraftLiveRole.HologramPad);
         }
 
+        public void SetPresencePublishingEnabled(bool value)
+        {
+            presencePublishingEnabled = value;
+            if (!value)
+            {
+                if (presenceCoroutine != null)
+                {
+                    StopCoroutine(presenceCoroutine);
+                    presenceCoroutine = null;
+                }
+
+                return;
+            }
+
+            StartPresencePublishingIfNeeded();
+        }
+
+        public void BeginPresencePublishing()
+        {
+            SetPresencePublishingEnabled(true);
+        }
+
+        private void StartPresencePublishingIfNeeded()
+        {
+            if (!presencePublishingEnabled || presenceCoroutine != null ||
+                !hasEnabled || !isActiveAndEnabled || session == null)
+            {
+                return;
+            }
+
+            presenceCoroutine = StartCoroutine(UpdatePadPresence());
+        }
+
         private IEnumerator UpdatePadPresence()
         {
-            while (enabled && session != null)
+            while (enabled && presencePublishingEnabled && session != null)
             {
                 CraftLivePadPresence own = new CraftLivePadPresence
                 {

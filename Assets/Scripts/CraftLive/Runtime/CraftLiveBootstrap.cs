@@ -71,6 +71,7 @@ namespace CraftOrigin.CraftLive
             // created only by the authoritative Pad 2 setup button.
             showConnectionSetup =
                 CraftLiveLaunchQuery.ShouldShowConnectionSetup();
+            transport?.SetPresencePublishingEnabled(!showConnectionSetup);
             session?.Configure(ResolvedRoomId, ResolvedRole);
 
             if (transport != null && launchConfig != null)

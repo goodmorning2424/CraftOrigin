@@ -26,8 +26,11 @@ namespace CraftOrigin.CraftLive
         private readonly Renderer[] statusDots = new Renderer[4];
         private readonly TextMesh[] statusTexts = new TextMesh[4];
         private TextMesh connectionText;
+        private TextMesh connectText;
         private TextMesh startText;
+        private Renderer connectRenderer;
         private Renderer startRenderer;
+        private Collider connectCollider;
         private Collider startCollider;
         private int setupGeneration;
         private bool generationCaptured;
@@ -37,7 +40,6 @@ namespace CraftOrigin.CraftLive
             hiddenPresentationRenderers =
                 new Dictionary<Renderer, bool>();
 
-        private const float SetupCameraDistance = 2f;
         private const float SetupDesignWidth = 7.7f;
         private const float SetupDesignHeight = 10.6f;
 
@@ -209,16 +211,43 @@ namespace CraftOrigin.CraftLive
             connectionText = CreateText(
                 "ConnectionMessage",
                 string.Empty,
-                new Vector3(0f, -2.25f, -0.7f),
+                new Vector3(0f, -2.05f, -0.7f),
                 0.032f,
                 CraftLiveForgeUITheme.ParchmentText);
+
+            GameObject connect = CreatePart(
+                "BeginConnection",
+                new Vector3(0f, -2.72f, -0.72f),
+                new Vector3(3.8f, 0.7f, 0.24f),
+                CraftLiveForgeUITheme.Brass,
+                true);
+            connectRenderer = connect.GetComponent<Renderer>();
+            connectCollider = connect.GetComponent<Collider>();
+            CraftLiveWorldButton connectButton =
+                connect.AddComponent<CraftLiveWorldButton>();
+            connectButton.Configure(
+                connect.transform,
+                new[] { connectRenderer },
+                CraftLiveForgeUITheme.Brass,
+                Color.Lerp(
+                    CraftLiveForgeUITheme.Brass,
+                    Color.white,
+                    0.3f),
+                Color.white);
+            connectButton.AddListener(BeginConnection);
+            connectText = CreateText(
+                "ConnectLabel",
+                "接続開始",
+                new Vector3(0f, -2.72f, -0.9f),
+                0.039f,
+                Color.white);
 
             if (role == CraftLiveRole.WorkbenchPad)
             {
                 GameObject start = CreatePart(
                     "StartConnectedGroup",
-                    new Vector3(0f, -3.2f, -0.72f),
-                    new Vector3(3.8f, 0.82f, 0.24f),
+                    new Vector3(0f, -3.58f, -0.72f),
+                    new Vector3(3.8f, 0.7f, 0.24f),
                     CraftLiveForgeUITheme.Ember,
                     true);
                 startRenderer = start.GetComponent<Renderer>();
@@ -238,18 +267,9 @@ namespace CraftOrigin.CraftLive
                 startText = CreateText(
                     "StartLabel",
                     "未接続の端末があってもスタートできます",
-                    new Vector3(0f, -3.2f, -0.9f),
-                    0.031f,
+                    new Vector3(0f, -3.58f, -0.9f),
+                    0.029f,
                     Color.white);
-            }
-            else
-            {
-                startText = CreateText(
-                    "WaitLabel",
-                    "確認後、Pad 2でスタート",
-                    new Vector3(0f, -3.2f, -0.7f),
-                    0.038f,
-                    CraftLiveForgeUITheme.Brass);
             }
 
             HideUnderlyingPresentation();
@@ -270,15 +290,28 @@ namespace CraftOrigin.CraftLive
             // Keeping setup on the shared camera makes it the same upright,
             // full-screen gate for every role without moving scene anchors.
             screen.SetParent(presentationCamera.transform, false);
+            float cameraDistance = ResolveCameraFacingDistance(
+                presentationCamera);
             screen.localPosition = new Vector3(
                 0f,
                 0f,
-                SetupCameraDistance);
+                cameraDistance);
             screen.localRotation = Quaternion.identity;
             screen.localScale = Vector3.one *
                 ResolveCameraFacingScale(
                     presentationCamera,
-                    SetupCameraDistance);
+                    cameraDistance);
+        }
+
+        public static float ResolveCameraFacingDistance(Camera targetCamera)
+        {
+            if (targetCamera == null)
+            {
+                return 2f;
+            }
+
+            float near = Mathf.Max(0.01f, targetCamera.nearClipPlane);
+            return Mathf.Max(near + 0.12f, near * 1.35f);
         }
 
         public static float ResolveCameraFacingScale(
@@ -309,8 +342,27 @@ namespace CraftOrigin.CraftLive
 
         private void HideUnderlyingPresentation()
         {
-            Renderer[] renderers =
-                GetComponentsInChildren<Renderer>(true);
+            if (!gameObject.scene.IsValid() ||
+                !gameObject.scene.isLoaded)
+            {
+                HideRenderers(GetComponentsInChildren<Renderer>(true));
+                return;
+            }
+
+            GameObject[] sceneRoots =
+                gameObject.scene.GetRootGameObjects();
+            foreach (GameObject sceneRoot in sceneRoots)
+            {
+                if (sceneRoot != null)
+                {
+                    HideRenderers(
+                        sceneRoot.GetComponentsInChildren<Renderer>(true));
+                }
+            }
+        }
+
+        private void HideRenderers(Renderer[] renderers)
+        {
             foreach (Renderer targetRenderer in renderers)
             {
                 if (targetRenderer == null ||
@@ -401,6 +453,8 @@ namespace CraftOrigin.CraftLive
             bool allConnected = transport != null &&
                                 transport.AreAllPadsConnected();
             bool canStart = session != null && !started;
+            bool ownConnected = transport != null &&
+                                transport.IsRoleConnected(role);
             if (connectionText != null)
             {
                 connectionText.text = transport == null
@@ -433,6 +487,35 @@ namespace CraftOrigin.CraftLive
                         : "未接続ありでもゲームをスタート";
                 }
             }
+
+            if (connectCollider != null)
+            {
+                connectCollider.enabled = !ownConnected;
+            }
+
+            if (connectRenderer != null)
+            {
+                CraftLiveForgeUITheme.ApplyForgeSurface(
+                    connectRenderer,
+                    ownConnected
+                        ? new Color(0.18f, 0.62f, 0.34f)
+                        : CraftLiveForgeUITheme.Brass);
+            }
+
+            if (connectText != null)
+            {
+                connectText.text = ownConnected
+                    ? "このPadは接続済み"
+                    : transport != null && transport.IsPresencePublishing
+                        ? "接続中..."
+                        : "接続開始";
+            }
+        }
+
+        private void BeginConnection()
+        {
+            transport?.BeginPresencePublishing();
+            Refresh();
         }
 
         private void StartGroup()
