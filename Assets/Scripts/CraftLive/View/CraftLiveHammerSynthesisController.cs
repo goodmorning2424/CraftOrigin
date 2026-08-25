@@ -310,9 +310,7 @@ namespace CraftOrigin.CraftLive
         private bool IsMixing()
         {
             return session != null &&
-                   session.State != null &&
-                   session.State.craft.status ==
-                       CraftLiveCraftStatus.Mixing;
+                   ShouldShowHammerInput(session.State);
         }
 
         private float GetStrokePixels()
@@ -374,6 +372,12 @@ namespace CraftOrigin.CraftLive
             }
 
             bool mixing = ShouldShowHammerInput(state);
+            if (!mixing)
+            {
+                dragging = false;
+                activePointerId = int.MinValue;
+                directedTravel = 0f;
+            }
             if (generatedRoot != null)
             {
                 generatedRoot.SetActive(mixing);

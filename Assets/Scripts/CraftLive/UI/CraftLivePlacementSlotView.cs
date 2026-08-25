@@ -208,7 +208,8 @@ namespace CraftOrigin.CraftLive
                 previewSize,
                 true,
                 material.Pad2PreviewRollDegrees,
-                preferUpright: true);
+                preferUpright: true,
+                restAuthoredBottomOnSurface: true);
             foreach (Collider collider in
                      previewObject.GetComponentsInChildren<Collider>(true))
             {

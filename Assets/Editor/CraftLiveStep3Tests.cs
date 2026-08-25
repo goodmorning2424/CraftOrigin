@@ -95,7 +95,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void GalleryWall_LowerNameplatesUseTopWidthAndReducedHeight()
+        public void GalleryWall_NameplatesUseEqualSidePaddingAndReducedHeight()
         {
             CraftLiveGalleryWallView.ResetNameplateReference();
             MethodInfo ensure = typeof(CraftLiveGalleryWallView).GetMethod(
@@ -132,10 +132,23 @@ namespace CraftOrigin.CraftLiveTests
             Vector3 topSize = topPlate.transform.Find("WoodShadow").localScale;
             Vector3 lowerSize =
                 lowerPlate.transform.Find("WoodShadow").localScale;
-            Assert.That(lowerSize.x, Is.EqualTo(topSize.x).Within(0.0001f));
+            Renderer topTextRenderer =
+                GetField<TextMesh>(top, "headerText")
+                    .GetComponent<Renderer>();
+            Renderer lowerTextRenderer =
+                GetField<TextMesh>(lower, "headerText")
+                    .GetComponent<Renderer>();
+            float topPadding =
+                (topSize.x - topTextRenderer.bounds.size.x) * 0.5f;
+            float lowerPadding =
+                (lowerSize.x - lowerTextRenderer.bounds.size.x) * 0.5f;
+            Assert.That(
+                lowerPadding,
+                Is.EqualTo(topPadding).Within(0.0001f));
             Assert.That(
                 lowerSize.y,
-                Is.EqualTo(topSize.y * 0.82f).Within(0.0001f));
+                Is.EqualTo(topSize.y * 0.82f * 0.78f)
+                    .Within(0.0001f));
             Assert.That(
                 lowerPlate.transform.position.x,
                 Is.LessThan(topPlate.transform.position.x));
@@ -1069,6 +1082,17 @@ namespace CraftOrigin.CraftLiveTests
                 BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.That(field, Is.Not.Null, fieldName);
             field.SetValue(target, value);
+        }
+
+        private static T GetField<T>(
+            object target,
+            string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(field, Is.Not.Null, fieldName);
+            return (T)field.GetValue(target);
         }
 
         private static void InvokeMethod(

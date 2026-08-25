@@ -948,7 +948,8 @@ namespace CraftOrigin.CraftLive
             float targetProjectedSize,
             bool faceLargestSurface,
             float rollDegrees = 0f,
-            bool preferUpright = false)
+            bool preferUpright = false,
+            bool restAuthoredBottomOnSurface = false)
         {
             if (contentRoot == null || contentRoot.parent == null)
             {
@@ -968,7 +969,18 @@ namespace CraftOrigin.CraftLive
 
             Quaternion roll = Quaternion.Euler(0f, 0f, rollDegrees);
             Quaternion bestRotation = roll;
-            if (faceLargestSurface)
+            if (restAuthoredBottomOnSurface &&
+                authoredUp.sqrMagnitude > 0.0001f)
+            {
+                // Pad 2's parent-local XY plane is the workbench surface and
+                // local -Z points toward the camera. Align the model's authored
+                // up direction with -Z so its opposite (the bottom) faces the
+                // table. Roll remains a rotation around the surface normal.
+                bestRotation = roll * Quaternion.FromToRotation(
+                    authoredUp.normalized,
+                    Vector3.back);
+            }
+            else if (faceLargestSurface)
             {
                 float bestScore = float.NegativeInfinity;
                 foreach (Quaternion orientation in SurfaceOrientations)

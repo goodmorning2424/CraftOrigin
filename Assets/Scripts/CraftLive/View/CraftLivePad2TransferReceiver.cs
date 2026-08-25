@@ -1149,7 +1149,8 @@ namespace CraftOrigin.CraftLive
                 targetSize,
                 true,
                 rollDegrees,
-                preferUpright: preferUpright);
+                preferUpright: preferUpright,
+                restAuthoredBottomOnSurface: preferUpright);
             DisableColliders(visual);
             return visual;
         }

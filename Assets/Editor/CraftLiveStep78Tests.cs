@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using CraftOrigin.CraftLive;
@@ -157,6 +158,65 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 setup.session.State.craft.status,
                 Is.EqualTo(CraftLiveCraftStatus.Complete));
+            Assert.That(
+                setup.session.State.completedWeapons,
+                Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ExpireSession_DuringSynthesisCompletesWeaponOnce()
+        {
+            TestSetup setup = CreateValidSetup();
+            Assert.That(setup.session.StartSynthesis(), Is.True);
+            setup.session.RegisterHammerPass(1f, false);
+
+            setup.session.ExpireSession();
+
+            Assert.That(
+                setup.session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.FinalSelection));
+            Assert.That(
+                setup.session.State.craft.status,
+                Is.EqualTo(CraftLiveCraftStatus.Complete));
+            Assert.That(
+                setup.session.State.craft.completionPresentationReady,
+                Is.True);
+            Assert.That(
+                setup.session.State.completedWeapons,
+                Has.Count.EqualTo(1));
+            Assert.That(
+                setup.session.RegisterHammerPass(1f, false),
+                Is.False);
+
+            setup.session.CompleteSynthesis();
+            Assert.That(
+                setup.session.State.completedWeapons,
+                Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ExpireSession_DuringCompletionFlashRevealsExistingResult()
+        {
+            TestSetup setup = CreateValidSetup();
+            Assert.That(setup.session.StartSynthesis(), Is.True);
+            setup.session.CompleteSynthesis(true);
+            Assert.That(
+                setup.session.State.craft.completionPresentationReady,
+                Is.False);
+
+            setup.session.ExpireSession();
+
+            Assert.That(
+                setup.session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.FinalSelection));
+            Assert.That(
+                setup.session.State.craft.completionPresentationReady,
+                Is.True);
+            Assert.That(
+                setup.session.State.completedWeapons,
+                Has.Count.EqualTo(1));
+
+            setup.session.RevealCompletionPresentation();
             Assert.That(
                 setup.session.State.completedWeapons,
                 Has.Count.EqualTo(1));
@@ -442,6 +502,46 @@ namespace CraftOrigin.CraftLiveTests
                         true);
 
             Assert.That(result, Is.EqualTo(guidePosition));
+        }
+
+        [Test]
+        public void Pad2Material_RestsAuthoredBottomOnWorkbenchSurface()
+        {
+            GameObject visual = new GameObject("Visual");
+            created.Add(visual);
+            GameObject contentObject = new GameObject("VisualContent");
+            contentObject.transform.SetParent(visual.transform, false);
+            GameObject model = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            model.transform.SetParent(contentObject.transform, false);
+
+            Type utilityType = typeof(CraftLivePad2TransferReceiver)
+                .Assembly.GetType(
+                    "CraftOrigin.CraftLive.CraftLiveRuntimeVisualUtility");
+            Assert.That(utilityType, Is.Not.Null);
+            MethodInfo fit = utilityType.GetMethod(
+                "FitAndCenter",
+                BindingFlags.Static | BindingFlags.Public);
+            Assert.That(fit, Is.Not.Null);
+
+            bool fitted = (bool)fit.Invoke(
+                null,
+                new object[]
+                {
+                    contentObject.transform,
+                    1f,
+                    true,
+                    0f,
+                    true,
+                    true
+                });
+
+            Assert.That(fitted, Is.True);
+            Vector3 placedUp =
+                contentObject.transform.TransformDirection(Vector3.up);
+            Assert.That(
+                Vector3.Dot(placedUp.normalized, Vector3.back),
+                Is.GreaterThan(0.999f));
         }
 
         [TestCase(0, 6, 6)]

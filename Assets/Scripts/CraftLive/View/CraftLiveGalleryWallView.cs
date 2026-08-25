@@ -12,6 +12,7 @@ namespace CraftOrigin.CraftLive
     {
         private static Vector2 referenceNameplateWorldSize;
         private static float referenceNameplateCameraDistance;
+        private static float referenceNameplateSidePadding;
         private static bool hasReferenceNameplateSize;
 
         [Header("Identity")]
@@ -87,6 +88,7 @@ namespace CraftOrigin.CraftLive
         {
             referenceNameplateWorldSize = Vector2.zero;
             referenceNameplateCameraDistance = 0f;
+            referenceNameplateSidePadding = 0f;
             hasReferenceNameplateSize = false;
         }
 
@@ -326,6 +328,13 @@ namespace CraftOrigin.CraftLive
             {
                 referenceNameplateWorldSize = new Vector2(width, height);
                 referenceNameplateCameraDistance = cameraDistance;
+                // The top plate is built first and currently has the larger
+                // horizontal blank area. Reuse that physical side padding for
+                // every tier instead of scaling a fixed board width, so short
+                // labels keep exactly the same blank width on both sides.
+                referenceNameplateSidePadding = Mathf.Max(
+                    0f,
+                    (width - textBounds.size.x) * 0.5f);
                 hasReferenceNameplateSize = true;
             }
             else
@@ -342,12 +351,19 @@ namespace CraftOrigin.CraftLive
                         ? cameraDistance /
                           referenceNameplateCameraDistance
                         : 1f;
-                width = referenceNameplateWorldSize.x * perspectiveScale;
+                float equalSidePadding =
+                    referenceNameplateSidePadding * perspectiveScale;
+                width = textBounds.size.x + equalSidePadding * 2f;
+                width = Mathf.Min(
+                    width,
+                    ResolveMaximumNameplateWidth(
+                        targetCamera,
+                        textBounds.center,
+                        width));
                 height = referenceNameplateWorldSize.y *
                     perspectiveScale * lowerNameplateHeightScale;
                 Vector2 categorySizeScale =
                     ResolveLowerNameplateSizeScale();
-                width *= categorySizeScale.x;
                 height *= categorySizeScale.y;
 
                 if (!hasAppliedLowerHeaderOffset)

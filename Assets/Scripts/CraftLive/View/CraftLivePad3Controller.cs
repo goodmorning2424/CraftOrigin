@@ -39,6 +39,10 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0f)] private float qrButtonCameraOffset = 1.05f;
         [SerializeField, Min(0f)] private float qrFeedbackCameraOffset = 0.82f;
 
+        [Header("Remaining Time")]
+        [SerializeField, Min(0.05f)]
+        private float timerRefreshInterval = 0.2f;
+
         [Header("Events")]
         [SerializeField] private UnityEvent<bool>
             onScanningChanged;
@@ -53,6 +57,8 @@ namespace CraftOrigin.CraftLive
         private GameObject generatedQrVisual;
         private GameObject generatedQrHousing;
         private int observedRegistrationSerial = -1;
+        private float nextTimerRefreshTime;
+        private string displayedTimerText;
 
         private void Awake()
         {
@@ -85,6 +91,19 @@ namespace CraftOrigin.CraftLive
             BuildTubes();
             BuildQrFallback();
             Refresh(session != null ? session.State : null);
+        }
+
+        private void Update()
+        {
+            if (Time.unscaledTime < nextTimerRefreshTime)
+            {
+                return;
+            }
+
+            nextTimerRefreshTime = Time.unscaledTime +
+                                   timerRefreshInterval;
+            RefreshRemainingTimeDisplay(
+                session != null ? session.State : null);
         }
 
         private void OnDisable()
@@ -533,6 +552,7 @@ namespace CraftOrigin.CraftLive
 
         private void Refresh(CraftLiveRoomState state)
         {
+            RefreshRemainingTimeDisplay(state);
             if (state == null ||
                 state.registrationSerial ==
                     observedRegistrationSerial)
@@ -565,6 +585,48 @@ namespace CraftOrigin.CraftLive
                     : $"{displayName}は登録済みです");
             onRegisteredMaterialChanged?.Invoke(displayName);
             onNewRegistration?.Invoke(newlyRegistered);
+        }
+
+        private void RefreshRemainingTimeDisplay(
+            CraftLiveRoomState state)
+        {
+            if (bindings == null ||
+                bindings.NoticeBoard == null ||
+                session == null)
+            {
+                return;
+            }
+
+            float remainingSeconds;
+            if (state != null &&
+                state.sessionPhase == CraftLiveSessionPhase.Playing)
+            {
+                remainingSeconds =
+                    session.GetRemainingSessionSeconds();
+            }
+            else if (state != null &&
+                     state.sessionPhase ==
+                         CraftLiveSessionPhase.StartScreen)
+            {
+                remainingSeconds = session.Rules != null
+                    ? session.Rules.SessionDurationSeconds
+                    : 300f;
+            }
+            else
+            {
+                remainingSeconds = 0f;
+            }
+
+            string value =
+                CraftLiveSessionTimerController.FormatTime(
+                    remainingSeconds);
+            if (string.Equals(value, displayedTimerText))
+            {
+                return;
+            }
+
+            displayedTimerText = value;
+            bindings.NoticeBoard.SetComment(value);
         }
 
         private void HandleScanCompleted(

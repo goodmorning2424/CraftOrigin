@@ -1778,10 +1778,10 @@ MonoBehaviour:
   session: {fileID: 0}
   targetCamera: {fileID: 1597678933}
   boxRenderer: {fileID: 6488394813042112958}
-  heading: CRAFT-LIVE // SYSTEM LOG
-  fallbackComment: "\u7D20\u6750\u3092\u78BA\u8A8D\u3057\u3001\u6B21\u306E\u5DE5\u7A0B\u3078\u9032\u3082\u3046"
+  heading: "CRAFT-LIVE // \u6B8B\u308A\u6642\u9593"
+  fallbackComment: 05:00
   charactersPerLine: 20
-  maximumLines: 2
+  maximumLines: 1
   widthInsideBox: 0.76
   heightInsideBox: 0.2
   frameOverlap: 0.012

@@ -305,8 +305,43 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            bool completedActiveSynthesis = false;
+            long completedAtUnixMs = UnixNowMs();
             Mutate(next =>
             {
+                if (next.craft.status ==
+                        CraftLiveCraftStatus.Mixing &&
+                    string.IsNullOrEmpty(
+                        CraftLiveCalculator.ValidateSynthesis(
+                            next,
+                            catalog,
+                            rules)))
+                {
+                    CompleteSynthesisState(
+                        next,
+                        false,
+                        completedAtUnixMs);
+                    completedActiveSynthesis = true;
+                }
+                else if (next.craft.status ==
+                         CraftLiveCraftStatus.Mixing)
+                {
+                    // Never carry an invalid in-flight craft into the
+                    // final-selection screen.
+                    next.craft = new CraftLiveCraftState();
+                    next.result = new CraftLiveResultState();
+                }
+                else if (next.craft.status ==
+                             CraftLiveCraftStatus.Complete &&
+                         !next.craft.completionPresentationReady)
+                {
+                    // The result was already recorded, but the delayed
+                    // completion flash had not revealed it yet.
+                    next.craft.completionPresentationReady = true;
+                    PublishStatsToPad3(next);
+                    completedActiveSynthesis = true;
+                }
+
                 next.sessionPhase =
                     CraftLiveSessionPhase.FinalSelection;
                 next.selectedMaterialId = string.Empty;
@@ -317,6 +352,12 @@ namespace CraftOrigin.CraftLive
                     ? "完成武器を1つ選んでください"
                     : "完成した武器がありません";
             });
+
+            CraftLiveAudio.StopSynthesisLoop();
+            if (completedActiveSynthesis)
+            {
+                CraftLiveAudio.PlayForgeComplete();
+            }
         }
 
         public bool CanPlaceSelectedMaterialIn(CraftLiveSlotId slot)
@@ -955,6 +996,8 @@ namespace CraftOrigin.CraftLive
             bool completeImmediately = true)
         {
             if (state == null ||
+                state.sessionPhase !=
+                    CraftLiveSessionPhase.Playing ||
                 state.craft.status !=
                     CraftLiveCraftStatus.Mixing)
             {
@@ -1002,7 +1045,10 @@ namespace CraftOrigin.CraftLive
 
         public void SetMixPower(float power)
         {
-            if (state.craft.status != CraftLiveCraftStatus.Mixing)
+            if (state == null ||
+                state.sessionPhase !=
+                    CraftLiveSessionPhase.Playing ||
+                state.craft.status != CraftLiveCraftStatus.Mixing)
             {
                 return;
             }
@@ -1021,7 +1067,10 @@ namespace CraftOrigin.CraftLive
 
         public void CompleteSynthesis(bool deferPresentation = false)
         {
-            if (state.craft.status != CraftLiveCraftStatus.Mixing)
+            if (state == null ||
+                state.sessionPhase !=
+                    CraftLiveSessionPhase.Playing ||
+                state.craft.status != CraftLiveCraftStatus.Mixing)
             {
                 return;
             }
@@ -1036,39 +1085,16 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            Mutate(next =>
-            {
-                next.result = CraftLiveCalculator.BuildResult(next, catalog, rules, UnixNowMs());
-                next.craft.status = CraftLiveCraftStatus.Complete;
-                next.craft.mixBonus = rules != null
-                    ? rules.EvaluateRank(next.craft.mixPower).Bonus
-                    : 0f;
-                next.craft.resultRank = next.result.rank;
-                next.craft.completionPresentationReady =
-                    !deferPresentation;
-                next.completedWeapons.Add(next.result.Clone());
-                int maximum = rules != null
-                    ? rules.MaximumCompletedWeapons
-                    : 12;
-                while (next.completedWeapons.Count > maximum)
-                {
-                    next.completedWeapons.RemoveAt(0);
-                }
-
-                if (!deferPresentation)
-                {
-                    PublishStatsToPad3(next);
-                }
-                if (next.sessionEndsAtUnixMs > 0 &&
-                    UnixNowMs() >= next.sessionEndsAtUnixMs)
-                {
-                    next.sessionPhase =
-                        CraftLiveSessionPhase.FinalSelection;
-                }
-
-                next.message = $"合成{next.result.rank}！ {next.result.weaponName}が完成しました。";
-            });
-            if (!deferPresentation)
+            long completedAtUnixMs = UnixNowMs();
+            bool deferUntilFlash = deferPresentation &&
+                                   (state.sessionEndsAtUnixMs <= 0 ||
+                                    completedAtUnixMs <
+                                    state.sessionEndsAtUnixMs);
+            Mutate(next => CompleteSynthesisState(
+                next,
+                deferUntilFlash,
+                completedAtUnixMs));
+            if (!deferUntilFlash)
             {
                 CraftLiveAudio.StopSynthesisLoop();
                 CraftLiveAudio.PlayForgeComplete();
@@ -1078,6 +1104,8 @@ namespace CraftOrigin.CraftLive
         public void RevealCompletionPresentation()
         {
             if (state == null ||
+                state.sessionPhase !=
+                    CraftLiveSessionPhase.Playing ||
                 state.craft.status != CraftLiveCraftStatus.Complete ||
                 state.craft.completionPresentationReady)
             {
@@ -1299,6 +1327,47 @@ namespace CraftOrigin.CraftLive
                     rules,
                     bonus);
             target.statusDisplaySerial++;
+        }
+
+        private void CompleteSynthesisState(
+            CraftLiveRoomState target,
+            bool deferPresentation,
+            long completedAtUnixMs)
+        {
+            target.result = CraftLiveCalculator.BuildResult(
+                target,
+                catalog,
+                rules,
+                completedAtUnixMs);
+            target.craft.status = CraftLiveCraftStatus.Complete;
+            target.craft.mixBonus = rules != null
+                ? rules.EvaluateRank(target.craft.mixPower).Bonus
+                : 0f;
+            target.craft.resultRank = target.result.rank;
+            target.craft.completionPresentationReady =
+                !deferPresentation;
+            target.completedWeapons.Add(target.result.Clone());
+            int maximum = rules != null
+                ? rules.MaximumCompletedWeapons
+                : 12;
+            while (target.completedWeapons.Count > maximum)
+            {
+                target.completedWeapons.RemoveAt(0);
+            }
+
+            if (!deferPresentation)
+            {
+                PublishStatsToPad3(target);
+            }
+            if (target.sessionEndsAtUnixMs > 0 &&
+                completedAtUnixMs >= target.sessionEndsAtUnixMs)
+            {
+                target.sessionPhase =
+                    CraftLiveSessionPhase.FinalSelection;
+            }
+
+            target.message =
+                $"合成{target.result.rank}！ {target.result.weaponName}が完成しました。";
         }
 
         private void SetMessage(string message)
