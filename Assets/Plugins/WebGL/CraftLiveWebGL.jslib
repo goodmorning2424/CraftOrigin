@@ -100,7 +100,9 @@ mergeInto(LibraryManager.library, {
       return navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
-          facingMode: { ideal: "environment" },
+          // The material QR is presented in front of the operator. Prefer
+          // the iPad's inside/front camera instead of the rear camera.
+          facingMode: { exact: "user" },
           width: { ideal: 1280 },
           height: { ideal: 720 }
         }
@@ -139,7 +141,7 @@ mergeInto(LibraryManager.library, {
             : (result && result.data) || "";
           close("OnQrScanResult", value, false);
         }, {
-          preferredCamera: "environment",
+          preferredCamera: "user",
           maxScansPerSecond: 5,
           returnDetailedScanResult: true,
           highlightScanRegion: true,

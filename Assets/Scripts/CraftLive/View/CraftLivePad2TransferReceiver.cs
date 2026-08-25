@@ -25,7 +25,7 @@ namespace CraftOrigin.CraftLive
         private float materialSurfaceOffset = 0.45f;
         [SerializeField, Min(0f), Tooltip(
             "WebGLで素材が盤面へ埋まることを防ぐ、カメラ方向への追加距離です。")]
-        private float webGlSurfaceSafetyOffset = 0.12f;
+        private float webGlSurfaceSafetyOffset = 0.2f;
         [SerializeField, Min(0f)] private float completionHoldSeconds = 0.55f;
         [SerializeField] private bool publishStatsAfterArrival = true;
         [SerializeField, Min(0f)] private float statusPublishDelay = 0.2f;
@@ -528,6 +528,30 @@ namespace CraftOrigin.CraftLive
                 // shader failure can terminate the light coroutine after the
                 // slot has already reached PlacementComplete. Release that
                 // completed transfer here so Pad 1 can select the next item.
+                if (!isResettingTransferLifecycle &&
+                    session != null &&
+                    IsCurrentTransfer(
+                        groupGeneration,
+                        transferSerial,
+                        CraftLivePlacementStatus.Pad2Arriving))
+                {
+                    // Arrival animation is presentation, not authority. If a
+                    // WebGL renderer/particle failure aborts it, still commit
+                    // the reserved slot so the item cannot remain embedded
+                    // on the table while the room reports "not sent".
+                    if (session.CompleteCurrentPlacement(
+                            groupGeneration,
+                            transferSerial))
+                    {
+                        session.PublishCurrentStatsToPad3(
+                            groupGeneration,
+                            transferSerial);
+                        session.ContinueAfterPlacement(
+                            groupGeneration,
+                            transferSerial);
+                    }
+                }
+
                 if (!isResettingTransferLifecycle &&
                     session != null &&
                     ShouldReleaseCompletedPlacement(

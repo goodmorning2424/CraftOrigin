@@ -173,6 +173,7 @@ namespace CraftOrigin.CraftLive
                 headerText.transform.SetParent(
                     owner.transform,
                     true);
+                NormalizeHeaderTextAspect(headerText.transform);
             }
             column.SetFixedHeader(
                 headerText != null ? headerText.transform : null);
@@ -232,6 +233,27 @@ namespace CraftOrigin.CraftLive
                 wheelStep * mouseWheelSensitivityMultiplier);
             column.SetViewport(viewportTop, viewportBottom);
             return true;
+        }
+
+        private static void NormalizeHeaderTextAspect(Transform textTransform)
+        {
+            if (textTransform == null)
+            {
+                return;
+            }
+
+            // Preserve the current height and use it as the uniform XY size.
+            // This restores the glyph aspect ratio without allowing the name
+            // text to grow vertically beyond its authored footprint.
+            Vector3 scale = textTransform.localScale;
+            float height = Mathf.Abs(scale.y);
+            if (height <= 0.0001f)
+            {
+                return;
+            }
+
+            scale.x = Mathf.Sign(scale.x == 0f ? 1f : scale.x) * height;
+            textTransform.localScale = scale;
         }
 
         public void ClearBindings()

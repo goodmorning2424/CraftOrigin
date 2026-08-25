@@ -245,6 +245,41 @@ namespace CraftOrigin.CraftLive
             });
         }
 
+        /// <summary>
+        /// Starts a new group without replacing the room transport. This is
+        /// called only by Pad 2 after the four setup heartbeats are visible.
+        /// </summary>
+        public void RestartGroupFromConnectionSetup()
+        {
+            if (state == null || role != CraftLiveRole.WorkbenchPad)
+            {
+                return;
+            }
+
+            long now = UnixNowMs();
+            long durationMs = Mathf.RoundToInt(
+                (rules != null
+                    ? rules.SessionDurationSeconds
+                    : 300f) * 1000f);
+            CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
+            next.groupGeneration = IncrementGeneration(
+                state.groupGeneration);
+            next.transferQueueSerial = Mathf.Max(
+                0,
+                state.transferQueueSerial);
+            next.transferBatchSerial = Mathf.Max(
+                0,
+                state.transferBatchSerial);
+            next.sessionStartedAtUnixMs = now;
+            next.sessionEndsAtUnixMs = now + durationMs;
+            next.sessionPhase = CraftLiveSessionPhase.Playing;
+            next.message = "武器づくりを始めよう";
+            next.revision = state.revision + 1;
+            next.updatedAtUnixMs = now;
+            state = next;
+            PublishLocal();
+        }
+
         public float GetRemainingSessionSeconds()
         {
             if (state == null ||

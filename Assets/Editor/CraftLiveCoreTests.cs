@@ -484,7 +484,7 @@ namespace CraftOrigin.CraftLiveTests
             CraftLiveWeaponDefinition bare =
                 CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
             CraftLiveMaterialDefinition evasion = CreateMaterial(
-                "evasion",
+                CraftLiveCalculator.SecretPikopikoMaterialId,
                 CraftLiveMaterialCategory.Upgrade);
             SetField(evasion, "statModifiers", new CraftLiveStats
             {
@@ -508,6 +508,9 @@ namespace CraftOrigin.CraftLiveTests
             CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
             state.selectedWeaponId = sword.WeaponId;
             state.slots.top = evasion.MaterialId;
+            state.slots.right = evasion.MaterialId;
+            state.slots.left = evasion.MaterialId;
+            state.slots.bottom = evasion.MaterialId;
             state.slots.attribute = attribute.MaterialId;
 
             Assert.That(
@@ -534,7 +537,7 @@ namespace CraftOrigin.CraftLiveTests
             CraftLiveWeaponDefinition bare =
                 CreateWeapon(CraftLiveCalculator.SecretBareHandsWeaponId);
             CraftLiveMaterialDefinition attack = CreateMaterial(
-                "attack",
+                CraftLiveCalculator.SecretKazikiMaterialId,
                 CraftLiveMaterialCategory.Upgrade);
             SetField(attack, "statModifiers", new CraftLiveStats
             {
@@ -553,7 +556,10 @@ namespace CraftOrigin.CraftLiveTests
                 });
             CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
             state.selectedWeaponId = thrust.WeaponId;
+            state.slots.top = attack.MaterialId;
             state.slots.right = attack.MaterialId;
+            state.slots.left = attack.MaterialId;
+            state.slots.bottom = attack.MaterialId;
             state.slots.skill = skill.MaterialId;
 
             Assert.That(
@@ -563,7 +569,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void SecretWeapon_BareHandsRequiresFistAndEverySlotEmpty()
+        public void SecretWeapon_BareHandsRequiresEverySlotEmpty()
         {
             CraftLiveWeaponDefinition sword = CreateWeapon("sword");
             CraftLiveWeaponDefinition bare =
@@ -580,19 +586,13 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 CraftLiveCalculator.ResolveResultWeapon(state, catalog)
                     .WeaponId,
-                Is.EqualTo(sword.WeaponId));
-
-            state.selectedWeaponId = bare.WeaponId;
-            Assert.That(
-                CraftLiveCalculator.ResolveResultWeapon(state, catalog)
-                    .WeaponId,
                 Is.EqualTo(CraftLiveCalculator.SecretBareHandsWeaponId));
 
             state.slots.attribute = attribute.MaterialId;
             Assert.That(
                 CraftLiveCalculator.ResolveResultWeapon(state, catalog)
                     .WeaponId,
-                Is.EqualTo(bare.WeaponId));
+                Is.EqualTo(sword.WeaponId));
         }
 
         [Test]

@@ -29,7 +29,7 @@ namespace CraftOrigin.CraftLive
         public bool IsSwitchingPad { get; private set; }
         public bool IsIntegratedEditorTestWorkflow =>
             integratedEditorTestWorkflow;
-        private bool resetRoomOnLaunch;
+        private bool showConnectionSetup;
 
         private void Awake()
         {
@@ -67,11 +67,10 @@ namespace CraftOrigin.CraftLive
             ResolvedRoomId = CraftLiveLaunchQuery.Read(
                 "room",
                 fallbackRoom);
-            resetRoomOnLaunch =
-                Application.platform == RuntimePlatform.WebGLPlayer &&
-                CraftLiveLaunchQuery.ShouldResetRoomOnLaunch(
-                    ResolvedRole,
-                    CraftLiveLaunchQuery.Read("reset", "1"));
+            // Room lifecycle is no longer owned by Pad 1. A fresh group is
+            // created only by the authoritative Pad 2 setup button.
+            showConnectionSetup =
+                CraftLiveLaunchQuery.ShouldShowConnectionSetup();
             session?.Configure(ResolvedRoomId, ResolvedRole);
 
             if (transport != null && launchConfig != null)
@@ -102,34 +101,7 @@ namespace CraftOrigin.CraftLive
                 yield break;
             }
 
-            if (resetRoomOnLaunch)
-            {
-                // Do not expose Pad 1 controls until the previous remote
-                // state has been read and replaced. This prevents a tap made
-                // during startup from being erased by the launch reset.
-                yield return ResetRoomAfterInitialSync();
-            }
-
             yield return LoadPadScene(ResolvedRole, false);
-        }
-
-        private IEnumerator ResetRoomAfterInitialSync()
-        {
-            // Pad 1 is the lifecycle owner. Pads 2-4 only join the same room,
-            // otherwise opening four iPads would reset the group four times.
-            // Wait for the persisted room first so its older progress cannot
-            // arrive after this reset and overwrite the new group.
-            while (enabled && transport != null &&
-                   transport.IsRemoteMode &&
-                   !transport.InitialSyncComplete)
-            {
-                yield return null;
-            }
-
-            if (enabled && session != null)
-            {
-                session.ResetRoomForNextGroup();
-            }
         }
 
         public void SwitchPad(CraftLiveRole role)
@@ -284,6 +256,7 @@ namespace CraftOrigin.CraftLive
             DisablePadSceneAudioListeners(padScene);
             ConfigureEditorTestWorkflow(padScene);
             padRoot.ApplyCamera(targetCamera);
+            ConfigureConnectionSetup(padRoot, role);
             SceneManager.SetActiveScene(padScene);
             ResolvedRole = role;
             LoadedPadSceneName = sceneName;
@@ -306,6 +279,26 @@ namespace CraftOrigin.CraftLive
                     yield return unload;
                 }
             }
+        }
+
+        private void ConfigureConnectionSetup(
+            CraftLivePadSceneRoot padRoot,
+            CraftLiveRole role)
+        {
+            if (!showConnectionSetup || padRoot == null)
+            {
+                return;
+            }
+
+            CraftLiveConnectionSetupScreen setup =
+                padRoot.GetComponent<CraftLiveConnectionSetupScreen>();
+            if (setup == null)
+            {
+                setup = padRoot.gameObject.AddComponent<
+                    CraftLiveConnectionSetupScreen>();
+            }
+
+            setup.Configure(session, transport, role);
         }
 
 #if UNITY_EDITOR
@@ -596,6 +589,20 @@ namespace CraftOrigin.CraftLive
                     return false;
                 default:
                     return true;
+            }
+        }
+
+        public static bool ShouldShowConnectionSetup()
+        {
+            switch (Read("setup", "0").Trim().ToLowerInvariant())
+            {
+                case "1":
+                case "true":
+                case "on":
+                case "yes":
+                    return true;
+                default:
+                    return false;
             }
         }
 

@@ -8,6 +8,58 @@ using UnityEngine.Networking;
 
 namespace CraftOrigin.CraftLive
 {
+    [Serializable]
+    public sealed class CraftLivePadPresence
+    {
+        public string role = string.Empty;
+        public long lastSeenUnixMs;
+    }
+
+    [Serializable]
+    public sealed class CraftLiveRoomPresence
+    {
+        public CraftLivePadPresence pad1;
+        public CraftLivePadPresence pad2;
+        public CraftLivePadPresence pad3;
+        public CraftLivePadPresence pad4;
+
+        public CraftLivePadPresence Get(CraftLiveRole role)
+        {
+            switch (role)
+            {
+                case CraftLiveRole.MaterialPad:
+                    return pad1;
+                case CraftLiveRole.WorkbenchPad:
+                    return pad2;
+                case CraftLiveRole.QrPad:
+                    return pad3;
+                case CraftLiveRole.HologramPad:
+                    return pad4;
+                default:
+                    return null;
+            }
+        }
+
+        public void Set(CraftLiveRole role, CraftLivePadPresence value)
+        {
+            switch (role)
+            {
+                case CraftLiveRole.MaterialPad:
+                    pad1 = value;
+                    break;
+                case CraftLiveRole.WorkbenchPad:
+                    pad2 = value;
+                    break;
+                case CraftLiveRole.QrPad:
+                    pad3 = value;
+                    break;
+                case CraftLiveRole.HologramPad:
+                    pad4 = value;
+                    break;
+            }
+        }
+    }
+
     public enum CraftLiveConnectionState
     {
         Local,
@@ -25,6 +77,9 @@ namespace CraftOrigin.CraftLive
             LocalRooms = new Dictionary<string, CraftLiveRoomState>();
         private static readonly List<CraftLiveRoomTransport> LocalClients =
             new List<CraftLiveRoomTransport>();
+        private static readonly Dictionary<string, CraftLiveRoomPresence>
+            LocalPresence =
+                new Dictionary<string, CraftLiveRoomPresence>();
 
         [Header("References")]
         [SerializeField] private CraftLiveSession session;
@@ -43,6 +98,11 @@ namespace CraftOrigin.CraftLive
             8f;
         [SerializeField] private bool cachePendingState = true;
 
+        [Header("Pad Presence")]
+        [SerializeField, Min(0.5f)] private float presenceHeartbeatSeconds =
+            1.5f;
+        [SerializeField, Min(2f)] private float presenceTimeoutSeconds = 6f;
+
         [Header("Events")]
         [SerializeField] private UnityEvent<string> onConnectionStatusChanged;
         [SerializeField] private UnityEvent<bool> onOnlineChanged;
@@ -51,6 +111,9 @@ namespace CraftOrigin.CraftLive
         private CraftLiveRoomState pendingPublish;
         private Coroutine pollingCoroutine;
         private Coroutine publishingCoroutine;
+        private Coroutine presenceCoroutine;
+        private CraftLiveRoomPresence roomPresence =
+            new CraftLiveRoomPresence();
         private string remoteEtag = string.Empty;
         private int consecutiveFailures;
         private long lastSuccessfulRequestUnixMs;
@@ -71,10 +134,12 @@ namespace CraftOrigin.CraftLive
         public int ConsecutiveFailures => consecutiveFailures;
         public long LastSuccessfulRequestUnixMs =>
             lastSuccessfulRequestUnixMs;
+        public CraftLiveRoomPresence RoomPresence => roomPresence;
 
         public event Action<
             CraftLiveConnectionState,
             string> ConnectionChanged;
+        public event Action PresenceChanged;
 
         private void Awake()
         {
@@ -104,6 +169,8 @@ namespace CraftOrigin.CraftLive
             {
                 ConnectLocalRoom();
             }
+
+            presenceCoroutine = StartCoroutine(UpdatePadPresence());
         }
 
         private void OnDisable()
@@ -125,7 +192,105 @@ namespace CraftOrigin.CraftLive
                 publishingCoroutine = null;
             }
 
+            if (presenceCoroutine != null)
+            {
+                StopCoroutine(presenceCoroutine);
+                presenceCoroutine = null;
+            }
+
             LocalClients.Remove(this);
+        }
+
+        public bool IsRoleConnected(CraftLiveRole targetRole)
+        {
+            CraftLivePadPresence record = roomPresence?.Get(targetRole);
+            if (record == null || record.lastSeenUnixMs <= 0)
+            {
+                return false;
+            }
+
+            long maximumAgeMs = Mathf.RoundToInt(
+                Mathf.Max(2f, presenceTimeoutSeconds) * 1000f);
+            return CraftLiveSession.UnixNowMs() - record.lastSeenUnixMs <=
+                   maximumAgeMs;
+        }
+
+        public bool AreAllPadsConnected()
+        {
+            return IsRoleConnected(CraftLiveRole.MaterialPad) &&
+                   IsRoleConnected(CraftLiveRole.WorkbenchPad) &&
+                   IsRoleConnected(CraftLiveRole.QrPad) &&
+                   IsRoleConnected(CraftLiveRole.HologramPad);
+        }
+
+        private IEnumerator UpdatePadPresence()
+        {
+            while (enabled && session != null)
+            {
+                CraftLivePadPresence own = new CraftLivePadPresence
+                {
+                    role = PresenceKey(session.Role),
+                    lastSeenUnixMs = CraftLiveSession.UnixNowMs()
+                };
+
+                if (IsRemoteMode)
+                {
+                    using (UnityWebRequest write =
+                           UnityWebRequest.Put(
+                               BuildPresenceRoleUrl(session.Role),
+                               JsonUtility.ToJson(own)))
+                    {
+                        write.SetRequestHeader(
+                            "Content-Type",
+                            "application/json");
+                        write.timeout = Mathf.CeilToInt(
+                            requestTimeoutSeconds);
+                        yield return write.SendWebRequest();
+                    }
+
+                    using (UnityWebRequest read =
+                           UnityWebRequest.Get(BuildPresenceRoomUrl()))
+                    {
+                        read.timeout = Mathf.CeilToInt(
+                            requestTimeoutSeconds);
+                        yield return read.SendWebRequest();
+                        if (read.result == UnityWebRequest.Result.Success &&
+                            !string.IsNullOrWhiteSpace(
+                                read.downloadHandler.text) &&
+                            read.downloadHandler.text != "null")
+                        {
+                            try
+                            {
+                                roomPresence = JsonUtility.FromJson<
+                                    CraftLiveRoomPresence>(
+                                    read.downloadHandler.text) ??
+                                    new CraftLiveRoomPresence();
+                            }
+                            catch (Exception)
+                            {
+                                roomPresence = new CraftLiveRoomPresence();
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    if (!LocalPresence.TryGetValue(
+                            session.RoomId,
+                            out CraftLiveRoomPresence local))
+                    {
+                        local = new CraftLiveRoomPresence();
+                        LocalPresence[session.RoomId] = local;
+                    }
+
+                    local.Set(session.Role, own);
+                    roomPresence = local;
+                }
+
+                PresenceChanged?.Invoke();
+                yield return new WaitForSecondsRealtime(
+                    Mathf.Max(0.5f, presenceHeartbeatSeconds));
+            }
         }
 
         public void Configure(
@@ -557,6 +722,38 @@ namespace CraftOrigin.CraftLive
             string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
             return $"{baseUrl}/rooms/" +
                    $"{UnityWebRequest.EscapeURL(session.RoomId)}.json";
+        }
+
+        private string BuildPresenceRoomUrl()
+        {
+            string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
+            return $"{baseUrl}/presence/" +
+                   $"{UnityWebRequest.EscapeURL(session.RoomId)}.json";
+        }
+
+        private string BuildPresenceRoleUrl(CraftLiveRole targetRole)
+        {
+            string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
+            return $"{baseUrl}/presence/" +
+                   $"{UnityWebRequest.EscapeURL(session.RoomId)}/" +
+                   $"{PresenceKey(targetRole)}.json";
+        }
+
+        private static string PresenceKey(CraftLiveRole targetRole)
+        {
+            switch (targetRole)
+            {
+                case CraftLiveRole.MaterialPad:
+                    return "pad1";
+                case CraftLiveRole.WorkbenchPad:
+                    return "pad2";
+                case CraftLiveRole.QrPad:
+                    return "pad3";
+                case CraftLiveRole.HologramPad:
+                    return "pad4";
+                default:
+                    return "unknown";
+            }
         }
 
         private void UpdateRemoteEtag(UnityWebRequest request)

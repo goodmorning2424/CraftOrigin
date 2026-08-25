@@ -4291,7 +4291,7 @@ MonoBehaviour:
   fitSpacingToCamera: 1
   wallSpacing: 4
   spacingPadding: 0.25
-  dragSensitivity: 0.01
+  dragSensitivity: 0.002
   changeThreshold: 0.22
   snapSpeed: 10
 --- !u!114 &1760931050

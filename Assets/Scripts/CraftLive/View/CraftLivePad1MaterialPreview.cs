@@ -357,10 +357,18 @@ namespace CraftOrigin.CraftLive
                 GameObject content = Instantiate(
                     material.WorldPrefab,
                     spawnedModel.transform);
-                CraftLiveRuntimeVisualUtility.FitAndCenter(
+                PrepareParticlePreview(content);
+                bool fitted = CraftLiveRuntimeVisualUtility.FitAndCenter(
                     content.transform,
                     targetModelSize * material.Pad1PreviewScale,
                     false);
+                if (!fitted || IsParticleOnlyVisual(content))
+                {
+                    CreateParticlePreviewCore(
+                        spawnedModel.transform,
+                        material.EffectColor,
+                        targetModelSize * material.Pad1PreviewScale);
+                }
             }
             else if (createPlaceholderWhenMissing)
             {
@@ -588,7 +596,9 @@ namespace CraftOrigin.CraftLive
             PositionPresentationRoots(
                 presentationCamera,
                 resolvedAnchor);
-            UpdateHologramColors(themeColor);
+            UpdateHologramColors(
+                themeColor,
+                material != null && material.RequiresQrUnlock);
             UpdateHologramText(details);
             UpdateTransferButton(material, themeColor);
             UpdateReturnButton(themeColor);
@@ -1978,7 +1988,9 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        private void UpdateHologramColors(Color themeColor)
+        private void UpdateHologramColors(
+            Color themeColor,
+            bool qrUnlockedMaterial)
         {
             // Separate the three visual roles instead of painting the whole
             // hologram with one color. A dark tinted field preserves the
@@ -1990,7 +2002,12 @@ namespace CraftOrigin.CraftLive
                 0.34f);
             // Tint strength and transparency must be independent. Multiplying
             // both by opacity attenuates the visible hue twice.
-            panelColor.a = hologramPanelOpacity;
+            // QR materials are unfamiliar to the player and tend to use
+            // bright particle previews. Give their explanation panel a much
+            // more opaque field so the text stays legible over the effect.
+            panelColor.a = qrUnlockedMaterial
+                ? Mathf.Max(hologramPanelOpacity, 0.72f)
+                : hologramPanelOpacity;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
             ApplyRendererColor(fallbackPanelRenderer, panelColor);
 
@@ -2650,6 +2667,51 @@ namespace CraftOrigin.CraftLive
                 "_EmissionColor",
                 emission ? color * 0.2f : Color.black);
             target.SetPropertyBlock(block);
+        }
+
+        private static void PrepareParticlePreview(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            foreach (ParticleSystem particles in
+                     target.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                ParticleSystem.MainModule main = particles.main;
+                main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+                particles.Simulate(0.12f, true, true, true);
+                particles.Play(true);
+            }
+        }
+
+        private static bool IsParticleOnlyVisual(GameObject target)
+        {
+            return target != null &&
+                   target.GetComponentInChildren<ParticleSystem>(true) != null &&
+                   target.GetComponentInChildren<MeshRenderer>(true) == null &&
+                   target.GetComponentInChildren<SpriteRenderer>(true) == null;
+        }
+
+        private static void CreateParticlePreviewCore(
+            Transform parent,
+            Color color,
+            float targetSize)
+        {
+            GameObject core = GameObject.CreatePrimitive(
+                PrimitiveType.Sphere);
+            core.name = "ParticlePreviewCore";
+            core.transform.SetParent(parent, false);
+            core.transform.localScale =
+                Vector3.one * Mathf.Max(0.08f, targetSize * 0.28f);
+            Collider collider = core.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Destroy(collider);
+            }
+
+            ApplyColor(core.GetComponent<Renderer>(), color, true);
         }
 
         private static string WrapText(

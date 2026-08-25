@@ -20,7 +20,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private bool fitSpacingToCamera = true;
         [SerializeField, Min(0.1f)] private float wallSpacing = 4f;
         [SerializeField, Min(0f)] private float spacingPadding = 0.25f;
-        [SerializeField, Min(0.0001f)] private float dragSensitivity = 0.01f;
+        [SerializeField, Min(0.0001f)] private float dragSensitivity = 0.002f;
         [SerializeField, Range(0.05f, 0.95f)]
         private float changeThreshold = 0.22f;
         [SerializeField, Min(0.1f)] private float snapSpeed = 10f;

@@ -722,7 +722,8 @@ namespace CraftOrigin.CraftLive
                 content,
                 targetSize * weapon.SelectionPreviewScale,
                 true,
-                -18f);
+                -18f,
+                true);
             content.localScale =
                 Vector3.Scale(
                     content.localScale,
@@ -1000,10 +1001,18 @@ namespace CraftOrigin.CraftLive
                                 candidateUp.normalized,
                                 Vector3.up)
                             : 0f;
+                        // Never select the equally large 180-degree solution.
+                        // That ambiguity caused only some imported weapons to
+                        // appear upside down in the carousel.
+                        if (upright < -0.05f)
+                        {
+                            continue;
+                        }
+
                         score *= Mathf.Lerp(
-                            0.94f,
-                            1.06f,
-                            (upright + 1f) * 0.5f);
+                            0.96f,
+                            1.08f,
+                            Mathf.Clamp01(upright));
                     }
 
                     if (score > bestScore)

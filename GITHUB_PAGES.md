@@ -16,12 +16,16 @@
 
 公開先が `https://goodmorning2424.github.io/CraftOrigin/` の場合、同じ`room`番号を指定して各Padを開きます。
 
-- Pad1: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad1&room=001`
-- Pad2: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad2&room=001`
-- Pad3: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad3&room=001`
-- Pad4: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad4&room=001`
+- Pad1: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad1&room=001&setup=1`
+- Pad2: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad2&room=001&setup=1`
+- Pad3: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad3&room=001&setup=1`
+- Pad4: `https://goodmorning2424.github.io/CraftOrigin/?pad=pad4&room=001&setup=1`
 
 連携テストでは、各iPadで別のPad URLを開き、全端末の`room`を同じ値にします。別グループで試す場合は`room=002`などへ変更します。
+
+`setup=1`を付けると、`pad`と`room`を変えずに4台の接続確認画面へ入ります。全Padが「接続済み」になった後、Pad2のボタンだけが有効になります。このボタンで同じルーム接続を維持したままゲーム状態を最初から開始します。Pad1を開いた際の自動リセットは行いません。
+
+Firebase Realtime Databaseでは、従来の`rooms`に加えて`presence`以下も各Padから読み書きできるルールにしてください。
 
 Pad3でQRを読むときは、Safariのカメラ使用確認で「許可」を選びます。GitHub PagesはHTTPS配信なので、ブラウザのカメラAPIを利用できます。
 

@@ -6,6 +6,8 @@ namespace CraftOrigin.CraftLive
             "weapon_pikopiko_sword";
         public const string SecretKazikiWeaponId = "weapon_kaziki";
         public const string SecretBareHandsWeaponId = "weapon_kobushi";
+        public const string SecretPikopikoMaterialId = "ore_evasion";
+        public const string SecretKazikiMaterialId = "ore_attack";
         private static readonly CraftLiveSlotId[] BaseStatSlots =
         {
             CraftLiveSlotId.Top,
@@ -270,25 +272,27 @@ namespace CraftOrigin.CraftLive
 
             CraftLiveWeaponDefinition selected =
                 catalog.FindWeapon(state.selectedWeaponId);
-            if (selected != null &&
-                selected.WeaponId == SecretBareHandsWeaponId &&
-                !state.HasAnyPlacedMaterial())
+            if (selected != null && !state.HasAnyPlacedMaterial())
             {
                 return catalog.FindWeapon(SecretBareHandsWeaponId) ??
                        selected;
             }
 
             if (selected != null &&
-                selected.WeaponType == CraftLiveWeaponType.Sword &&
-                HasOnlyUpgradeProfile(state, catalog, false))
+                HasFourMatchingBaseMaterials(
+                    state,
+                    catalog,
+                    SecretPikopikoMaterialId))
             {
                 return catalog.FindWeapon(SecretPikopikoWeaponId) ??
                        selected;
             }
 
             if (selected != null &&
-                selected.WeaponType == CraftLiveWeaponType.Thrust &&
-                HasOnlyUpgradeProfile(state, catalog, true))
+                HasFourMatchingBaseMaterials(
+                    state,
+                    catalog,
+                    SecretKazikiMaterialId))
             {
                 return catalog.FindWeapon(SecretKazikiWeaponId) ??
                        selected;
@@ -308,45 +312,35 @@ namespace CraftOrigin.CraftLive
             return copy;
         }
 
-        private static bool HasOnlyUpgradeProfile(
+        private static bool HasFourMatchingBaseMaterials(
             CraftLiveRoomState state,
             CraftLiveCatalog catalog,
-            bool attack)
+            string requiredMaterialId)
         {
-            bool found = false;
+            int matchingCount = 0;
             foreach (CraftLiveSlotId slot in BaseStatSlots)
             {
                 string materialId = state.slots.Get(slot);
                 if (string.IsNullOrWhiteSpace(materialId))
                 {
-                    continue;
+                    return false;
                 }
 
                 CraftLiveMaterialDefinition material =
                     catalog.FindMaterial(materialId);
                 if (material == null ||
-                    material.Category != CraftLiveMaterialCategory.Upgrade)
+                    material.Category != CraftLiveMaterialCategory.Upgrade ||
+                    material.MaterialId != requiredMaterialId)
                 {
                     return false;
                 }
 
-                CraftLiveStats stats = material.StatModifiers;
-                bool matches = attack
-                    ? stats.attackRate > 0f &&
-                      stats.defenseRate <= 0f &&
-                      stats.evasionRate <= 0f
-                    : stats.evasionRate > 0f &&
-                      stats.attackRate <= 0f &&
-                      stats.defenseRate <= 0f;
-                if (!matches)
-                {
-                    return false;
-                }
-
-                found = true;
+                matchingCount++;
             }
 
-            return found;
+            // The secret recipe is exactly four matching base materials.
+            // Attribute and skill slots intentionally do not participate.
+            return matchingCount == BaseStatSlots.Length;
         }
 
         private static int GetNextResultSerial(

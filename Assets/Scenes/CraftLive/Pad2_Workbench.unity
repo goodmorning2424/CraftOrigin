@@ -1070,7 +1070,7 @@ MonoBehaviour:
   arrivalDuration: 0.75
   arrivalArcHeight: 1.2
   materialSurfaceOffset: 0.45
-  webGlSurfaceSafetyOffset: 0.12
+  webGlSurfaceSafetyOffset: 0.2
   completionHoldSeconds: 3.2
   publishStatsAfterArrival: 0
   statusPublishDelay: 0.2
