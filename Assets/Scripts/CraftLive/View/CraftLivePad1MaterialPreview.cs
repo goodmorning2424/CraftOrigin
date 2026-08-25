@@ -596,9 +596,7 @@ namespace CraftOrigin.CraftLive
             PositionPresentationRoots(
                 presentationCamera,
                 resolvedAnchor);
-            UpdateHologramColors(
-                themeColor,
-                material != null && material.RequiresQrUnlock);
+            UpdateHologramColors(themeColor);
             UpdateHologramText(details);
             UpdateTransferButton(material, themeColor);
             UpdateReturnButton(themeColor);
@@ -1988,9 +1986,7 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        private void UpdateHologramColors(
-            Color themeColor,
-            bool qrUnlockedMaterial)
+        private void UpdateHologramColors(Color themeColor)
         {
             // Separate the three visual roles instead of painting the whole
             // hologram with one color. A dark tinted field preserves the
@@ -2002,12 +1998,8 @@ namespace CraftOrigin.CraftLive
                 0.34f);
             // Tint strength and transparency must be independent. Multiplying
             // both by opacity attenuates the visible hue twice.
-            // QR materials are unfamiliar to the player and tend to use
-            // bright particle previews. Give their explanation panel a much
-            // more opaque field so the text stays legible over the effect.
-            panelColor.a = qrUnlockedMaterial
-                ? Mathf.Max(hologramPanelOpacity, 0.72f)
-                : hologramPanelOpacity;
+            // Use the same panel transparency for catalog and QR materials.
+            panelColor.a = hologramPanelOpacity;
             SetMaterialColor(fallbackPanelMaterial, panelColor);
             ApplyRendererColor(fallbackPanelRenderer, panelColor);
 

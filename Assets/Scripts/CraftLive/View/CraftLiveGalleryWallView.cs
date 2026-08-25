@@ -30,6 +30,14 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private TextMesh emptyStateText;
         [SerializeField, Range(0.6f, 1f)]
         private float lowerNameplateHeightScale = 0.82f;
+        [SerializeField]
+        [Tooltip("赤線基準のタイプ名札サイズ。現在の生成サイズに対するXY倍率です。")]
+        private Vector2 attributeNameplateSizeScale =
+            new Vector2(0.84f, 0.63f);
+        [SerializeField]
+        [Tooltip("赤線基準のスキル名札サイズ。現在の生成サイズに対するXY倍率です。")]
+        private Vector2 skillNameplateSizeScale =
+            new Vector2(0.71f, 0.78f);
         [SerializeField, Range(0f, 0.2f)]
         private float lowerNameplateLeftShiftRatio = 0.07f;
 
@@ -337,6 +345,10 @@ namespace CraftOrigin.CraftLive
                 width = referenceNameplateWorldSize.x * perspectiveScale;
                 height = referenceNameplateWorldSize.y *
                     perspectiveScale * lowerNameplateHeightScale;
+                Vector2 categorySizeScale =
+                    ResolveLowerNameplateSizeScale();
+                width *= categorySizeScale.x;
+                height *= categorySizeScale.y;
 
                 if (!hasAppliedLowerHeaderOffset)
                 {
@@ -430,6 +442,19 @@ namespace CraftOrigin.CraftLive
                 brass);
             headerText.color = Color.white;
             generatedHeaderNameplate.SetActive(true);
+        }
+
+        private Vector2 ResolveLowerNameplateSizeScale()
+        {
+            switch (category)
+            {
+                case CraftLiveMaterialCategory.Attribute:
+                    return attributeNameplateSizeScale;
+                case CraftLiveMaterialCategory.Skill:
+                    return skillNameplateSizeScale;
+                default:
+                    return Vector2.one;
+            }
         }
 
         private static float ResolveCameraDistance(
@@ -669,6 +694,22 @@ namespace CraftOrigin.CraftLive
         private void OnValidate()
         {
             itemSpacing = Mathf.Max(0.1f, itemSpacing);
+            attributeNameplateSizeScale.x = Mathf.Clamp(
+                attributeNameplateSizeScale.x,
+                0.1f,
+                2f);
+            attributeNameplateSizeScale.y = Mathf.Clamp(
+                attributeNameplateSizeScale.y,
+                0.1f,
+                2f);
+            skillNameplateSizeScale.x = Mathf.Clamp(
+                skillNameplateSizeScale.x,
+                0.1f,
+                2f);
+            skillNameplateSizeScale.y = Mathf.Clamp(
+                skillNameplateSizeScale.y,
+                0.1f,
+                2f);
             dragSensitivityMultiplier = Mathf.Max(
                 0.01f,
                 dragSensitivityMultiplier);

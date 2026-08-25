@@ -1876,6 +1876,10 @@ MonoBehaviour:
   headerText: {fileID: 800774106}
   emptyStateRoot: {fileID: 0}
   emptyStateText: {fileID: 0}
+  lowerNameplateHeightScale: 0.82
+  attributeNameplateSizeScale: {x: 0.84, y: 0.63}
+  skillNameplateSizeScale: {x: 0.71, y: 0.78}
+  lowerNameplateLeftShiftRatio: 0.07
   itemSpacing: 0.28
   viewportTop: 0.31922698
   viewportBottom: -0.31922698
@@ -4101,7 +4105,7 @@ MonoBehaviour:
   revealDuration: 0.28
   createFallbackHologram: 1
   hologramColor: {r: 1, g: 0.22478205, b: 0, a: 1}
-  hologramPanelOpacity: 0.22
+  hologramPanelOpacity: 0.2
   hologramBorderGlow: 1.09
   hologramBorderThickness: 0.014
   hologramPanelSizeMultiplier: {x: 3, y: 1}
@@ -4255,7 +4259,7 @@ MonoBehaviour:
   launchDuration: 0.55
   physicalLaunchSpeed: 3.2
   launchArcHeight: 1.1
-  cameraShiftDuration: 1.32
+  cameraShiftDuration: 1
   cameraRotationSpeed: 70
   cameraYawDegrees: 60
   animateCameraDuringLaunch: 1
@@ -4515,6 +4519,10 @@ MonoBehaviour:
   headerText: {fileID: 1476982957}
   emptyStateRoot: {fileID: 1501696138}
   emptyStateText: {fileID: 1501696139}
+  lowerNameplateHeightScale: 0.82
+  attributeNameplateSizeScale: {x: 0.84, y: 0.63}
+  skillNameplateSizeScale: {x: 0.71, y: 0.78}
+  lowerNameplateLeftShiftRatio: 0.07
   itemSpacing: 0.28
   viewportTop: 0.31922698
   viewportBottom: -0.31922698
@@ -4782,6 +4790,10 @@ MonoBehaviour:
   headerText: {fileID: 631372171}
   emptyStateRoot: {fileID: 681246370}
   emptyStateText: {fileID: 681246371}
+  lowerNameplateHeightScale: 0.82
+  attributeNameplateSizeScale: {x: 0.84, y: 0.63}
+  skillNameplateSizeScale: {x: 0.71, y: 0.78}
+  lowerNameplateLeftShiftRatio: 0.07
   itemSpacing: 0.28
   viewportTop: 0.31922692
   viewportBottom: -0.31922692
