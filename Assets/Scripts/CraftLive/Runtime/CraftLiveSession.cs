@@ -160,10 +160,6 @@ namespace CraftOrigin.CraftLive
                 state.transferQueueSerial;
             int previousTransferBatchSerial =
                 state.transferBatchSerial;
-            long now = UnixNowMs();
-            long durationMs = Mathf.RoundToInt(
-                (rules != null ? rules.SessionDurationSeconds : 300f) *
-                1000f);
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
             next.groupGeneration = IncrementGeneration(
                 previousGeneration);
@@ -173,12 +169,12 @@ namespace CraftOrigin.CraftLive
             next.transferBatchSerial = Mathf.Max(
                 0,
                 previousTransferBatchSerial);
-            next.sessionStartedAtUnixMs = now;
-            next.sessionEndsAtUnixMs = now + durationMs;
-            next.sessionPhase = CraftLiveSessionPhase.Playing;
+            next.sessionStartedAtUnixMs = 0L;
+            next.sessionEndsAtUnixMs = 0L;
+            next.sessionPhase = CraftLiveSessionPhase.StartScreen;
             next.revision = previousRevision + 1;
-            next.updatedAtUnixMs = now;
-            next.message = "新しい制作を開始しました。";
+            next.updatedAtUnixMs = UnixNowMs();
+            next.message = "スタートを押してください。";
             state = next;
             PublishLocal();
         }
@@ -208,18 +204,13 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            long now = UnixNowMs();
-            long durationMs = Mathf.RoundToInt(
-                (rules != null
-                    ? rules.SessionDurationSeconds
-                    : 300f) * 1000f);
             Mutate(next =>
             {
-                next.sessionStartedAtUnixMs = now;
-                next.sessionEndsAtUnixMs = now + durationMs;
+                next.sessionStartedAtUnixMs = 0L;
+                next.sessionEndsAtUnixMs = 0L;
                 next.sessionPhase =
-                    CraftLiveSessionPhase.Playing;
-                next.message = "武器づくりを始めよう";
+                    CraftLiveSessionPhase.StartScreen;
+                next.message = "スタートを押してください。";
             });
         }
 
@@ -246,8 +237,10 @@ namespace CraftOrigin.CraftLive
         }
 
         /// <summary>
-        /// Starts a new group without replacing the room transport. This is
-        /// called only by Pad 2 after the four setup heartbeats are visible.
+        /// Prepares a new group without replacing the room transport. This is
+        /// called only by Pad 2 after the setup screen is confirmed. The game
+        /// timer remains stopped until the separate Pad 2 start button calls
+        /// StartGroup.
         /// </summary>
         public void RestartGroupFromConnectionSetup()
         {
@@ -256,11 +249,6 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            long now = UnixNowMs();
-            long durationMs = Mathf.RoundToInt(
-                (rules != null
-                    ? rules.SessionDurationSeconds
-                    : 300f) * 1000f);
             CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
             next.groupGeneration = IncrementGeneration(
                 state.groupGeneration);
@@ -270,12 +258,12 @@ namespace CraftOrigin.CraftLive
             next.transferBatchSerial = Mathf.Max(
                 0,
                 state.transferBatchSerial);
-            next.sessionStartedAtUnixMs = now;
-            next.sessionEndsAtUnixMs = now + durationMs;
-            next.sessionPhase = CraftLiveSessionPhase.Playing;
-            next.message = "武器づくりを始めよう";
+            next.sessionStartedAtUnixMs = 0L;
+            next.sessionEndsAtUnixMs = 0L;
+            next.sessionPhase = CraftLiveSessionPhase.StartScreen;
+            next.message = "スタートを押してください。";
             next.revision = state.revision + 1;
-            next.updatedAtUnixMs = now;
+            next.updatedAtUnixMs = UnixNowMs();
             state = next;
             PublishLocal();
         }

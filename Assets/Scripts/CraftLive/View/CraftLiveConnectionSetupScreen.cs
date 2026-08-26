@@ -483,8 +483,8 @@ namespace CraftOrigin.CraftLive
                 if (startText != null)
                 {
                     startText.text = allConnected
-                        ? "ゲームを最初からスタート"
-                        : "未接続ありでもゲームをスタート";
+                        ? "スタート画面へ進む"
+                        : "未接続ありでもスタート画面へ";
                 }
             }
 

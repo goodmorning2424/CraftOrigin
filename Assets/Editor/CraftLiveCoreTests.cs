@@ -352,6 +352,41 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void EnsureSessionStarted_ShowsStartScreenWithoutTimer()
+        {
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(
+                    new List<CraftLiveMaterialDefinition>(),
+                    new List<CraftLiveWeaponDefinition>()));
+
+            session.EnsureSessionStarted();
+
+            Assert.That(
+                session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
+            Assert.That(session.State.sessionStartedAtUnixMs, Is.Zero);
+            Assert.That(session.State.sessionEndsAtUnixMs, Is.Zero);
+        }
+
+        [Test]
+        public void ConnectionSetup_PreparesStartScreenWithoutTimer()
+        {
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(
+                    new List<CraftLiveMaterialDefinition>(),
+                    new List<CraftLiveWeaponDefinition>()));
+            session.Configure("001", CraftLiveRole.WorkbenchPad);
+
+            session.RestartGroupFromConnectionSetup();
+
+            Assert.That(
+                session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
+            Assert.That(session.State.sessionStartedAtUnixMs, Is.Zero);
+            Assert.That(session.State.sessionEndsAtUnixMs, Is.Zero);
+        }
+
+        [Test]
         public void Pad4ScreenFit_UsesNearestViewportEdge()
         {
             float centered = CraftLiveHologramView.ResolveScreenFitScale(
@@ -427,7 +462,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void ExpiredEmptyRemoteRoom_RestartsWithoutBlockingPad2()
+        public void ExpiredEmptyRemoteRoom_ReturnsToStartScreen()
         {
             CraftLiveWeaponDefinition weapon = CreateWeapon("sword");
             CraftLiveMaterialDefinition registered = CreateMaterial(
@@ -452,20 +487,18 @@ namespace CraftOrigin.CraftLiveTests
 
             Assert.That(
                 session.State.sessionPhase,
-                Is.EqualTo(CraftLiveSessionPhase.Playing));
-            Assert.That(
-                session.State.sessionEndsAtUnixMs,
-                Is.GreaterThan(CraftLiveSession.UnixNowMs()));
+                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
+            Assert.That(session.State.sessionEndsAtUnixMs, Is.Zero);
             Assert.That(session.State.revision, Is.EqualTo(13));
             Assert.That(session.State.groupGeneration, Is.EqualTo(7));
             Assert.That(session.State.transferQueueSerial, Is.EqualTo(23));
             Assert.That(session.State.transferBatchSerial, Is.EqualTo(11));
             Assert.That(
                 session.State.HasMaterialRegistered("registered"),
-                Is.True);
+                Is.False);
             Assert.That(
                 CraftLivePad2WeaponCarousel.CanChangeWeapon(session.State),
-                Is.True);
+                Is.False);
         }
 
         [Test]
