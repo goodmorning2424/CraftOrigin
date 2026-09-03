@@ -57,6 +57,10 @@ jobs:
           artifactsPath: TestResults
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Restore tracked files changed by Unity tests
+        shell: bash
+        run: git restore --source=HEAD --worktree --staged -- .
+
       - name: Build WebGL
         uses: game-ci/unity-builder@v4
         env:
