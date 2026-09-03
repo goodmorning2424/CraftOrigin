@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: skill_luck
   displayName: "\u5E78\u904B"
-  description: "\u5E78\u904B\u304C\u8A2A\u308C\u307E\u3059"
+  description: "各ターン25%で、HP回復・次攻撃強化・MP回復のどれかが発動。"
   category: 1
   requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: 83694caa8c595554cb540c5b1fa52853, type: 3}
@@ -52,7 +52,7 @@ MonoBehaviour:
   skillDescription: 
   skillEffect:
     type: 1
-    activationChancePercent: 31.8
+    activationChancePercent: 25
     primaryValue: 0
     secondaryValue: 0
     intervalSeconds: 0

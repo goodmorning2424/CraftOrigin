@@ -60,6 +60,38 @@ namespace CraftOrigin.CraftLive
         }
     }
 
+    [Serializable]
+    public sealed class CraftLiveSharedWeaponDto
+    {
+        public string weaponId;
+        public string teamName;
+        public string weaponName;
+        public string weaponImageId;
+        public int attack;
+        public int defense;
+        public float evasion;
+        public string attribute;
+        public string skillAId;
+        public string skillBId;
+        public string ultimateSkillId;
+        public string motionType;
+    }
+
+    [Serializable]
+    public sealed class CraftLiveWeaponGroupRecord
+    {
+        public int schemaVersion = 1;
+        public string groupNumber;
+        public string status = "ready";
+        public long createdAtUnixMs;
+        public long expiresAtUnixMs;
+        public string sourceRoomId;
+        public int sourceGroupGeneration;
+        public int sourceResultSerial;
+        public CraftLiveSharedWeaponDto weapon;
+        public CraftLiveResultState craftResult;
+    }
+
     public enum CraftLiveConnectionState
     {
         Local,
@@ -112,6 +144,7 @@ namespace CraftOrigin.CraftLive
         private Coroutine pollingCoroutine;
         private Coroutine publishingCoroutine;
         private Coroutine presenceCoroutine;
+        private Coroutine groupPublishCoroutine;
         private CraftLiveRoomPresence roomPresence =
             new CraftLiveRoomPresence();
         private string remoteEtag = string.Empty;
@@ -122,6 +155,7 @@ namespace CraftOrigin.CraftLive
         private string connectionMessage = string.Empty;
         private bool presencePublishingEnabled = true;
         private bool hasEnabled;
+        private string simulatorGroupNumber = string.Empty;
 
         public bool IsRemoteMode =>
             useFirebase && !string.IsNullOrWhiteSpace(firebaseDatabaseUrl);
@@ -139,6 +173,7 @@ namespace CraftOrigin.CraftLive
         public CraftLiveRoomPresence RoomPresence => roomPresence;
         public bool IsPresencePublishing =>
             presencePublishingEnabled && presenceCoroutine != null;
+        public string SimulatorGroupNumber => simulatorGroupNumber;
 
         public event Action<
             CraftLiveConnectionState,
@@ -151,6 +186,13 @@ namespace CraftOrigin.CraftLive
             {
                 session = GetComponent<CraftLiveSession>();
             }
+        }
+
+        public void SetSimulatorGroupNumber(string value)
+        {
+            simulatorGroupNumber = IsFiveDigitGroupNumber(value)
+                ? value.Trim()
+                : string.Empty;
         }
 
         private void OnEnable()
@@ -202,6 +244,12 @@ namespace CraftOrigin.CraftLive
             {
                 StopCoroutine(presenceCoroutine);
                 presenceCoroutine = null;
+            }
+
+            if (groupPublishCoroutine != null)
+            {
+                StopCoroutine(groupPublishCoroutine);
+                groupPublishCoroutine = null;
             }
 
             LocalClients.Remove(this);
@@ -406,6 +454,7 @@ namespace CraftOrigin.CraftLive
                 pendingPublish = nextState.Clone();
                 SaveCachedState(PendingCacheKey, pendingPublish);
                 StartPublisherIfReady();
+                EnsureGroupNumberPublish(nextState);
                 return;
             }
 
@@ -420,6 +469,7 @@ namespace CraftOrigin.CraftLive
                     client.session.ApplyRemoteState(nextState.Clone());
                 }
             }
+            EnsureGroupNumberPublish(nextState);
         }
 
         private IEnumerator PollRemoteRoom()
@@ -489,9 +539,22 @@ namespace CraftOrigin.CraftLive
             int comparison = CompareVersion(remote, localCandidate);
             if (comparison > 0)
             {
-                session.ApplyRemoteState(remote);
-                pendingPublish = null;
-                DeleteCachedState(PendingCacheKey);
+                if (TryBuildTransferReconciledState(
+                        remote,
+                        localCandidate,
+                        out CraftLiveRoomState reconciled))
+                {
+                    session.ApplyRemoteState(reconciled);
+                    pendingPublish = reconciled.Clone();
+                    SaveCachedState(PendingCacheKey, pendingPublish);
+                    StartPublisherIfReady();
+                }
+                else
+                {
+                    session.ApplyRemoteState(remote);
+                    pendingPublish = null;
+                    DeleteCachedState(PendingCacheKey);
+                }
             }
             else if (pendingPublish == null && comparison >= 0)
             {
@@ -502,6 +565,331 @@ namespace CraftOrigin.CraftLive
             SetConnectionState(
                 CraftLiveConnectionState.Online,
                 $"Firebase room {session.RoomId}");
+            EnsureGroupNumberPublish(session.State);
+        }
+
+        private void EnsureGroupNumberPublish(CraftLiveRoomState candidate)
+        {
+            if (candidate == null || session == null ||
+                session.Role != CraftLiveRole.WorkbenchPad ||
+                candidate.sessionPhase != CraftLiveSessionPhase.Finished ||
+                candidate.result == null ||
+                candidate.selectedFinalResultSerial <= 0 ||
+                !string.IsNullOrWhiteSpace(candidate.finalWeaponCode) ||
+                groupPublishCoroutine != null)
+            {
+                return;
+            }
+
+            int generation = candidate.groupGeneration;
+            int serial = candidate.selectedFinalResultSerial;
+            CraftLiveResultState result = candidate.result.Clone();
+            if (!IsRemoteMode)
+            {
+                string localNumber = CreateGroupCandidate(
+                    session.RoomId,
+                    generation,
+                    serial,
+                    0);
+                session.ApplyIssuedGroupNumber(generation, serial, localNumber);
+                return;
+            }
+
+            groupPublishCoroutine = StartCoroutine(
+                PublishWeaponGroup(generation, serial, result));
+        }
+
+        private IEnumerator PublishWeaponGroup(
+            int generation,
+            int resultSerial,
+            CraftLiveResultState result)
+        {
+            while (enabled && IsGroupIssuePending(generation, resultSerial))
+            {
+                bool issued = false;
+                bool stopCandidateScan = false;
+                string publishFailure = string.Empty;
+                int candidateCount = string.IsNullOrWhiteSpace(
+                    simulatorGroupNumber)
+                    ? 99
+                    : 1;
+                for (int offset = 0; offset < candidateCount && !issued; offset++)
+                {
+                    string number = string.IsNullOrWhiteSpace(
+                        simulatorGroupNumber)
+                        ? CreateGroupCandidate(
+                            session.RoomId,
+                            generation,
+                            resultSerial,
+                            offset)
+                        : simulatorGroupNumber;
+                    string url = BuildWeaponGroupUrl(number);
+                    string etag = string.Empty;
+                    bool available = false;
+
+                    using (UnityWebRequest get = UnityWebRequest.Get(url))
+                    {
+                        get.SetRequestHeader("X-Firebase-ETag", "true");
+                        get.timeout = Mathf.CeilToInt(requestTimeoutSeconds);
+                        yield return get.SendWebRequest();
+                        if (get.result != UnityWebRequest.Result.Success)
+                        {
+                            publishFailure = DescribeGroupPublishFailure(
+                                get.responseCode,
+                                get.error);
+                            stopCandidateScan =
+                                IsFirebaseAuthorizationFailure(
+                                    get.responseCode);
+                            if (stopCandidateScan)
+                                break;
+                            continue;
+                        }
+
+                        etag = get.GetResponseHeader("ETag") ?? string.Empty;
+                        // Without an ETag the following PUT cannot be made
+                        // conditional. Retrying is safer than overwriting a
+                        // group that another room may have reserved meanwhile.
+                        if (string.IsNullOrWhiteSpace(etag))
+                        {
+                            publishFailure =
+                                "Firebase応答にETagがありません。";
+                            continue;
+                        }
+
+                        string json = get.downloadHandler.text;
+                        if (string.IsNullOrWhiteSpace(json) || json == "null")
+                        {
+                            available = true;
+                        }
+                        else
+                        {
+                            try
+                            {
+                                CraftLiveWeaponGroupRecord existing =
+                                    JsonUtility.FromJson<CraftLiveWeaponGroupRecord>(json);
+                                available = IsWeaponGroupSlotAvailable(
+                                    existing,
+                                    session.RoomId,
+                                    generation,
+                                    resultSerial,
+                                    CraftLiveSession.UnixNowMs());
+                            }
+                            catch (Exception)
+                            {
+                                available = false;
+                            }
+                        }
+                    }
+
+                    if (stopCandidateScan)
+                        break;
+
+                    if (!available || !IsGroupIssuePending(generation, resultSerial))
+                        continue;
+
+                    CraftLiveWeaponGroupRecord record = BuildWeaponGroupRecord(
+                        number,
+                        generation,
+                        resultSerial,
+                        result);
+                    byte[] body = Encoding.UTF8.GetBytes(JsonUtility.ToJson(record));
+                    using (UnityWebRequest put = new UnityWebRequest(url, "PUT"))
+                    {
+                        put.uploadHandler = new UploadHandlerRaw(body);
+                        put.downloadHandler = new DownloadHandlerBuffer();
+                        put.SetRequestHeader("Content-Type", "application/json");
+                        put.SetRequestHeader("If-Match", etag);
+                        put.timeout = Mathf.CeilToInt(requestTimeoutSeconds);
+                        yield return put.SendWebRequest();
+                        if (put.result == UnityWebRequest.Result.Success)
+                        {
+                            issued = session.ApplyIssuedGroupNumber(
+                                generation,
+                                resultSerial,
+                                number,
+                                IsFiveDigitGroupNumber(number));
+                        }
+                        else
+                        {
+                            publishFailure = DescribeGroupPublishFailure(
+                                put.responseCode,
+                                put.error);
+                            stopCandidateScan =
+                                IsFirebaseAuthorizationFailure(
+                                    put.responseCode);
+                        }
+                    }
+
+                    if (stopCandidateScan)
+                        break;
+                }
+
+                if (issued)
+                    break;
+                session.ReportGroupNumberRetry(
+                    generation,
+                    resultSerial,
+                    publishFailure);
+                yield return new WaitForSecondsRealtime(3f);
+            }
+            groupPublishCoroutine = null;
+        }
+
+        public static bool IsFirebaseAuthorizationFailure(long responseCode)
+        {
+            return responseCode == 401L || responseCode == 403L;
+        }
+
+        public static string DescribeGroupPublishFailure(
+            long responseCode,
+            string error)
+        {
+            if (IsFirebaseAuthorizationFailure(responseCode))
+            {
+                return "Firebase Database Rulesが読み書きを拒否しています。";
+            }
+
+            if (responseCode > 0L)
+            {
+                return $"Firebase通信エラー ({responseCode})。再試行します。";
+            }
+
+            return string.IsNullOrWhiteSpace(error)
+                ? "Firebaseへ接続できません。再試行します。"
+                : $"Firebase通信失敗: {error}";
+        }
+
+        private bool IsGroupIssuePending(int generation, int resultSerial)
+        {
+            CraftLiveRoomState current = session != null ? session.State : null;
+            return current != null &&
+                current.groupGeneration == generation &&
+                current.sessionPhase == CraftLiveSessionPhase.Finished &&
+                current.selectedFinalResultSerial == resultSerial &&
+                string.IsNullOrWhiteSpace(current.finalWeaponCode);
+        }
+
+        public static string CreateGroupCandidate(
+            string roomId,
+            int generation,
+            int resultSerial,
+            int offset)
+        {
+            unchecked
+            {
+                uint hash = 2166136261;
+                string source = $"{roomId}|{generation}|{resultSerial}";
+                foreach (char value in source)
+                {
+                    hash ^= value;
+                    hash *= 16777619;
+                }
+                int number = (int)((hash + (uint)Mathf.Max(0, offset)) % 99u) + 1;
+                return number.ToString("00");
+            }
+        }
+
+        public static bool IsFiveDigitGroupNumber(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            return normalized.Length == 5 &&
+                   int.TryParse(normalized, out int numeric) &&
+                   numeric >= 10000 && numeric <= 99999;
+        }
+
+        public static bool IsWeaponGroupSlotAvailable(
+            CraftLiveWeaponGroupRecord existing,
+            string roomId,
+            int generation,
+            int resultSerial,
+            long nowUnixMs)
+        {
+            if (existing == null)
+                return true;
+
+            if (existing.sourceRoomId == (roomId ?? string.Empty) &&
+                existing.sourceGroupGeneration == generation &&
+                existing.sourceResultSerial == resultSerial)
+            {
+                return true;
+            }
+
+            // A missing expiry belongs to an unknown/legacy record. Treat it as
+            // occupied instead of overwriting data that RealRPG still considers
+            // valid. Only an explicit, elapsed expiry makes a number reusable.
+            return existing.expiresAtUnixMs > 0 &&
+                   existing.expiresAtUnixMs <= nowUnixMs;
+        }
+
+        private CraftLiveWeaponGroupRecord BuildWeaponGroupRecord(
+            string number,
+            int generation,
+            int resultSerial,
+            CraftLiveResultState result)
+        {
+            long now = CraftLiveSession.UnixNowMs();
+            return new CraftLiveWeaponGroupRecord
+            {
+                groupNumber = number,
+                status = "ready",
+                createdAtUnixMs = now,
+                expiresAtUnixMs = now + 30L * 60L * 1000L,
+                sourceRoomId = session.RoomId,
+                sourceGroupGeneration = generation,
+                sourceResultSerial = resultSerial,
+                weapon = BuildSharedWeapon(result),
+                craftResult = result.Clone()
+            };
+        }
+
+        private static CraftLiveSharedWeaponDto BuildSharedWeapon(
+            CraftLiveResultState result)
+        {
+            string attribute = MapAttribute(
+                result.attributeId,
+                result.elementEffect.type);
+            return new CraftLiveSharedWeaponDto
+            {
+                weaponId = result.weaponId,
+                teamName = "文化祭パーティ",
+                weaponName = result.weaponName,
+                weaponImageId = result.weaponId,
+                attack = Mathf.Max(1, Mathf.RoundToInt(result.stats.attackRate)),
+                defense = Mathf.Max(0, Mathf.RoundToInt(result.stats.defenseRate)),
+                evasion = Mathf.Clamp01(result.stats.evasionRate / 100f),
+                attribute = attribute,
+                skillAId = "common_a",
+                skillBId = attribute == "Thunder" ? "starfall" : "festival_flare",
+                ultimateSkillId = "ultimate_festival",
+                motionType = MapMotion(result.weaponType)
+            };
+        }
+
+        public static string MapAttribute(
+            string attributeId,
+            CraftLiveElementType elementType)
+        {
+            string value = (attributeId ?? string.Empty).Trim().ToLowerInvariant();
+            if (value == "fire") return "Fire";
+            if (value == "freeze" || value == "ice" || value == "water") return "Ice";
+            if (value == "lightning" || value == "thunder") return "Thunder";
+            switch (elementType)
+            {
+                case CraftLiveElementType.Fire: return "Fire";
+                case CraftLiveElementType.Freeze: return "Ice";
+                case CraftLiveElementType.Lightning: return "Thunder";
+                default: return "None";
+            }
+        }
+
+        private static string MapMotion(CraftLiveWeaponType type)
+        {
+            switch (type)
+            {
+                case CraftLiveWeaponType.Thrust: return "Thrust";
+                case CraftLiveWeaponType.Staff: return "StaffSwing";
+                default: return "SwordSlash";
+            }
         }
 
         private void StartPublisherIfReady()
@@ -613,12 +1001,30 @@ namespace CraftOrigin.CraftLive
                 SaveCachedState(ConfirmedCacheKey, remote);
                 if (CompareVersion(remote, attempted) >= 0)
                 {
-                    session.ApplyRemoteState(remote);
-                    if (pendingPublish == null ||
-                        CompareVersion(pendingPublish, remote) <= 0)
+                    CraftLiveRoomState localCandidate =
+                        pendingPublish ?? attempted;
+                    if (TryBuildTransferReconciledState(
+                            remote,
+                            localCandidate,
+                            out CraftLiveRoomState reconciled))
                     {
-                        pendingPublish = null;
-                        DeleteCachedState(PendingCacheKey);
+                        session.ApplyRemoteState(reconciled);
+                        pendingPublish = reconciled.Clone();
+                        SaveCachedState(
+                            PendingCacheKey,
+                            pendingPublish);
+                    }
+                    else
+                    {
+                        session.ApplyRemoteState(remote);
+                        if (pendingPublish == null ||
+                            CompareVersion(
+                                pendingPublish,
+                                remote) <= 0)
+                        {
+                            pendingPublish = null;
+                            DeleteCachedState(PendingCacheKey);
+                        }
                     }
                 }
             }
@@ -763,6 +1169,13 @@ namespace CraftOrigin.CraftLive
                    $"{UnityWebRequest.EscapeURL(session.RoomId)}.json";
         }
 
+        private string BuildWeaponGroupUrl(string groupNumber)
+        {
+            string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
+            return $"{baseUrl}/weaponGroups/" +
+                   $"{UnityWebRequest.EscapeURL(groupNumber)}.json";
+        }
+
         private string BuildPresenceRoomUrl()
         {
             string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
@@ -839,6 +1252,26 @@ namespace CraftOrigin.CraftLive
                 ? revisionComparison
                 : left.updatedAtUnixMs.CompareTo(
                     right.updatedAtUnixMs);
+        }
+
+        public static bool TryBuildTransferReconciledState(
+            CraftLiveRoomState remote,
+            CraftLiveRoomState local,
+            out CraftLiveRoomState reconciled)
+        {
+            reconciled = remote != null ? remote.Clone() : null;
+            if (reconciled == null || local == null ||
+                reconciled.groupGeneration != local.groupGeneration ||
+                !reconciled.MergeTransferReliabilityFrom(local))
+            {
+                return false;
+            }
+
+            reconciled.revision = Math.Max(
+                remote.revision,
+                local.revision) + 1;
+            reconciled.updatedAtUnixMs = CraftLiveSession.UnixNowMs();
+            return true;
         }
 
         public static bool IsRemoteNewer(

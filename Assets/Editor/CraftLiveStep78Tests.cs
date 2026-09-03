@@ -4,8 +4,10 @@ using System.Reflection;
 using CraftOrigin.CraftLive;
 using CraftOrigin.CraftLiveEditor;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Video;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
@@ -29,11 +31,13 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void V4State_MigratesToV5()
+        public void LegacyState_MigratesToCurrentSchema()
         {
             CraftLiveRoomState state =
                 CraftLiveRoomState.FromJson("{\"schemaVersion\":4}");
-            Assert.That(state.schemaVersion, Is.EqualTo(5));
+            Assert.That(
+                state.schemaVersion,
+                Is.EqualTo(CraftLiveRoomState.CurrentSchemaVersion));
             Assert.That(state.completedWeapons, Is.Empty);
         }
 
@@ -61,6 +65,218 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo("2FD211"));
             Assert.That(first, Is.EqualTo(
                 CraftLiveWeaponCode.Generate(result)));
+        }
+
+        [TestCase(401L)]
+        [TestCase(403L)]
+        public void GroupPublishing_StopsCandidateScanOnRulesDenial(
+            long status)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.IsFirebaseAuthorizationFailure(status),
+                Is.True);
+            Assert.That(
+                CraftLiveRoomTransport.DescribeGroupPublishFailure(
+                    status,
+                    "Unauthorized"),
+                Does.Contain("Database Rules"));
+        }
+
+        [Test]
+        public void GroupIssuePanel_ExplainsRulesFailure()
+        {
+            Assert.That(
+                CraftLivePad2ResultController.BuildGroupIssueStatus(
+                    "Firebase Database Rulesが読み書きを拒否しています。"),
+                Does.Contain("権限エラー"));
+        }
+
+        [TestCase(CraftLiveRole.Auto, false)]
+        [TestCase(CraftLiveRole.MaterialPad, false)]
+        [TestCase(CraftLiveRole.WorkbenchPad, true)]
+        [TestCase(CraftLiveRole.QrPad, false)]
+        [TestCase(CraftLiveRole.HologramPad, false)]
+        public void StartButton_IsAuthoritativeOnlyOnPad2(
+            CraftLiveRole role,
+            bool expected)
+        {
+            Assert.That(
+                CraftLivePad2ResultController.IsAuthoritativeStartRole(role),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void StartTutorial_HasAssignableVideoSlotAndFallbackFrame()
+        {
+            FieldInfo clipField = typeof(CraftLivePad2ResultController)
+                .GetField(
+                    "startTutorialVideo",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(clipField, Is.Not.Null);
+            Assert.That(clipField.FieldType, Is.EqualTo(typeof(VideoClip)));
+
+            GameObject host = new GameObject("StartTutorialTest");
+            created.Add(host);
+            CraftLivePad2ResultController controller =
+                host.AddComponent<CraftLivePad2ResultController>();
+            MethodInfo buildFrame = typeof(CraftLivePad2ResultController)
+                .GetMethod(
+                    "BuildTutorialVideoFrame",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(buildFrame, Is.Not.Null);
+            buildFrame.Invoke(controller, new object[] { host.transform });
+
+            Assert.That(
+                host.transform.Find("TutorialVideoFrame"),
+                Is.Not.Null);
+            Assert.That(
+                host.transform.Find("TutorialVideoSurface"),
+                Is.Not.Null);
+            CraftLiveTutorialVideoTapSurface tapSurface =
+                host.transform.Find("TutorialVideoSurface")
+                    .GetComponent<CraftLiveTutorialVideoTapSurface>();
+            Assert.That(tapSurface, Is.Not.Null);
+            Assert.That(tapSurface.Interactable, Is.False);
+            Assert.That(
+                host.transform.Find("TutorialVideoSurface")
+                    .GetComponent<Collider>(),
+                Is.Not.Null);
+            Assert.That(
+                host.transform.Find(
+                    "TutorialVideoPlaceholder/TutorialVideoLabel"),
+                Is.Not.Null);
+            Assert.That(host.GetComponent<VideoPlayer>(), Is.Null);
+        }
+
+        [Test]
+        public void DefaultRules_UseRealRpgMaximumStat()
+        {
+            CraftLiveRules rules =
+                ScriptableObject.CreateInstance<CraftLiveRules>();
+            created.Add(rules);
+            Assert.That(rules.MaximumStat, Is.EqualTo(1000f));
+            Assert.That(
+                rules.SessionDurationSeconds,
+                Is.EqualTo(330f));
+            Assert.That(
+                CraftLiveStatusTubeView.NormalizeValue(500f, rules.MaximumStat),
+                Is.EqualTo(0.5f));
+        }
+
+        [Test]
+        public void TimedIntroduction_CountsTowardSessionDuration()
+        {
+            TestSetup setup = CreateValidSetup();
+            CraftLiveRoomState state = setup.session.State.Clone();
+            state.sessionPhase = CraftLiveSessionPhase.StartScreen;
+            state.sessionStartedAtUnixMs = 0L;
+            state.sessionEndsAtUnixMs = 0L;
+            setup.session.ApplyRemoteState(state);
+
+            setup.session.BeginTimedIntroduction();
+
+            long startedAt = setup.session.State.sessionStartedAtUnixMs;
+            long endsAt = setup.session.State.sessionEndsAtUnixMs;
+            Assert.That(startedAt, Is.GreaterThan(0L));
+            Assert.That(endsAt - startedAt, Is.EqualTo(330000L));
+            Assert.That(
+                setup.session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
+
+            setup.session.StartGroup();
+
+            Assert.That(
+                setup.session.State.sessionStartedAtUnixMs,
+                Is.EqualTo(startedAt));
+            Assert.That(
+                setup.session.State.sessionEndsAtUnixMs,
+                Is.EqualTo(endsAt));
+            Assert.That(
+                setup.session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.Playing));
+        }
+
+        [TestCase("KatateSword.asset", 500f, 300f, 500f)]
+        [TestCase("bigswordSword.asset", 700f, 400f, 300f)]
+        [TestCase("PikopikoSword 1.asset", 300f, 300f, 800f)]
+        [TestCase("YariThrust.asset", 500f, 200f, 600f)]
+        [TestCase("KobushiThrust 1.asset", 200f, 200f, 200f)]
+        [TestCase("KazikiThrust 1.asset", 1000f, 100f, 100f)]
+        [TestCase("TueStaff.asset", 400f, 400f, 400f)]
+        [TestCase("FudeThrust 1.asset", 450f, 300f, 500f)]
+        public void WeaponBaseStats_MatchRealRpgDefinitions(
+            string assetName,
+            float attack,
+            float defense,
+            float evasion)
+        {
+            CraftLiveWeaponDefinition weapon =
+                AssetDatabase.LoadAssetAtPath<CraftLiveWeaponDefinition>(
+                    $"Assets/Buki/Weapons/{assetName}");
+            Assert.That(weapon, Is.Not.Null);
+            Assert.That(weapon.BaseStats.attackRate, Is.EqualTo(attack));
+            Assert.That(weapon.BaseStats.defenseRate, Is.EqualTo(defense));
+            Assert.That(weapon.BaseStats.evasionRate, Is.EqualTo(evasion));
+        }
+
+        [TestCase("attack.asset", 50f, 0f, 0f, "最大1000")]
+        [TestCase("defence.asset", 0f, 50f, 0f, "最大1000")]
+        [TestCase("Kaihi.asset", 0f, 0f, 50f, "最大1000")]
+        public void UpgradeMaterials_MatchRealRpgFiftyPointBonus(
+            string assetName,
+            float attack,
+            float defense,
+            float evasion,
+            string descriptionPart)
+        {
+            CraftLiveMaterialDefinition material =
+                AssetDatabase.LoadAssetAtPath<CraftLiveMaterialDefinition>(
+                    $"Assets/CraftLiveData/Sozai/{assetName}");
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.StatModifiers.attackRate, Is.EqualTo(attack));
+            Assert.That(material.StatModifiers.defenseRate, Is.EqualTo(defense));
+            Assert.That(material.StatModifiers.evasionRate, Is.EqualTo(evasion));
+            Assert.That(material.Description, Does.Contain(descriptionPart));
+        }
+
+        [TestCase("fire.asset", "10%", 100f)]
+        [TestCase("freeze.asset", "50%", 50f)]
+        [TestCase("lighting.asset", "50%", 50f)]
+        public void AttributeDescriptions_MatchRealRpgRules(
+            string assetName,
+            string descriptionPart,
+            float activationChance)
+        {
+            CraftLiveMaterialDefinition material =
+                AssetDatabase.LoadAssetAtPath<CraftLiveMaterialDefinition>(
+                    $"Assets/CraftLiveData/Sozai/{assetName}");
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.Description, Does.Contain(descriptionPart));
+            Assert.That(
+                material.ElementEffect.activationChancePercent,
+                Is.EqualTo(activationChance));
+        }
+
+        [TestCase("Heal.asset", 100f, 5f)]
+        [TestCase("DoubleStrike.asset", 30f, 0f)]
+        [TestCase("luck.asset", 25f, 0f)]
+        [TestCase("Inochi.asset", 100f, 100f)]
+        public void SkillDescriptions_MatchRealRpgRules(
+            string assetName,
+            float activationChance,
+            float primaryValue)
+        {
+            CraftLiveMaterialDefinition material =
+                AssetDatabase.LoadAssetAtPath<CraftLiveMaterialDefinition>(
+                    $"Assets/CraftLiveData/Sozai/{assetName}");
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.Description, Is.Not.Empty);
+            Assert.That(
+                material.SkillEffect.activationChancePercent,
+                Is.EqualTo(activationChance));
+            Assert.That(
+                material.SkillEffect.primaryValue,
+                Is.EqualTo(primaryValue));
         }
 
         [TestCase("2NN400", "weapon_bigsword_sword")]
@@ -241,7 +457,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void FinalSelection_IssuesCode()
+        public void FinalSelection_WaitsForFirebaseGroupNumber()
         {
             TestSetup setup = CreateValidSetup();
             setup.session.StartSynthesis();
@@ -256,7 +472,131 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(CraftLiveSessionPhase.Finished));
             Assert.That(
                 setup.session.State.finalWeaponCode,
-                Does.Match("^[2-9][NFCT][NLDHB][0-4]{3}$"));
+                Is.Empty);
+            Assert.That(
+                setup.session.ApplyIssuedGroupNumber(
+                    setup.session.State.groupGeneration,
+                    serial,
+                    "07"),
+                Is.True);
+            Assert.That(setup.session.State.finalWeaponCode, Is.EqualTo("07"));
+        }
+
+        [Test]
+        public void FinalSelection_CannotReplaceIssuedGroupNumber()
+        {
+            TestSetup setup = CreateValidSetup();
+            setup.session.StartSynthesis();
+            setup.session.CompleteSynthesis();
+            int serial = setup.session.State.result.resultSerial;
+            setup.session.ExpireSession();
+            Assert.That(setup.session.SelectFinalWeapon(serial), Is.True);
+            Assert.That(
+                setup.session.ApplyIssuedGroupNumber(
+                    setup.session.State.groupGeneration,
+                    serial,
+                    "07"),
+                Is.True);
+            Assert.That(
+                setup.session.ApplyIssuedGroupNumber(
+                    setup.session.State.groupGeneration,
+                    serial,
+                    "08"),
+                Is.False);
+
+            Assert.That(setup.session.SelectFinalWeapon(serial), Is.False);
+            Assert.That(setup.session.State.finalWeaponCode, Is.EqualTo("07"));
+            Assert.That(
+                setup.session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.Finished));
+        }
+
+        [Test]
+        public void Simulator_CanIssueFiveDigitDebugGroupNumber()
+        {
+            TestSetup setup = CreateValidSetup();
+            setup.session.StartSynthesis();
+            setup.session.CompleteSynthesis();
+            int serial = setup.session.State.result.resultSerial;
+            setup.session.ExpireSession();
+            Assert.That(setup.session.SelectFinalWeapon(serial), Is.True);
+
+            Assert.That(
+                setup.session.ApplyIssuedGroupNumber(
+                    setup.session.State.groupGeneration,
+                    serial,
+                    "54321",
+                    true),
+                Is.True);
+            Assert.That(
+                setup.session.State.finalWeaponCode,
+                Is.EqualTo("54321"));
+        }
+
+        [TestCase("00001")]
+        [TestCase("1234")]
+        [TestCase("100000")]
+        [TestCase("abcde")]
+        public void Simulator_RejectsInvalidFiveDigitGroupNumber(string value)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.IsFiveDigitGroupNumber(value),
+                Is.False);
+        }
+
+        [TestCase("10000")]
+        [TestCase("54321")]
+        [TestCase("99999")]
+        public void Simulator_AcceptsFiveDigitGroupNumber(string value)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.IsFiveDigitGroupNumber(value),
+                Is.True);
+        }
+
+        [Test]
+        public void WeaponGroupSlot_RequiresAnExplicitElapsedExpiry()
+        {
+            CraftLiveWeaponGroupRecord existing =
+                new CraftLiveWeaponGroupRecord
+                {
+                    sourceRoomId = "other-room",
+                    sourceGroupGeneration = 3,
+                    sourceResultSerial = 8,
+                    expiresAtUnixMs = 0
+                };
+
+            Assert.That(
+                CraftLiveRoomTransport.IsWeaponGroupSlotAvailable(
+                    existing,
+                    "001",
+                    4,
+                    9,
+                    1000),
+                Is.False);
+            existing.expiresAtUnixMs = 999;
+            Assert.That(
+                CraftLiveRoomTransport.IsWeaponGroupSlotAvailable(
+                    existing,
+                    "001",
+                    4,
+                    9,
+                    1000),
+                Is.True);
+        }
+
+        [TestCase(CraftLiveElementType.Fire, "Fire")]
+        [TestCase(CraftLiveElementType.Freeze, "Ice")]
+        [TestCase(CraftLiveElementType.Lightning, "Thunder")]
+        public void SharedAttribute_FallsBackToTypedElement(
+            CraftLiveElementType elementType,
+            string expected)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.MapAttribute(
+                    string.Empty,
+                    elementType),
+                Is.EqualTo(expected));
         }
 
         [Test]
@@ -338,16 +678,18 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expectedLength).Within(0.0001f));
         }
 
-        [TestCase(true, 4, 3, "upgrade_attack", true)]
-        [TestCase(true, 4, 4, "upgrade_attack", false)]
-        [TestCase(false, 4, 3, "upgrade_attack", false)]
-        [TestCase(true, 0, -1, "upgrade_attack", false)]
-        [TestCase(true, 4, 3, "", false)]
+        [TestCase(true, 4, 3, "upgrade_attack", true, true)]
+        [TestCase(true, 4, 4, "upgrade_attack", true, false)]
+        [TestCase(false, 4, 3, "upgrade_attack", true, false)]
+        [TestCase(true, 0, -1, "upgrade_attack", true, false)]
+        [TestCase(true, 4, 3, "", true, false)]
+        [TestCase(true, 4, 3, "upgrade_attack", false, false)]
         public void Pad1RegistrationArrival_PlaysOnceAfterNewRegistration(
             bool built,
             int registrationSerial,
             int handledSerial,
             string materialId,
+            bool newlyRegistered,
             bool expected)
         {
             Assert.That(
@@ -356,8 +698,143 @@ namespace CraftOrigin.CraftLiveTests
                         built,
                         registrationSerial,
                         handledSerial,
-                        materialId),
+                        materialId,
+                        newlyRegistered),
                 Is.EqualTo(expected));
+        }
+
+        [TestCase("命の玉", true, "命の玉が追加されました")]
+        [TestCase("命の玉", false, "命の玉はすでに読み込んでいます")]
+        [TestCase(" ", true, "素材が追加されました")]
+        public void Pad1RegistrationPopup_UsesRegistrationResult(
+            string materialName,
+            bool newlyRegistered,
+            string expected)
+        {
+            Assert.That(
+                CraftLivePad1GalleryController.BuildRegistrationPopupMessage(
+                    materialName,
+                    newlyRegistered),
+                Is.EqualTo(expected));
+        }
+
+        [TestCase(61f, false, false, 0)]
+        [TestCase(60f, false, false, 60)]
+        [TestCase(45f, true, false, 0)]
+        [TestCase(30f, true, false, 30)]
+        [TestCase(20f, false, false, 30)]
+        [TestCase(20f, true, true, 0)]
+        [TestCase(0f, true, false, 0)]
+        public void Pad2TimeWarning_FiresEachThresholdOnce(
+            float remaining,
+            bool minuteShown,
+            bool thirtyShown,
+            int expected)
+        {
+            Assert.That(
+                CraftLivePad2ResultController.ResolveTimeWarningSecond(
+                    remaining,
+                    minuteShown,
+                    thirtyShown),
+                Is.EqualTo(expected));
+        }
+
+        [TestCase(CraftLiveSessionPhase.Playing, 60f, true)]
+        [TestCase(CraftLiveSessionPhase.Playing, 30f, true)]
+        [TestCase(CraftLiveSessionPhase.Playing, 60.1f, false)]
+        [TestCase(CraftLiveSessionPhase.Playing, 0f, false)]
+        [TestCase(CraftLiveSessionPhase.FinalSelection, 30f, false)]
+        public void Pad3Timer_TurnsRedOnlyDuringFinalMinute(
+            CraftLiveSessionPhase phase,
+            float remaining,
+            bool expected)
+        {
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                sessionPhase = phase
+            };
+            Assert.That(
+                CraftLivePad3Controller.ShouldUseUrgentTimerColor(
+                    state,
+                    remaining),
+                Is.EqualTo(expected));
+        }
+
+        [TestCase(CraftLiveCalculator.SecretBareHandsWeaponId, true)]
+        [TestCase(CraftLiveCalculator.SecretPikopikoWeaponId, false)]
+        [TestCase(CraftLiveCalculator.SecretKazikiWeaponId, false)]
+        [TestCase("weapon_sword", false)]
+        public void SecretResult_SmokeIsExclusiveToBareHands(
+            string weaponId,
+            bool expected)
+        {
+            Assert.That(
+                CraftLivePad2ResultController.ShouldBuildBareHandsSmoke(
+                    weaponId),
+                Is.EqualTo(expected));
+        }
+
+        [TestCase(false, false)]
+        [TestCase(true, true)]
+        public void ResultPanel_WaitsForCompletionPresentation(
+            bool presentationReady,
+            bool expected)
+        {
+            CraftLiveRoomState state = new CraftLiveRoomState
+            {
+                sessionPhase = CraftLiveSessionPhase.Playing
+            };
+            state.craft.status = CraftLiveCraftStatus.Complete;
+            state.craft.completionPresentationReady = presentationReady;
+
+            Assert.That(
+                CraftLivePad2ResultController.ShouldShowResult(state),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void SecretResult_BuildsGoldenBurstAndBareHandsSmoke()
+        {
+            GameObject host = new GameObject("SecretResultVisualTest");
+            created.Add(host);
+            MethodInfo build = typeof(CraftLivePad2ResultController)
+                .GetMethod(
+                    "BuildSecretResultEffect",
+                    BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.That(build, Is.Not.Null);
+
+            build.Invoke(
+                null,
+                new object[]
+                {
+                    host.transform,
+                    CraftLiveCalculator.SecretBareHandsWeaponId
+                });
+
+            Assert.That(
+                host.transform.Find("SecretGoldenRay_0"),
+                Is.Not.Null);
+            Transform smoke = host.transform.Find("BareHandsSmoke_0");
+            Assert.That(smoke, Is.Not.Null);
+            Assert.That(
+                smoke.GetComponent<CraftLiveSecretSmokeEffect>(),
+                Is.Not.Null);
+        }
+
+        [Test]
+        public void LifeOrbMaterial_IsFullyOpaque()
+        {
+            const string path =
+                "Assets/Materials/" +
+                "Meshy_AI_Crimson_Jewel_Pyramid_0813120040_texture.mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            Assert.That(material, Is.Not.Null);
+            Assert.That(material.GetFloat("_Surface"), Is.EqualTo(0f));
+            Assert.That(material.GetFloat("_ZWrite"), Is.EqualTo(1f));
+            Assert.That(material.GetColor("_BaseColor").a, Is.EqualTo(1f));
+            Assert.That(
+                material.IsKeywordEnabled("_SURFACE_TYPE_TRANSPARENT"),
+                Is.False);
         }
 
         [Test]
@@ -502,6 +979,21 @@ namespace CraftOrigin.CraftLiveTests
                         true);
 
             Assert.That(result, Is.EqualTo(guidePosition));
+        }
+
+        [Test]
+        public void LandingArc_UsesWorkbenchNormalInsteadOfWorldHeight()
+        {
+            Vector3 start = new Vector3(2f, 3f, 4f);
+            Vector3 result = CraftLivePad2TransferReceiver
+                .OffsetAlongSurfaceNormal(
+                    start,
+                    Vector3.back,
+                    0.75f);
+
+            Assert.That(result.x, Is.EqualTo(start.x));
+            Assert.That(result.y, Is.EqualTo(start.y));
+            Assert.That(result.z, Is.EqualTo(3.25f));
         }
 
         [Test]

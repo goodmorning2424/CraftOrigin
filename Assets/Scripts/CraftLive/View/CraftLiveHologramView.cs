@@ -379,6 +379,22 @@ namespace CraftOrigin.CraftLive
                     currentParticleEffect,
                     attribute.EffectColor);
             }
+
+            // Particle prefabs imported from older Unity versions do not
+            // always resume automatically in WebGL. Normalize their material
+            // and explicitly warm/play every child system.
+            CraftLiveForgeUITheme.EnsureCompatibleSurfaces(
+                currentParticleEffect);
+            foreach (ParticleSystem particles in
+                     currentParticleEffect.GetComponentsInChildren<
+                         ParticleSystem>(true))
+            {
+                ParticleSystem.MainModule main = particles.main;
+                main.cullingMode =
+                    ParticleSystemCullingMode.AlwaysSimulate;
+                particles.Simulate(0.12f, true, true, true);
+                particles.Play(true);
+            }
         }
 
         private float FitWeaponInsideCamera()

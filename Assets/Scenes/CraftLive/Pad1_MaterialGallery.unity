@@ -4123,7 +4123,7 @@ MonoBehaviour:
   displayAreaGizmoColor: {r: 0.1, g: 0.9, b: 1, a: 0.8}
   hologramFont: {fileID: 0}
   hologramGeneratedFontSize: 125
-  hologramMaxCharacterSize: 0.028
+  hologramMaxCharacterSize: 0.045
   hologramTextColor: {r: 1, g: 0.99056596, b: 0.99056596, a: 1}
   createTransferButton: 0
   allowTransferWithoutPlacementForPlayTest: 1
@@ -4264,7 +4264,7 @@ MonoBehaviour:
   cameraYawDegrees: 60
   animateCameraDuringLaunch: 1
   postRampGravity: 0.5
-  resetAfterStandaloneLaunch: 1
+  resetAfterStandaloneLaunch: 0
   onQueueCountChanged:
     m_PersistentCalls:
       m_Calls: []

@@ -57,6 +57,7 @@ namespace CraftOrigin.CraftLive
         private Vector3 restingScale;
         private bool interactable;
         private bool viewportVisible = true;
+        private bool previewSuppressed;
         private Vector2 iconTargetSize;
         private Vector3 iconBaseScale;
         private CraftLiveGalleryColumn owningColumn;
@@ -70,6 +71,7 @@ namespace CraftOrigin.CraftLive
         public CraftLiveMaterialDefinition Material => material;
         public bool Interactable => interactable;
         public bool ViewportVisible => viewportVisible;
+        public bool PreviewSuppressed => previewSuppressed;
         public Transform PresentationAnchor =>
             movingRoot != null ? movingRoot : transform;
 
@@ -357,6 +359,19 @@ namespace CraftOrigin.CraftLive
         public void SetViewportVisible(bool visible)
         {
             viewportVisible = visible;
+            RefreshRendererVisibility();
+            RefreshColliders();
+        }
+
+        public void SetPreviewSuppressed(bool suppressed)
+        {
+            previewSuppressed = suppressed;
+            RefreshRendererVisibility();
+        }
+
+        private void RefreshRendererVisibility()
+        {
+            bool visible = viewportVisible && !previewSuppressed;
             Renderer[] visibleRenderers =
                 GetComponentsInChildren<Renderer>(true);
             foreach (Renderer targetRenderer in visibleRenderers)
@@ -376,8 +391,6 @@ namespace CraftOrigin.CraftLive
             {
                 fallbackStateText.gameObject.SetActive(visible);
             }
-
-            RefreshColliders();
         }
 
         public void Select()

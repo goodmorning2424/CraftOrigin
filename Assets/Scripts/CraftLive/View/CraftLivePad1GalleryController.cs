@@ -28,6 +28,7 @@ namespace CraftOrigin.CraftLive
 
         [Header("Registration")]
         [SerializeField] private bool showLockedMaterials;
+        [SerializeField, Min(0.5f)] private float registrationPopupDuration = 3f;
 
         [Header("Automatic Layout")]
         [SerializeField] private bool applyDefaultLayout = true;
@@ -64,6 +65,9 @@ namespace CraftOrigin.CraftLive
         private bool built;
         private int handledRegistrationSerial = -1;
         private GameObject generatedBlackSurround;
+        private string registrationPopupMessage = string.Empty;
+        private float registrationPopupStartedAt = float.NegativeInfinity;
+        private GUIStyle registrationPopupStyle;
 
         private struct ColumnLayout
         {
@@ -244,6 +248,63 @@ namespace CraftOrigin.CraftLive
             }
 
             SetSpecialHeadersVisible(true);
+            registrationPopupMessage = string.Empty;
+        }
+
+        private void OnGUI()
+        {
+            if (string.IsNullOrWhiteSpace(registrationPopupMessage))
+            {
+                return;
+            }
+
+            float elapsed = Time.realtimeSinceStartup -
+                            registrationPopupStartedAt;
+            float duration = Mathf.Max(0.5f, registrationPopupDuration);
+            if (elapsed >= duration)
+            {
+                registrationPopupMessage = string.Empty;
+                return;
+            }
+
+            if (registrationPopupStyle == null)
+            {
+                registrationPopupStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = Mathf.Clamp(
+                        Mathf.RoundToInt(Screen.height * 0.034f),
+                        22,
+                        42),
+                    fontStyle = FontStyle.Bold,
+                    wordWrap = true
+                };
+                registrationPopupStyle.normal.textColor =
+                    new Color(1f, 0.91f, 0.58f);
+            }
+
+            float fade = Mathf.Min(
+                Mathf.Clamp01(elapsed / 0.18f),
+                Mathf.Clamp01((duration - elapsed) / 0.35f));
+            float width = Mathf.Min(Screen.width * 0.82f, 760f);
+            float height = Mathf.Clamp(Screen.height * 0.095f, 72f, 112f);
+            float slide = (1f - Mathf.Clamp01(elapsed / 0.22f)) * -height;
+            Rect popup = new Rect(
+                (Screen.width - width) * 0.5f,
+                Mathf.Max(18f, Screen.height * 0.035f) + slide,
+                width,
+                height);
+
+            Color previousColor = GUI.color;
+            Color previousBackground = GUI.backgroundColor;
+            int previousDepth = GUI.depth;
+            GUI.depth = -1100;
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            GUI.backgroundColor = new Color(0.1f, 0.055f, 0.018f, 0.96f);
+            GUI.Box(popup, registrationPopupMessage, registrationPopupStyle);
+            GUI.color = previousColor;
+            GUI.backgroundColor = previousBackground;
+            GUI.depth = previousDepth;
         }
 
         public void Rebuild()
@@ -610,9 +671,19 @@ namespace CraftOrigin.CraftLive
                     built,
                     state.registrationSerial,
                     handledRegistrationSerial,
-                    state.lastRegisteredMaterialId);
+                    state.lastRegisteredMaterialId,
+                    state.lastRegistrationDelta > 0);
                 string registeredMaterialId =
                     state.lastRegisteredMaterialId;
+                CraftLiveMaterialDefinition registeredMaterial =
+                    session != null && session.Catalog != null
+                        ? session.Catalog.FindMaterial(registeredMaterialId)
+                        : null;
+                ShowRegistrationPopup(
+                    registeredMaterial != null
+                        ? registeredMaterial.DisplayName
+                        : registeredMaterialId,
+                    state.lastRegistrationDelta > 0);
                 Rebuild();
                 if (playArrival)
                 {
@@ -629,12 +700,36 @@ namespace CraftOrigin.CraftLive
             bool galleryBuilt,
             int registrationSerial,
             int handledSerial,
-            string registeredMaterialId)
+            string registeredMaterialId,
+            bool newlyRegistered)
         {
             return galleryBuilt &&
                    registrationSerial > 0 &&
                    registrationSerial != handledSerial &&
-                   !string.IsNullOrWhiteSpace(registeredMaterialId);
+                   !string.IsNullOrWhiteSpace(registeredMaterialId) &&
+                   newlyRegistered;
+        }
+
+        public static string BuildRegistrationPopupMessage(
+            string materialName,
+            bool newlyRegistered)
+        {
+            string displayName = string.IsNullOrWhiteSpace(materialName)
+                ? "素材"
+                : materialName.Trim();
+            return newlyRegistered
+                ? $"{displayName}が追加されました"
+                : $"{displayName}はすでに読み込んでいます";
+        }
+
+        private void ShowRegistrationPopup(
+            string materialName,
+            bool newlyRegistered)
+        {
+            registrationPopupMessage = BuildRegistrationPopupMessage(
+                materialName,
+                newlyRegistered);
+            registrationPopupStartedAt = Time.realtimeSinceStartup;
         }
 
         private CraftLiveMaterialPaintingView FindPainting(

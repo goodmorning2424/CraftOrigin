@@ -122,7 +122,9 @@ namespace CraftOrigin.CraftLive
             {
                 label.text = finalSelected
                     ? $"{state.result.weaponName}\n" +
-                      $"{state.finalWeaponCode}"
+                      (string.IsNullOrWhiteSpace(state.finalWeaponCode)
+                          ? "グループ番号 発行中…"
+                          : $"グループ番号 {state.finalWeaponCode}")
                     : state.result.weaponName;
             }
         }

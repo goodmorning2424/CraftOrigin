@@ -87,6 +87,30 @@ namespace CraftOrigin.CraftLive
                 transferSerial);
         }
 
+        public bool AbortStalledFlow(
+            int groupGeneration,
+            int transferSerial)
+        {
+            bool ownsTransfer =
+                (flowRoutine != null || externalFlowActive) &&
+                activeTransferGeneration == groupGeneration &&
+                activeTransferSerial == transferSerial;
+            if (!ownsTransfer)
+            {
+                return false;
+            }
+
+            ResetFlowLifecycle(groupGeneration);
+            if (isActiveAndEnabled && session != null)
+            {
+                // Rebuild every glow from the authoritative slot state. This
+                // turns a timed-out animation into the same final presentation
+                // instead of leaving the material dark.
+                Refresh(session.State);
+            }
+            return true;
+        }
+
         public static bool ShouldStartAutomaticFlow(
             bool isExternallySequenced,
             CraftLivePlacementStatus status,

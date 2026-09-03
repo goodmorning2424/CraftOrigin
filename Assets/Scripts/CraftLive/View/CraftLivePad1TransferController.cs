@@ -127,8 +127,8 @@ namespace CraftOrigin.CraftLive
 
         [Header("Standalone Play Test")]
         [SerializeField]
-        [Tooltip("Pad2受信機がないテストシーンでは、発射後に再び転送できる状態へ戻します。")]
-        private bool resetAfterStandaloneLaunch = true;
+        [Tooltip("明示的な単体テスト時だけ有効にします。別WebGL上のPad2はローカル検索では検出できません。")]
+        private bool resetAfterStandaloneLaunch;
 
         [Header("Events")]
         [SerializeField] private UnityEvent<int> onQueueCountChanged;
@@ -383,9 +383,9 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            // Capture the next queued frame before BeginSingleTransfer removes
-            // it from the queue. The full-formation branch remains available
-            // behind the temporary multi-transfer feature gate.
+            // Capture the complete visible formation before BeginTransferBatch
+            // removes the first entry. Pad1 presents the frames together while
+            // Pad2 still advances and commits them one transfer at a time.
             if (!CaptureQueuedFormation(current))
             {
                 // StateChanged normally creates the queued frame before the
@@ -783,9 +783,12 @@ namespace CraftOrigin.CraftLive
 
         private IEnumerator Launch(CraftLiveRoomState snapshot)
         {
-            if (usingPhysicalLauncher &&
-                snapshot != null &&
-                snapshot.transferBatchRemaining > 0)
+            if (ShouldUsePhysicalBatchPresentation(
+                    usingPhysicalLauncher,
+                    snapshot != null
+                        ? snapshot.transferBatchRemaining
+                        : 0,
+                    HasCompleteCapturedBatchFormation(snapshot)))
             {
                 yield return LaunchPhysicalBatch(snapshot);
                 yield break;
@@ -1124,6 +1127,16 @@ namespace CraftOrigin.CraftLive
             return offsets;
         }
 
+        public static bool ShouldUsePhysicalBatchPresentation(
+            bool physicalLauncherAvailable,
+            int remainingBatchCount,
+            bool capturedFormationComplete)
+        {
+            return physicalLauncherAvailable &&
+                   remainingBatchCount > 0 &&
+                   capturedFormationComplete;
+        }
+
         private void FinishLaunchRoutine()
         {
             launchRoutine = null;
@@ -1224,7 +1237,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < loadDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = EaseOut(
                     Mathf.Clamp01(elapsed / loadDuration));
                 for (int index = 0; index < tickets.Length; index++)
@@ -1269,7 +1282,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 for (int index = 0; index < tickets.Length; index++)
                 {
                     if (tickets[index] == null)
@@ -1317,7 +1330,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 for (int index = 0; index < tickets.Length; index++)
                 {
                     if (tickets[index] == null)
@@ -1362,31 +1375,12 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            if (!CraftLiveSession.MultiMaterialTransferEnabled)
-            {
-                CraftLiveTransferQueueEntry first = state.transferQueue[0];
-                if (first == null ||
-                    !queueVisuals.TryGetValue(
-                        first.serial,
-                        out GameObject firstVisual) ||
-                    firstVisual == null)
-                {
-                    return false;
-                }
-
-                capturedLaunchPoses[first.serial] =
-                    new QueuedWorldPose(
-                        firstVisual.transform.position,
-                        firstVisual.transform.rotation);
-                return true;
-            }
-
             foreach (CraftLiveTransferQueueEntry entry in state.transferQueue)
             {
                 if (entry == null ||
                     !queueVisuals.TryGetValue(
                         entry.serial,
-                    out GameObject visual) ||
+                        out GameObject visual) ||
                     visual == null)
                 {
                     capturedLaunchPoses.Clear();
@@ -1481,7 +1475,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < impactDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = EaseOut(Mathf.Clamp01(
                     elapsed / impactDuration));
                 SetPull(Mathf.Lerp(startPull, 0f, t));
@@ -1508,7 +1502,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(
                     elapsed * physicalLaunchSpeed / distance);
                 ticket.position = Vector3.LerpUnclamped(start, end, t);
@@ -1556,7 +1550,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < duration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float travelled = Mathf.Min(
                     pathLength,
                     elapsed * physicalLaunchSpeed);
@@ -1632,7 +1626,7 @@ namespace CraftOrigin.CraftLive
                 -ResolveCameraUp().normalized * postRampGravity;
             while (ticket != null && cameraTurning)
             {
-                float deltaTime = Mathf.Max(0f, Time.deltaTime);
+                float deltaTime = Mathf.Max(0f, Time.unscaledDeltaTime);
                 velocity += gravity * deltaTime;
                 ticket.position += velocity * deltaTime;
                 ticket.Rotate(
@@ -1663,7 +1657,7 @@ namespace CraftOrigin.CraftLive
                 -ResolveCameraUp().normalized * postRampGravity;
             while (cameraTurning)
             {
-                float deltaTime = Mathf.Max(0f, Time.deltaTime);
+                float deltaTime = Mathf.Max(0f, Time.unscaledDeltaTime);
                 for (int index = 0; index < tickets.Length; index++)
                 {
                     Transform ticket = tickets[index];
@@ -1692,7 +1686,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < loadDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = EaseOut(
                     Mathf.Clamp01(elapsed / loadDuration));
                 ticket.position =
@@ -1711,7 +1705,7 @@ namespace CraftOrigin.CraftLive
             Quaternion rotation = ticket.rotation;
             while (elapsed < launchDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(
                     elapsed / launchDuration);
                 Vector3 position =
@@ -1771,7 +1765,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (elapsed < rotationDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(
                     elapsed / rotationDuration);
                 cameraTransform.position =
@@ -2336,7 +2330,7 @@ namespace CraftOrigin.CraftLive
                 while (visual != null &&
                        directElapsed < queueArrivalDuration)
                 {
-                    directElapsed += Time.deltaTime;
+                    directElapsed += Time.unscaledDeltaTime;
                     float t = Mathf.Clamp01(
                         directElapsed / queueArrivalDuration);
                     float eased = EaseOut(t);
@@ -2396,7 +2390,7 @@ namespace CraftOrigin.CraftLive
             float elapsed = 0f;
             while (visual != null && elapsed < totalDuration)
             {
-                elapsed += Time.deltaTime;
+                elapsed += Time.unscaledDeltaTime;
                 if (elapsed < approachDuration)
                 {
                     float phase = EaseOut(Mathf.Clamp01(

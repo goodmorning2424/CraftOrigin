@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: ore_defence
   displayName: "\u9632\u5FA1"
-  description: "\u9632\u5FA1\u7387\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002"
+  description: "防御力+50（最大1000）。"
   category: 2
   requiresQrUnlock: 0
   icon: {fileID: 21300000, guid: 14bb08de59513ec43b32ca5d5a3b44cc, type: 3}
@@ -31,7 +31,7 @@ MonoBehaviour:
   usageSummary: 
   statModifiers:
     attackRate: 0
-    defenseRate: 5
+    defenseRate: 50
     evasionRate: 0
     elementBoost: 0
   attributeId: dark

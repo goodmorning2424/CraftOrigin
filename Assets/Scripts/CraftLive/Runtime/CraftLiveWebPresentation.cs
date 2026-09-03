@@ -1,12 +1,15 @@
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Rendering;
 
 namespace CraftOrigin.CraftLive
 {
     public sealed class CraftLiveWebPresentation : MonoBehaviour
     {
         [SerializeField] private Camera targetCamera;
+        [SerializeField] private CraftLiveSession session;
         [SerializeField, Min(1)] private int targetFrameRate = 30;
+        [SerializeField, Range(2, 4)] private int idleRenderFrameInterval = 2;
         [SerializeField] private Vector2 targetAspect = new Vector2(3f, 4f);
         [SerializeField] private bool letterboxCamera = true;
         [SerializeField] private bool respectSafeArea = true;
@@ -27,9 +30,29 @@ namespace CraftOrigin.CraftLive
             }
 
             QualitySettings.vSyncCount = 0;
+            Application.runInBackground = false;
             Application.targetFrameRate = targetFrameRate;
             Screen.sleepTimeout = SleepTimeout.NeverSleep;
             Refresh();
+        }
+
+        private void OnEnable()
+        {
+            if (session == null)
+            {
+                session = FindAnyObjectByType<CraftLiveSession>();
+            }
+
+            if (session != null)
+            {
+                session.StateChanged -= HandleStateChanged;
+                session.StateChanged += HandleStateChanged;
+                ApplyEnergyProfile(session.State);
+            }
+            else
+            {
+                OnDemandRendering.renderFrameInterval = 1;
+            }
         }
 
         private void Update()
@@ -48,10 +71,42 @@ namespace CraftOrigin.CraftLive
 
         private void OnDisable()
         {
+            if (session != null)
+            {
+                session.StateChanged -= HandleStateChanged;
+            }
+
+            OnDemandRendering.renderFrameInterval = 1;
             if (targetCamera != null)
             {
                 targetCamera.rect = new Rect(0f, 0f, 1f, 1f);
             }
+        }
+
+        private void HandleStateChanged(CraftLiveRoomState state)
+        {
+            ApplyEnergyProfile(state);
+        }
+
+        private void ApplyEnergyProfile(CraftLiveRoomState state)
+        {
+            CraftLiveSessionPhase phase = state != null
+                ? state.sessionPhase
+                : CraftLiveSessionPhase.Playing;
+            OnDemandRendering.renderFrameInterval =
+                CalculateRenderFrameInterval(
+                    phase,
+                    idleRenderFrameInterval);
+        }
+
+        public static int CalculateRenderFrameInterval(
+            CraftLiveSessionPhase phase,
+            int idleInterval = 2)
+        {
+            return phase == CraftLiveSessionPhase.StartScreen ||
+                   phase == CraftLiveSessionPhase.Finished
+                ? Mathf.Clamp(idleInterval, 2, 4)
+                : 1;
         }
 
         public void Refresh()

@@ -21,7 +21,7 @@ MonoBehaviour:
   useFirebaseInEditor: 0
   useFirebaseInWebGl: 1
   firebaseDatabaseUrl: https://craft-live-default-rtdb.firebaseio.com
-  pollIntervalSeconds: 0.5
+  pollIntervalSeconds: 0.2
   requestTimeoutSeconds: 10
   initialRetryDelaySeconds: 0.75
   maximumRetryDelaySeconds: 8

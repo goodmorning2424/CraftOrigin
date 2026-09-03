@@ -31,6 +31,7 @@
       const recoveryAttemptParameter = "build-retry";
       const recoveryStorageKey = "craft-live-build-recovery-attempts";
       const maxRecoveryAttempts = 3;
+      const isFileProtocol = window.location.protocol === "file:";
 
       function currentRecoveryAttempts() {
         const urlAttempts = Number.parseInt(
@@ -159,7 +160,7 @@
         // render buffer bounded and predictable.
         devicePixelRatio: Math.min(
           window.devicePixelRatio || 1,
-          isIPad ? 1.5 : 2),
+          isIPad ? 1.35 : 2),
         autoSyncPersistentDataPath: true,
         showBanner: (message, type) => {
           // Unity reports a missing hashed .data file through showBanner as
@@ -212,7 +213,15 @@
             true);
         }
       };
-      document.body.appendChild(script);
+      if (isFileProtocol) {
+        loading.hidden = true;
+        showStatus(
+          "このUnity WebGLビルドはHTMLファイルの直接開きでは実行できません。ビルドフォルダー内の「Start-CraftLiveSimulator.cmd」を起動してください。",
+          "error",
+          true);
+      } else {
+        document.body.appendChild(script);
+      }
     </script>
   </body>
 </html>

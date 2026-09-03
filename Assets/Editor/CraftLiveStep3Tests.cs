@@ -49,6 +49,147 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expected));
         }
 
+        [Test]
+        public void SynchronizedStartScreen_IsPlacedInFrontOfSceneCamera()
+        {
+            GameObject cameraObject = new GameObject("StartScreenCamera");
+            createdObjects.Add(cameraObject);
+            Camera camera = cameraObject.AddComponent<Camera>();
+            camera.fieldOfView = 60f;
+
+            GameObject displayRoot = new GameObject("DisplayRoot");
+            createdObjects.Add(displayRoot);
+            GameObject underlying = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            underlying.name = "UnderlyingPadVisual";
+            createdObjects.Add(underlying);
+            Renderer underlyingRenderer = underlying.GetComponent<Renderer>();
+            GameObject host = new GameObject("StartScreenHost");
+            createdObjects.Add(host);
+            CraftLiveSynchronizedStartScreen screen =
+                host.AddComponent<CraftLiveSynchronizedStartScreen>();
+            SetField(screen, "displayRoot", displayRoot.transform);
+
+            MethodInfo build = typeof(CraftLiveSynchronizedStartScreen)
+                .GetMethod(
+                    "BuildScreen",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(build, Is.Not.Null);
+            build.Invoke(screen, null);
+
+            Transform generated = displayRoot.transform.Find(
+                "Generated_SynchronizedStartScreen");
+            Assert.That(generated, Is.Not.Null);
+            Vector3 viewport = camera.WorldToViewportPoint(
+                generated.position);
+            Assert.That(viewport.x, Is.EqualTo(0.5f).Within(0.01f));
+            Assert.That(viewport.y, Is.EqualTo(0.5f).Within(0.01f));
+            Assert.That(viewport.z, Is.GreaterThan(camera.nearClipPlane));
+            Assert.That(viewport.z, Is.EqualTo(1f).Within(0.05f));
+            Assert.That(
+                generated.Find("StartButtonFace"),
+                Is.Null);
+            Assert.That(
+                generated.Find("StartButtonLabel"),
+                Is.Null);
+            Transform backing = generated.Find("CastIronShadow");
+            Assert.That(backing, Is.Not.Null);
+            Transform occluder = generated.Find("FullViewportOccluder");
+            Assert.That(occluder, Is.Not.Null);
+            float visibleHeight = 2f * viewport.z * Mathf.Tan(
+                camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float visibleWidth = visibleHeight * camera.aspect;
+            Assert.That(
+                backing.lossyScale.x,
+                Is.GreaterThanOrEqualTo(visibleWidth));
+            Assert.That(
+                backing.lossyScale.y,
+                Is.GreaterThanOrEqualTo(visibleHeight));
+            Assert.That(underlyingRenderer.enabled, Is.False);
+            Assert.That(
+                underlying.GetComponent<Collider>().enabled,
+                Is.False);
+
+            underlyingRenderer.enabled = true;
+            GameObject lateVisual = GameObject.CreatePrimitive(
+                PrimitiveType.Cube);
+            lateVisual.name = "LatePadVisual";
+            createdObjects.Add(lateVisual);
+            Renderer lateRenderer = lateVisual.GetComponent<Renderer>();
+            MethodInfo suppress = typeof(CraftLiveSynchronizedStartScreen)
+                .GetMethod(
+                    "SuppressSceneRenderers",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(suppress, Is.Not.Null);
+            suppress.Invoke(screen, null);
+            Assert.That(underlyingRenderer.enabled, Is.False);
+            Assert.That(lateRenderer.enabled, Is.False);
+
+            MethodInfo restore = typeof(CraftLiveSynchronizedStartScreen)
+                .GetMethod(
+                    "RestoreSceneRenderers",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(restore, Is.Not.Null);
+            restore.Invoke(screen, null);
+            MethodInfo restoreColliders =
+                typeof(CraftLiveSynchronizedStartScreen).GetMethod(
+                    "RestoreSceneColliders",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(restoreColliders, Is.Not.Null);
+            restoreColliders.Invoke(screen, null);
+            Assert.That(underlyingRenderer.enabled, Is.True);
+            Assert.That(lateRenderer.enabled, Is.True);
+            Assert.That(
+                underlying.GetComponent<Collider>().enabled,
+                Is.True);
+        }
+
+        [Test]
+        public void RuntimeVisualFit_IgnoresParticleBoundsWhenMeshExists()
+        {
+            GameObject parent = new GameObject("FitParent");
+            createdObjects.Add(parent);
+            GameObject content = new GameObject("FitContent");
+            createdObjects.Add(content);
+            content.transform.SetParent(parent.transform, false);
+            GameObject mesh = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            createdObjects.Add(mesh);
+            mesh.transform.SetParent(content.transform, false);
+            GameObject particleObject = new GameObject("HugeParticles");
+            createdObjects.Add(particleObject);
+            particleObject.transform.SetParent(content.transform, false);
+            ParticleSystem particles = particleObject.AddComponent<ParticleSystem>();
+            ParticleSystemRenderer particleRenderer =
+                particleObject.GetComponent<ParticleSystemRenderer>();
+            particleRenderer.localBounds =
+                new Bounds(Vector3.zero, Vector3.one * 1000f);
+
+            System.Type utility = System.Type.GetType(
+                "CraftOrigin.CraftLive.CraftLiveRuntimeVisualUtility, Assembly-CSharp");
+            Assert.That(utility, Is.Not.Null);
+            MethodInfo fit = utility.GetMethod(
+                "FitAndCenter",
+                BindingFlags.Static | BindingFlags.Public);
+            Assert.That(fit, Is.Not.Null);
+            bool fitted = (bool)fit.Invoke(
+                null,
+                new object[]
+                {
+                    content.transform,
+                    2f,
+                    false,
+                    0f,
+                    false,
+                    false
+                });
+
+            Assert.That(fitted, Is.True);
+            Assert.That(
+                mesh.GetComponent<Renderer>().bounds.size.x,
+                Is.EqualTo(2f).Within(0.05f));
+            particles.Stop();
+        }
+
         [TestCase(CraftLiveMaterialCategory.Upgrade, "パワーアップ")]
         [TestCase(CraftLiveMaterialCategory.Skill, "スキル")]
         [TestCase(CraftLiveMaterialCategory.Attribute, "タイプ")]
@@ -663,6 +804,38 @@ namespace CraftOrigin.CraftLiveTests
             painting.SetViewportVisible(true);
 
             Assert.That(painting.Interactable, Is.False);
+            Assert.That(collider.enabled, Is.True);
+        }
+
+        [Test]
+        public void Painting_PreviewSuppressionHidesVisualsButKeepsInput()
+        {
+            GameObject paintingObject = new GameObject("Painting");
+            createdObjects.Add(paintingObject);
+            MeshRenderer renderer =
+                paintingObject.AddComponent<MeshRenderer>();
+            BoxCollider collider =
+                paintingObject.AddComponent<BoxCollider>();
+            CraftLiveMaterialPaintingView painting =
+                paintingObject.AddComponent<
+                    CraftLiveMaterialPaintingView>();
+            painting.ConfigureFallbackVisuals(
+                paintingObject.transform,
+                new Renderer[] { renderer },
+                new Collider[] { collider },
+                null,
+                null);
+
+            painting.SetViewportVisible(true);
+            painting.SetPreviewSuppressed(true);
+
+            Assert.That(painting.PreviewSuppressed, Is.True);
+            Assert.That(renderer.enabled, Is.False);
+            Assert.That(collider.enabled, Is.True);
+
+            painting.SetPreviewSuppressed(false);
+
+            Assert.That(renderer.enabled, Is.True);
             Assert.That(collider.enabled, Is.True);
         }
 

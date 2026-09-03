@@ -15,7 +15,7 @@ MonoBehaviour:
   materialId: ore_attack
   pad2PreviewRollDegrees: 180
   displayName: "\u653B\u6483"
-  description: "\u653B\u6483\u7387\u304C\u4E0A\u304C\u308A\u307E\u3059\u3002"
+  description: "攻撃力+50（最大1000）。"
   category: 2
   requiresQrUnlock: 0
   icon: {fileID: 21300000, guid: 2563ced709e67564a8e08a51e33e7df4, type: 3}
@@ -31,7 +31,7 @@ MonoBehaviour:
   abilitySummary: 
   usageSummary: 
   statModifiers:
-    attackRate: 5
+    attackRate: 50
     defenseRate: 0
     evasionRate: 0
     elementBoost: 0

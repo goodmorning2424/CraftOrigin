@@ -131,6 +131,63 @@ namespace CraftOrigin.CraftLive
 
         public bool IsReceivingAnyTransfer => receiveRoutine != null;
 
+        /// <summary>
+        /// Commits an arriving material before any visual coroutine starts.
+        /// Public for deterministic recovery/integration tests; normal runtime
+        /// entry is Refresh.
+        /// </summary>
+        public bool TryCommitArrivalBeforePresentation(
+            CraftLiveRoomState arrivalState)
+        {
+            if (session == null || arrivalState == null ||
+                arrivalState.placement == null ||
+                arrivalState.placement.status !=
+                    CraftLivePlacementStatus.Pad2Arriving ||
+                (arrivalState.groupGeneration ==
+                     handledTransferGeneration &&
+                 arrivalState.placement.transferSerial ==
+                     handledTransferSerial) ||
+                receiveRoutine != null)
+            {
+                return false;
+            }
+
+            handledTransferGeneration = arrivalState.groupGeneration;
+            handledTransferSerial =
+                arrivalState.placement.transferSerial;
+            activeTransferGeneration = handledTransferGeneration;
+            activeTransferSerial = handledTransferSerial;
+
+            if (session.CompleteCurrentPlacement(
+                    activeTransferGeneration,
+                    activeTransferSerial))
+            {
+                return true;
+            }
+
+            handledTransferGeneration = -1;
+            handledTransferSerial = -1;
+            activeTransferGeneration = -1;
+            activeTransferSerial = -1;
+            return false;
+        }
+
+        public bool AbortStalledTransfer(
+            int groupGeneration,
+            int transferSerial)
+        {
+            if (!IsReceivingTransfer(groupGeneration, transferSerial))
+            {
+                return false;
+            }
+
+            liquidFlowController?.AbortStalledFlow(
+                groupGeneration,
+                transferSerial);
+            ResetTransferLifecycle(groupGeneration, false);
+            return true;
+        }
+
 #if UNITY_EDITOR
         [ContextMenu("Debug/Start First Queued Arrival")]
         private void DebugStartFirstQueuedArrival()
@@ -205,6 +262,43 @@ namespace CraftOrigin.CraftLive
                     true);
             }
 
+            if (state.placement.status ==
+                    CraftLivePlacementStatus.Pad2Arriving &&
+                (state.groupGeneration !=
+                     handledTransferGeneration ||
+                 state.placement.transferSerial !=
+                     handledTransferSerial) &&
+                receiveRoutine == null)
+            {
+                CraftLiveRoomState arrivalSnapshot = state.Clone();
+
+                // The slot commit is authority; every animation below is only
+                // presentation. Commit before checking bindings or starting a
+                // coroutine so missing scene references, a suspended WebGL
+                // frame, broken prefab or shader exception cannot leave the
+                // shared room in Arriving.
+                if (!TryCommitArrivalBeforePresentation(
+                        arrivalSnapshot))
+                {
+                    return;
+                }
+
+                if (bindings == null)
+                {
+                    FinishCommittedArrivalWithoutPresentation(
+                        arrivalSnapshot.groupGeneration,
+                        arrivalSnapshot.placement.transferSerial);
+                    return;
+                }
+
+                receiveRoutine = StartCoroutine(
+                    PlaceSingleMaterialGuarded(
+                        arrivalSnapshot,
+                        activeTransferGeneration,
+                        activeTransferSerial));
+                return;
+            }
+
             if (bindings == null)
             {
                 return;
@@ -226,27 +320,23 @@ namespace CraftOrigin.CraftLive
             }
 #endif
 
-            if (state.placement.status ==
-                    CraftLivePlacementStatus.Pad2Arriving &&
-                (state.groupGeneration !=
-                     handledTransferGeneration ||
-                 state.placement.transferSerial !=
-                     handledTransferSerial) &&
-                receiveRoutine == null)
+        }
+
+        private void FinishCommittedArrivalWithoutPresentation(
+            int groupGeneration,
+            int transferSerial)
+        {
+            activeTransferGeneration = -1;
+            activeTransferSerial = -1;
+            if (publishStatsAfterArrival)
             {
-                handledTransferGeneration =
-                    state.groupGeneration;
-                handledTransferSerial =
-                    state.placement.transferSerial;
-                activeTransferGeneration =
-                    handledTransferGeneration;
-                activeTransferSerial = handledTransferSerial;
-                receiveRoutine = StartCoroutine(
-                    PlaceSingleMaterialGuarded(
-                        state.Clone(),
-                        activeTransferGeneration,
-                        activeTransferSerial));
+                session.PublishCurrentStatsToPad3(
+                    groupGeneration,
+                    transferSerial);
             }
+            session.ContinueAfterPlacement(
+                groupGeneration,
+                transferSerial);
         }
 
         private static bool IsLocalPlayTest()
@@ -323,8 +413,8 @@ namespace CraftOrigin.CraftLive
             int groupGeneration,
             int transferSerial)
         {
-            // Make sure StartCoroutine has assigned receiveRoutine before any
-            // checked state mutation can synchronously invoke Refresh.
+            // Make sure StartCoroutine has assigned receiveRoutine before the
+            // presentation starts yielding across frames.
             yield return null;
             try
             {
@@ -337,7 +427,7 @@ namespace CraftOrigin.CraftLive
                 if (!IsCurrentTransfer(
                         groupGeneration,
                         transferSerial,
-                        CraftLivePlacementStatus.Pad2Arriving))
+                        CraftLivePlacementStatus.PlacementComplete))
                 {
                     yield break;
                 }
@@ -352,17 +442,15 @@ namespace CraftOrigin.CraftLive
                 Transform target = GetSlotAnchor(slot);
                 if (material == null || target == null)
                 {
-                    if (session.CompleteCurrentPlacement(
-                            groupGeneration,
-                            transferSerial))
+                    if (publishStatsAfterArrival)
                     {
                         session.PublishCurrentStatsToPad3(
                             groupGeneration,
                             transferSerial);
-                        session.ContinueAfterPlacement(
-                            groupGeneration,
-                            transferSerial);
                     }
+                    session.ContinueAfterPlacement(
+                        groupGeneration,
+                        transferSerial);
                     yield break;
                 }
 
@@ -400,7 +488,7 @@ namespace CraftOrigin.CraftLive
                 if (!IsCurrentTransfer(
                         groupGeneration,
                         transferSerial,
-                        CraftLivePlacementStatus.Pad2Arriving))
+                        CraftLivePlacementStatus.PlacementComplete))
                 {
                     yield break;
                 }
@@ -430,7 +518,7 @@ namespace CraftOrigin.CraftLive
                 if (!IsCurrentTransfer(
                         groupGeneration,
                         transferSerial,
-                        CraftLivePlacementStatus.Pad2Arriving))
+                        CraftLivePlacementStatus.PlacementComplete))
                 {
                     yield break;
                 }
@@ -450,13 +538,7 @@ namespace CraftOrigin.CraftLive
 
                 DestroySafely(materialVisual);
                 activeTransferVisual = null;
-                if (!session.CompleteCurrentPlacement(
-                        groupGeneration,
-                        transferSerial))
-                {
-                    yield break;
-                }
-
+                RevealPlacedVisual(slot);
                 onPlacementCompleted?.Invoke(slot);
 
                 // Single and batch transfers share this exact method. Pad 2
@@ -507,6 +589,8 @@ namespace CraftOrigin.CraftLive
                 {
                     DestroySafely(activeTransferVisual);
                     activeTransferVisual = null;
+                    RevealPlacedVisual(
+                        snapshot.placement.confirmedSlot);
                     activeTransferGeneration = -1;
                     activeTransferSerial = -1;
                     receiveRoutine = null;
@@ -707,7 +791,26 @@ namespace CraftOrigin.CraftLive
             visual.name = $"Placed_{slot}_{materialId}";
             ApplyMaterialColor(visual, material.EffectColor);
             DisableColliders(visual);
+            bool presentingThisCommit =
+                activeTransferGeneration == state.groupGeneration &&
+                activeTransferSerial == state.placement.transferSerial &&
+                state.placement.status ==
+                    CraftLivePlacementStatus.PlacementComplete &&
+                state.placement.hasConfirmedSlot &&
+                state.placement.confirmedSlot == slot;
+            visual.SetActive(!presentingThisCommit);
             placedVisuals[slot] = visual;
+        }
+
+        private void RevealPlacedVisual(CraftLiveSlotId slot)
+        {
+            if (placedVisuals.TryGetValue(
+                    slot,
+                    out GameObject visual) &&
+                visual != null)
+            {
+                visual.SetActive(true);
+            }
         }
 
         private IEnumerator AnimateTicket(
@@ -794,15 +897,18 @@ namespace CraftOrigin.CraftLive
             ref Vector3 position,
             Vector3 originalScale)
         {
+            Vector3 surfaceNormal = ResolveSurfaceNormal();
             switch (form)
             {
                 case CraftLiveMaterialForm.Gem:
-                    position.y +=
+                    position = OffsetAlongSurfaceNormal(
+                        position,
+                        surfaceNormal,
                         Mathf.Abs(
                             Mathf.Sin(t * Mathf.PI * 2f)) *
                         arrivalArcHeight *
                         (1f - t) *
-                        0.28f;
+                        0.28f);
                     visual.localScale =
                         originalScale *
                         (1f +
@@ -825,22 +931,37 @@ namespace CraftOrigin.CraftLive
                                  arrivalArcHeight *
                                  (1f - t) *
                                  0.22f);
-                    position.y +=
+                    position = OffsetAlongSurfaceNormal(
+                        position,
+                        surfaceNormal,
                         Mathf.Sin(t * Mathf.PI) *
                         arrivalArcHeight *
-                        0.24f;
+                        0.24f);
                     break;
                 default:
-                    position.y +=
+                    position = OffsetAlongSurfaceNormal(
+                        position,
+                        surfaceNormal,
                         Mathf.Sin(t * Mathf.PI) *
                         arrivalArcHeight *
-                        0.1f;
+                        0.1f);
                     visual.rotation = Quaternion.Slerp(
                         visual.rotation,
                         targetRotation,
                         t);
                     break;
             }
+        }
+
+        public static Vector3 OffsetAlongSurfaceNormal(
+            Vector3 position,
+            Vector3 surfaceNormal,
+            float distance)
+        {
+            Vector3 normal = surfaceNormal.sqrMagnitude > 0.0001f
+                ? surfaceNormal.normalized
+                : Vector3.up;
+            return position + normal * distance;
         }
 
         private Vector3 ResolveArrivalPosition(

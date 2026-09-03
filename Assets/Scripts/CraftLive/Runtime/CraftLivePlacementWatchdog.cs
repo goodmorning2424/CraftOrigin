@@ -92,15 +92,29 @@ namespace CraftOrigin.CraftLive
                 if (placement.status == CraftLivePlacementStatus.PlacementComplete &&
                     elapsed >= completionTimeoutSeconds)
                 {
-                    if (receiver != null &&
+                    bool recoveryTimeoutReached = elapsed >=
+                        completionTimeoutSeconds + stageTimeoutSeconds;
+                    bool receiverIsStillRunning = receiver != null &&
                         receiver.IsReceivingTransfer(
                             groupGeneration,
-                            placement.transferSerial))
+                            placement.transferSerial);
+                    if (ShouldWaitForReceiver(
+                            receiverIsStillRunning,
+                            recoveryTimeoutReached))
                     {
                         // The receiver owns the place -> light -> continue
-                        // sequence. Advancing here at the same frame as the
-                        // light completion used to swallow the next arrival.
+                        // sequence during its grace period. After the recovery
+                        // timeout it must not hold the batch forever: a stuck
+                        // WebGL coroutine used to leave the next item unable
+                        // to launch even though the slot was already committed.
                         return;
+                    }
+
+                    if (recoveryTimeoutReached && receiverIsStillRunning)
+                    {
+                        receiver.AbortStalledTransfer(
+                            groupGeneration,
+                            placement.transferSerial);
                     }
 
                     CraftLiveLiquidFlowController flow =
@@ -110,8 +124,6 @@ namespace CraftOrigin.CraftLive
                         flow.HasCompletedFlow(
                             groupGeneration,
                             placement.transferSerial);
-                    bool recoveryTimeoutReached = elapsed >=
-                        completionTimeoutSeconds + stageTimeoutSeconds;
                     if (flowFinished || recoveryTimeoutReached)
                     {
                         session.ContinueAfterPlacement(
@@ -120,6 +132,13 @@ namespace CraftOrigin.CraftLive
                     }
                 }
             }
+        }
+
+        public static bool ShouldWaitForReceiver(
+            bool receiverIsStillRunning,
+            bool recoveryTimeoutReached)
+        {
+            return receiverIsStillRunning && !recoveryTimeoutReached;
         }
     }
 }

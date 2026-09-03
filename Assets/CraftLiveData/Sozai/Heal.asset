@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: skill_auto_heal
   displayName: "\u81EA\u52D5\u56DE\u5FA9"
-  description: "\u6BCE\u30BF\u30FC\u30F3\u4E00\u5B9A\u91CF\u3092\u81EA\u52D5\u3067\u56DE\u5FA9\u3057\u307E\u3059\u3002"
+  description: "毎ターン最大HPの5%を回復します。"
   category: 1
   requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: caaee4a41c9e7374989897e310ceadd0, type: 3}
@@ -52,8 +52,8 @@ MonoBehaviour:
   skillDescription: 
   skillEffect:
     type: 3
-    activationChancePercent: 0
-    primaryValue: 0
+    activationChancePercent: 100
+    primaryValue: 5
     secondaryValue: 0
     intervalSeconds: 0
   affectedStat: 1

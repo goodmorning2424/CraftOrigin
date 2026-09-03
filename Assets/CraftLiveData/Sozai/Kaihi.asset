@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: ore_evasion
   displayName: "\u56DE\u907F\u7387"
-  description: "\u653B\u6483\u304C\u5F53\u305F\u308A\u306B\u304F\u304F\u306A\u308A\u307E\u3059\u3002"
+  description: "回避力+50（最大1000）。"
   category: 2
   requiresQrUnlock: 0
   icon: {fileID: 21300000, guid: e52075fdd8f4b4b48ae35c02913bb27f, type: 3}
@@ -32,7 +32,7 @@ MonoBehaviour:
   statModifiers:
     attackRate: 0
     defenseRate: 0
-    evasionRate: 5
+    evasionRate: 50
     elementBoost: 0
   attributeId: thunder
   attributeDisplayName: "\u96F7"

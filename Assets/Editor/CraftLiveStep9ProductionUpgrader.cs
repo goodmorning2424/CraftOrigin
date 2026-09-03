@@ -69,8 +69,8 @@ namespace CraftOrigin.CraftLiveEditor
                     BuildTarget.WebGL,
                 "Active build target is WebGL.");
             report.Check(
-                PlayerSettings.runInBackground,
-                "Run In Background is enabled.");
+                !PlayerSettings.runInBackground,
+                "Run In Background is disabled for mobile power saving.");
             report.Check(
                 PlayerSettings.defaultWebScreenWidth == 768 &&
                 PlayerSettings.defaultWebScreenHeight == 1024,
@@ -102,6 +102,8 @@ namespace CraftOrigin.CraftLiveEditor
                 "Assets/WebGLTemplates/CraftLive/index.html";
             string stylePath =
                 "Assets/WebGLTemplates/CraftLive/TemplateData/style.css";
+            string simulatorPath =
+                "Assets/WebGLTemplates/CraftLive/simulator.html";
             string bridgePath =
                 "Assets/Plugins/WebGL/CraftLiveWebGL.jslib";
             report.Check(
@@ -110,6 +112,9 @@ namespace CraftOrigin.CraftLiveEditor
             report.Check(
                 File.Exists(GetProjectPath(stylePath)),
                 "Custom WebGL stylesheet exists.");
+            report.Check(
+                File.Exists(GetProjectPath(simulatorPath)),
+                "Three-pad Firebase simulator exists.");
             report.Check(
                 File.Exists(GetProjectPath(bridgePath)),
                 "WebGL QR bridge exists.");
@@ -189,7 +194,7 @@ namespace CraftOrigin.CraftLiveEditor
         {
             PlayerSettings.companyName = "goodmorning2424";
             PlayerSettings.productName = "Craft-live";
-            PlayerSettings.runInBackground = true;
+            PlayerSettings.runInBackground = false;
             PlayerSettings.defaultWebScreenWidth = 768;
             PlayerSettings.defaultWebScreenHeight = 1024;
             PlayerSettings.WebGL.template = "PROJECT:CraftLive";

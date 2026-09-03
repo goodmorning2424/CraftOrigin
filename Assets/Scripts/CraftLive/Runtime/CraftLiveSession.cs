@@ -8,10 +8,10 @@ namespace CraftOrigin.CraftLive
     [DefaultExecutionOrder(-300)]
     public sealed class CraftLiveSession : MonoBehaviour
     {
-        // Temporary safety gate. Keep the batch implementation available for
-        // later repair, but every public launch path currently transfers one
-        // material per spring operation.
-        public static bool MultiMaterialTransferEnabled => false;
+        // A batch is one player operation, but each material advances through
+        // the complete load -> launch -> arrive -> place -> light sequence on
+        // its own. No two authoritative placements run concurrently.
+        public static bool MultiMaterialTransferEnabled => true;
         public const string SingleTransferWarningMessage =
             "素材を一個ずつ転送してください";
 
@@ -124,6 +124,11 @@ namespace CraftOrigin.CraftLive
                     return;
                 }
 
+                // Transfer stages are commands as well as presentation state.
+                // Preserve the furthest durable stage even when a newer
+                // whole-room snapshot was written by another Pad.
+                remoteState.MergeTransferReliabilityFrom(state);
+
                 remoteState.transferQueueSerial = Mathf.Max(
                     remoteState.transferQueueSerial,
                     state.transferQueueSerial);
@@ -138,8 +143,8 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            StateChanged?.Invoke(state);
-            onMessageChanged?.Invoke(state.message);
+            InvokeStateHandlers(StateChanged, "remote state presentation");
+            InvokeMessageChanged();
         }
 
         private bool ShouldRestartExpiredEmptySession(
@@ -226,21 +231,49 @@ namespace CraftOrigin.CraftLive
             long durationMs = Mathf.RoundToInt(
                 (rules != null
                     ? rules.SessionDurationSeconds
-                    : 300f) * 1000f);
+                    : CraftLiveRules.DefaultSessionDurationSeconds) * 1000f);
+            long startedAt = state.sessionStartedAtUnixMs > 0
+                ? state.sessionStartedAtUnixMs
+                : now;
+            long endsAt = state.sessionEndsAtUnixMs > 0
+                ? state.sessionEndsAtUnixMs
+                : now + durationMs;
+            Mutate(next =>
+            {
+                next.sessionStartedAtUnixMs = startedAt;
+                next.sessionEndsAtUnixMs = endsAt;
+                next.sessionPhase = CraftLiveSessionPhase.Playing;
+                next.message = "武器づくりを始めよう";
+            });
+        }
+
+        public void BeginTimedIntroduction()
+        {
+            if (state == null ||
+                state.sessionPhase != CraftLiveSessionPhase.StartScreen ||
+                state.sessionEndsAtUnixMs > 0)
+            {
+                return;
+            }
+
+            long now = UnixNowMs();
+            long durationMs = Mathf.RoundToInt(
+                (rules != null
+                    ? rules.SessionDurationSeconds
+                    : CraftLiveRules.DefaultSessionDurationSeconds) * 1000f);
             Mutate(next =>
             {
                 next.sessionStartedAtUnixMs = now;
                 next.sessionEndsAtUnixMs = now + durationMs;
-                next.sessionPhase = CraftLiveSessionPhase.Playing;
-                next.message = "武器づくりを始めよう";
+                next.message = "操作説明動画を再生中";
             });
         }
 
         /// <summary>
         /// Prepares a new group without replacing the room transport. This is
         /// called only by Pad 2 after the setup screen is confirmed. The game
-        /// timer remains stopped until the separate Pad 2 start button calls
-        /// StartGroup.
+        /// timer remains stopped until the Pad 2 tutorial video actually
+        /// starts. Projects without a tutorial start it with StartGroup.
         /// </summary>
         public void RestartGroupFromConnectionSetup()
         {
@@ -275,7 +308,7 @@ namespace CraftOrigin.CraftLive
             {
                 return rules != null
                     ? rules.SessionDurationSeconds
-                    : 300f;
+                    : CraftLiveRules.DefaultSessionDurationSeconds;
             }
 
             return Mathf.Max(
@@ -542,7 +575,10 @@ namespace CraftOrigin.CraftLive
 
         public bool BeginAllQueuedTransfers()
         {
-            return BeginSingleTransfer();
+            int queuedCount = state != null && state.transferQueue != null
+                ? state.transferQueue.Count
+                : 0;
+            return BeginTransferBatch(queuedCount);
         }
 
         public bool BeginTransferBatch(int requestedCount)
@@ -671,6 +707,7 @@ namespace CraftOrigin.CraftLive
             {
                 next.placement.status = CraftLivePlacementStatus.Pad1Launching;
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
+                CaptureTransferSignal(next);
                 next.message = "転送中";
             });
             return true;
@@ -708,6 +745,7 @@ namespace CraftOrigin.CraftLive
             {
                 next.placement.status = CraftLivePlacementStatus.Pad2Arriving;
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
+                CaptureTransferSignal(next);
                 next.message = "素材が到着します";
             });
             return true;
@@ -744,6 +782,13 @@ namespace CraftOrigin.CraftLive
 
             Mutate(next =>
             {
+                next.lastCompletedTransferSerial = Mathf.Max(
+                    next.lastCompletedTransferSerial,
+                    next.placement.transferSerial);
+                next.placement.status =
+                    CraftLivePlacementStatus.PlacementComplete;
+                next.placement.statusChangedAtUnixMs = UnixNowMs();
+                CaptureTransferSignal(next);
                 if (MultiMaterialTransferEnabled &&
                     next.transferBatchRemaining > 0 &&
                     next.transferQueue.Count > 0)
@@ -801,8 +846,13 @@ namespace CraftOrigin.CraftLive
                 string materialId = next.placement.materialId;
                 CraftLiveSlotId slot = next.placement.confirmedSlot;
                 next.slots.Set(slot, materialId);
+                MarkSlotsChanged(next);
                 next.placement.status = CraftLivePlacementStatus.PlacementComplete;
                 next.placement.statusChangedAtUnixMs = UnixNowMs();
+                next.lastCompletedTransferSerial = Mathf.Max(
+                    next.lastCompletedTransferSerial,
+                    next.placement.transferSerial);
+                CaptureTransferSignal(next);
                 next.message = "配置完了";
             });
             return true;
@@ -877,6 +927,7 @@ namespace CraftOrigin.CraftLive
             Mutate(next =>
             {
                 next.slots.Set(slot, string.Empty);
+                MarkSlotsChanged(next);
                 PublishStatsToPad3(next);
                 next.message = $"{CraftLiveSlot.ToKey(slot)}スロットを空にしました。";
             });
@@ -1127,6 +1178,7 @@ namespace CraftOrigin.CraftLive
                 next.transferQueue.Clear();
                 next.transferBatchRemaining = 0;
                 next.slots.Clear();
+                MarkSlotsChanged(next);
                 next.displayedStats = new CraftLiveStats();
                 next.statusDisplaySerial++;
                 next.weaponSelectionConfirmed = false;
@@ -1139,8 +1191,8 @@ namespace CraftOrigin.CraftLive
         public bool SelectFinalWeapon(int resultSerial)
         {
             if (state == null ||
-                state.sessionPhase ==
-                    CraftLiveSessionPhase.Playing ||
+                state.sessionPhase !=
+                    CraftLiveSessionPhase.FinalSelection ||
                 state.completedWeapons == null)
             {
                 return false;
@@ -1164,19 +1216,77 @@ namespace CraftOrigin.CraftLive
                 return false;
             }
 
-            string code = CraftLiveWeaponCode.Generate(selected);
             Mutate(next =>
             {
                 next.selectedFinalResultSerial =
                     selected.resultSerial;
-                next.finalWeaponCode = code;
+                // The transport normally reserves a two-digit group number in
+                // Firebase. The browser-only three-pad simulator may reserve a
+                // five-digit debug number so test data cannot be mistaken for a
+                // visitor's production number.
+                // Keep the field empty until that reservation is confirmed so an
+                // unreserved number is never shown to visitors.
+                next.finalWeaponCode = string.Empty;
                 next.result = selected.Clone();
                 next.sessionPhase =
                     CraftLiveSessionPhase.Finished;
                 next.message =
-                    $"完成しました。次の部屋に進んでください。武器コード: {code}";
+                    "完成しました。グループ番号を発行しています…";
             });
             return true;
+        }
+
+        public bool ApplyIssuedGroupNumber(
+            int expectedGroupGeneration,
+            int expectedResultSerial,
+            string groupNumber,
+            bool allowFiveDigitDebugNumber = false)
+        {
+            string normalized = (groupNumber ?? string.Empty).Trim();
+            int productionNumber = 0;
+            bool validProductionNumber = normalized.Length == 2 &&
+                int.TryParse(normalized, out productionNumber) &&
+                productionNumber >= 1 && productionNumber <= 99;
+            bool validDebugNumber = allowFiveDigitDebugNumber &&
+                CraftLiveRoomTransport.IsFiveDigitGroupNumber(normalized);
+            if (state == null ||
+                state.groupGeneration != expectedGroupGeneration ||
+                state.sessionPhase != CraftLiveSessionPhase.Finished ||
+                state.selectedFinalResultSerial != expectedResultSerial ||
+                !string.IsNullOrWhiteSpace(state.finalWeaponCode) ||
+                (!validProductionNumber && !validDebugNumber))
+            {
+                return false;
+            }
+
+            Mutate(next =>
+            {
+                next.finalWeaponCode = validDebugNumber
+                    ? normalized
+                    : productionNumber.ToString("00");
+                next.message =
+                    $"完成しました。グループ番号は " +
+                    $"{next.finalWeaponCode} です。";
+            });
+            return true;
+        }
+
+        public void ReportGroupNumberRetry(
+            int expectedGroupGeneration,
+            int expectedResultSerial,
+            string failureMessage = null)
+        {
+            if (state == null ||
+                state.groupGeneration != expectedGroupGeneration ||
+                state.selectedFinalResultSerial != expectedResultSerial ||
+                !string.IsNullOrWhiteSpace(state.finalWeaponCode))
+            {
+                return;
+            }
+            Mutate(next =>
+                next.message = string.IsNullOrWhiteSpace(failureMessage)
+                    ? "Firebaseへ再接続しています。グループ番号を発行中です…"
+                    : failureMessage.Trim());
         }
 
         public void UnlockMaterialId(string materialId)
@@ -1283,6 +1393,20 @@ namespace CraftOrigin.CraftLive
                 : int.MaxValue;
         }
 
+        private static void MarkSlotsChanged(CraftLiveRoomState target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            long current = Math.Max(0L, target.slotsRevision);
+            long revisionFloor = Math.Max(current, target.revision);
+            target.slotsRevision = revisionFloor < long.MaxValue
+                ? revisionFloor + 1L
+                : long.MaxValue;
+        }
+
         private static void ActivateNextQueuedTransfer(
             CraftLiveRoomState target,
             CraftLivePlacementStatus status)
@@ -1298,6 +1422,20 @@ namespace CraftOrigin.CraftLive
             target.placement.transferSerial = entry.serial;
             target.placement.status = status;
             target.placement.statusChangedAtUnixMs = UnixNowMs();
+            CaptureTransferSignal(target);
+        }
+
+        private static void CaptureTransferSignal(
+            CraftLiveRoomState target)
+        {
+            if (target == null || target.placement == null)
+            {
+                return;
+            }
+
+            target.transferSignal = target.transferSignal ??
+                new CraftLiveTransferSignal();
+            target.transferSignal.Capture(target.placement);
         }
 
         private void PublishStatsToPad3(
@@ -1409,9 +1547,56 @@ namespace CraftOrigin.CraftLive
 
         private void PublishLocal()
         {
-            StateChanged?.Invoke(state);
-            LocalStateChanged?.Invoke(state);
-            onMessageChanged?.Invoke(state.message);
+            // Send the authoritative state to RoomTransport before building
+            // any local 3D presentation. Imported material prefabs can take a
+            // noticeable frame to instantiate on tablets; publishing first
+            // keeps the other pads from waiting for that visual work.
+            InvokeStateHandlers(LocalStateChanged, "local state persistence");
+            InvokeStateHandlers(StateChanged, "local state presentation");
+            InvokeMessageChanged();
+        }
+
+        private void InvokeStateHandlers(
+            Action<CraftLiveRoomState> handlers,
+            string context)
+        {
+            if (handlers == null)
+            {
+                return;
+            }
+
+            foreach (Delegate callback in handlers.GetInvocationList())
+            {
+                try
+                {
+                    ((Action<CraftLiveRoomState>)callback)(state);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogError(
+                        $"CraftLiveSession: {context} callback failed; " +
+                        "remaining callbacks will continue.",
+                        this);
+                    Debug.LogException(exception, this);
+                }
+            }
+        }
+
+        private void InvokeMessageChanged()
+        {
+            try
+            {
+                onMessageChanged?.Invoke(state != null
+                    ? state.message
+                    : string.Empty);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "CraftLiveSession: message presentation callback failed.",
+                    this);
+                Debug.LogException(exception, this);
+            }
         }
 
         public static long UnixNowMs()

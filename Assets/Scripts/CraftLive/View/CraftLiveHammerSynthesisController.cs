@@ -33,6 +33,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(0.05f, 1f)] private float completionFadeDuration = 0.55f;
         [SerializeField, Range(0.1f, 1f)] private float completionFadeInDuration = 0.4f;
         [SerializeField, Range(0.1f, 0.9f)] private float completionFlashOpacity = 0.7f;
+        [SerializeField, Min(2f)] private float secretCompletionRevealDelay = 2.6f;
 
         private GameObject generatedRoot;
         private GameObject synthesisButton;
@@ -43,6 +44,10 @@ namespace CraftOrigin.CraftLive
         private float directedTravel;
         private bool completionFlashVisible;
         private float completionFlashAlpha;
+        private bool secretCompletionVisible;
+        private float secretCompletionAlpha;
+        private float secretCompletionScale;
+        private Texture2D secretCompletionTexture;
 
         private void Awake()
         {
@@ -73,6 +78,8 @@ namespace CraftOrigin.CraftLive
             activePointerId = int.MinValue;
             completionFlashVisible = false;
             completionFlashAlpha = 0f;
+            secretCompletionVisible = false;
+            secretCompletionAlpha = 0f;
             if (session != null)
             {
                 session.StateChanged -= Refresh;
@@ -91,9 +98,29 @@ namespace CraftOrigin.CraftLive
             presentation?.HideImmediately();
         }
 
+        private void OnDestroy()
+        {
+            if (secretCompletionTexture == null)
+            {
+                return;
+            }
+
+            if (Application.isPlaying)
+            {
+                Destroy(secretCompletionTexture);
+            }
+            else
+            {
+                DestroyImmediate(secretCompletionTexture);
+            }
+
+            secretCompletionTexture = null;
+        }
+
         private void OnGUI()
         {
-            if (!completionFlashVisible || completionFlashAlpha <= 0f)
+            if ((!completionFlashVisible || completionFlashAlpha <= 0f) &&
+                (!secretCompletionVisible || secretCompletionAlpha <= 0f))
             {
                 return;
             }
@@ -101,13 +128,83 @@ namespace CraftOrigin.CraftLive
             Color previous = GUI.color;
             int previousDepth = GUI.depth;
             GUI.depth = -1000;
-            GUI.color = new Color(1f, 1f, 1f, completionFlashAlpha);
-            GUI.DrawTexture(
-                new Rect(0f, 0f, Screen.width, Screen.height),
-                Texture2D.whiteTexture,
-                ScaleMode.StretchToFill);
+            if (secretCompletionVisible && secretCompletionAlpha > 0f)
+            {
+                EnsureSecretCompletionTexture();
+                GUI.color = new Color(
+                    1f,
+                    0.66f,
+                    0.08f,
+                    secretCompletionAlpha * 0.34f);
+                GUI.DrawTexture(
+                    new Rect(0f, 0f, Screen.width, Screen.height),
+                    Texture2D.whiteTexture,
+                    ScaleMode.StretchToFill);
+
+                float size = Mathf.Max(Screen.width, Screen.height) *
+                             Mathf.Max(0.05f, secretCompletionScale);
+                GUI.color = new Color(1f, 0.82f, 0.22f, secretCompletionAlpha);
+                GUI.DrawTexture(
+                    new Rect(
+                        (Screen.width - size) * 0.5f,
+                        (Screen.height - size) * 0.5f,
+                        size,
+                        size),
+                    secretCompletionTexture,
+                    ScaleMode.StretchToFill,
+                    true);
+            }
+
+            if (completionFlashVisible && completionFlashAlpha > 0f)
+            {
+                GUI.color = new Color(1f, 1f, 1f, completionFlashAlpha);
+                GUI.DrawTexture(
+                    new Rect(0f, 0f, Screen.width, Screen.height),
+                    Texture2D.whiteTexture,
+                    ScaleMode.StretchToFill);
+            }
             GUI.color = previous;
             GUI.depth = previousDepth;
+        }
+
+        private void EnsureSecretCompletionTexture()
+        {
+            if (secretCompletionTexture != null)
+            {
+                return;
+            }
+
+            const int textureSize = 128;
+            secretCompletionTexture = new Texture2D(
+                textureSize,
+                textureSize,
+                TextureFormat.RGBA32,
+                false)
+            {
+                name = "Generated_SecretCompletionGlow",
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+            Color[] pixels = new Color[textureSize * textureSize];
+            for (int y = 0; y < textureSize; y++)
+            {
+                for (int x = 0; x < textureSize; x++)
+                {
+                    float normalizedX = (x + 0.5f) / textureSize * 2f - 1f;
+                    float normalizedY = (y + 0.5f) / textureSize * 2f - 1f;
+                    float distance = Mathf.Sqrt(
+                        normalizedX * normalizedX +
+                        normalizedY * normalizedY);
+                    float alpha = Mathf.Pow(
+                        1f - Mathf.Clamp01(distance),
+                        1.7f);
+                    pixels[y * textureSize + x] =
+                        new Color(1f, 0.75f, 0.12f, alpha);
+                }
+            }
+
+            secretCompletionTexture.SetPixels(pixels);
+            secretCompletionTexture.Apply(false, true);
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -545,7 +642,18 @@ namespace CraftOrigin.CraftLive
 
         private IEnumerator PlayCompletionFlash()
         {
-            float duration = Mathf.Max(0.1f, completionRevealDelay);
+            CraftLiveWeaponDefinition completionWeapon =
+                session != null
+                    ? CraftLiveCalculator.ResolveResultWeapon(
+                        session.State,
+                        session.Catalog)
+                    : null;
+            bool secretCompletion = completionWeapon != null &&
+                                    CraftLiveCalculator.IsSecretWeaponId(
+                                        completionWeapon.WeaponId);
+            float duration = secretCompletion
+                ? Mathf.Max(completionRevealDelay, secretCompletionRevealDelay)
+                : Mathf.Max(0.1f, completionRevealDelay);
             float fade = Mathf.Min(
                 duration,
                 Mathf.Max(0.05f, completionFadeDuration));
@@ -555,11 +663,23 @@ namespace CraftOrigin.CraftLive
             float fadeStart = duration - fade;
             completionFlashVisible = true;
             completionFlashAlpha = 0f;
+            secretCompletionVisible = secretCompletion;
+            secretCompletionAlpha = 0f;
+            secretCompletionScale = 0.12f;
             bool completionSwitched = false;
             float elapsed = 0f;
             while (elapsed < duration)
             {
                 elapsed += Time.unscaledDeltaTime;
+                float normalized = Mathf.Clamp01(elapsed / duration);
+                if (secretCompletion)
+                {
+                    float eased = 1f - Mathf.Pow(1f - normalized, 3f);
+                    secretCompletionScale = Mathf.Lerp(0.12f, 1.65f, eased);
+                    secretCompletionAlpha =
+                        Mathf.Clamp01(normalized / 0.16f) *
+                        Mathf.Clamp01((1f - normalized) / 0.22f);
+                }
                 if (elapsed < fadeIn)
                 {
                     completionFlashAlpha = completionFlashOpacity *
@@ -591,6 +711,8 @@ namespace CraftOrigin.CraftLive
 
             completionFlashAlpha = 0f;
             completionFlashVisible = false;
+            secretCompletionAlpha = 0f;
+            secretCompletionVisible = false;
             // Let the white overlay disappear before publishing completion.
             yield return null;
         }

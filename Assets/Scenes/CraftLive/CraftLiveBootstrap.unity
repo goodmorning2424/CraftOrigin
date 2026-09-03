@@ -562,6 +562,8 @@ MonoBehaviour:
   initialRetryDelaySeconds: 0.75
   maximumRetryDelaySeconds: 8
   cachePendingState: 1
+  presenceHeartbeatSeconds: 1.5
+  presenceTimeoutSeconds: 6
   onConnectionStatusChanged:
     m_PersistentCalls:
       m_Calls: []

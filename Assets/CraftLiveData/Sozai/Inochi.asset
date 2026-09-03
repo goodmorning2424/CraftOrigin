@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: skill_life_orb
   displayName: "\u547D\u306E\u73E0"
-  description: "\u653B\u6483\u3092\u53D7\u3051\u308B\u307B\u3069\u4E0E\u3048\u308B\u30C0\u30E1\u30FC\u30B8\u91CF\u304C\u5897\u3048\u307E\u3059\u3002"
+  description: "残りHPが少ないほど攻撃力上昇（最大+100%）。"
   category: 1
   requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: 8b508bac53103254cbcf6f426a1f41c5, type: 3}
@@ -52,8 +52,8 @@ MonoBehaviour:
   skillDescription: 
   skillEffect:
     type: 4
-    activationChancePercent: 50.2
-    primaryValue: 0
+    activationChancePercent: 100
+    primaryValue: 100
     secondaryValue: 0
     intervalSeconds: 0
   affectedStat: 0

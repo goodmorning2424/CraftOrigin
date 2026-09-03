@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using CraftOrigin.CraftLive;
 using CraftOrigin.CraftLiveEditor;
 using NUnit.Framework;
@@ -7,6 +9,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.TestTools;
 using Object = UnityEngine.Object;
 
 namespace CraftOrigin.CraftLiveTests
@@ -74,7 +77,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void QueuedSingleTransfer_BlocksSecondPad2Guide()
+        public void QueuedTransfer_AllowsAnotherMaterialOnAnOpenSlot()
         {
             CraftLiveMaterialDefinition oreA =
                 CreateMaterial(
@@ -91,12 +94,12 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 CraftLivePad1GalleryController.IsWaitingForSingleTransfer(
                     session.State),
-                Is.True);
+                Is.False);
             Assert.That(
                 CraftLivePad1GalleryController.CanBeginMaterialPlacement(
                     session.State,
                     oreB),
-                Is.False);
+                Is.True);
             Assert.That(
                 session.State.placement.status,
                 Is.EqualTo(CraftLivePlacementStatus.Idle));
@@ -133,7 +136,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void AllTransferEntryPoint_IsTemporarilyLimitedToOneItem()
+        public void AllTransferEntryPoint_ProcessesWholeBatchSequentially()
         {
             CraftLiveMaterialDefinition oreA =
                 CreateMaterial(
@@ -162,7 +165,14 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo("oreA"));
             Assert.That(
                 session.State.transferBatchRemaining,
-                Is.Zero);
+                Is.EqualTo(1));
+            Assert.That(session.State.transferQueue, Has.Count.EqualTo(1));
+            Assert.That(
+                session.State.transferSignal.status,
+                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
+            Assert.That(
+                session.State.transferSignal.transferSerial,
+                Is.EqualTo(session.State.placement.transferSerial));
 
             CompleteActiveTransfer(session);
 
@@ -171,15 +181,18 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo("oreA"));
             Assert.That(
                 session.State.placement.status,
-                Is.EqualTo(CraftLivePlacementStatus.Idle));
-            Assert.That(
-                session.State.transferQueue,
-                Has.Count.EqualTo(1));
-
-            Assert.That(session.BeginSingleTransfer(), Is.True);
+                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
             Assert.That(
                 session.State.placement.materialId,
                 Is.EqualTo("oreB"));
+            Assert.That(session.State.transferQueue, Is.Empty);
+            Assert.That(session.State.transferBatchRemaining, Is.Zero);
+            Assert.That(
+                session.State.transferSignal.status,
+                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
+            Assert.That(
+                session.State.transferSignal.transferSerial,
+                Is.EqualTo(session.State.placement.transferSerial));
 
             CompleteActiveTransfer(session);
 
@@ -190,10 +203,16 @@ namespace CraftOrigin.CraftLiveTests
                 session.State.placement.status,
                 Is.EqualTo(CraftLivePlacementStatus.Idle));
             Assert.That(session.State.transferQueue, Is.Empty);
+            Assert.That(
+                session.State.transferSignal.status,
+                Is.EqualTo(CraftLivePlacementStatus.PlacementComplete));
+            Assert.That(
+                session.State.lastCompletedTransferSerial,
+                Is.EqualTo(session.State.transferSignal.transferSerial));
         }
 
         [Test]
-        public void RepeatedSingleTransfers_ProcessFourItemsInOrder()
+        public void AllTransfer_FourItemsCompleteInOrderWithoutOverlap()
         {
             CraftLiveMaterialDefinition[] materials =
             {
@@ -216,13 +235,9 @@ namespace CraftOrigin.CraftLiveTests
                 QueueMaterial(session, materials[index], slots[index]);
             }
 
+            Assert.That(session.BeginAllQueuedTransfers(), Is.True);
             for (int index = 0; index < materials.Length; index++)
             {
-                Assert.That(
-                    index == 0
-                        ? session.BeginAllQueuedTransfers()
-                        : session.BeginSingleTransfer(),
-                    Is.True);
                 Assert.That(
                     session.State.placement.status,
                     Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
@@ -233,9 +248,16 @@ namespace CraftOrigin.CraftLiveTests
                 Assert.That(
                     session.State.slots.Get(slots[index]),
                     Is.EqualTo(materials[index].MaterialId));
-                Assert.That(
-                    session.State.placement.status,
-                    Is.EqualTo(CraftLivePlacementStatus.Idle));
+                if (index + 1 < materials.Length)
+                {
+                    Assert.That(
+                        session.State.placement.status,
+                        Is.EqualTo(
+                            CraftLivePlacementStatus.Pad1Loading));
+                    Assert.That(
+                        session.State.placement.materialId,
+                        Is.EqualTo(materials[index + 1].MaterialId));
+                }
             }
 
             Assert.That(
@@ -264,6 +286,83 @@ namespace CraftOrigin.CraftLiveTests
                     previousFront + 0.05f - 0.0001f));
                 Assert.That(offsets[index], Is.GreaterThan(0f));
             }
+        }
+
+        [Test]
+        public void PhysicalBatchPresentation_RequiresCompleteMultiItemFormation()
+        {
+            Assert.That(
+                CraftLivePad1TransferController.
+                    ShouldUsePhysicalBatchPresentation(true, 3, true),
+                Is.True);
+            Assert.That(
+                CraftLivePad1TransferController.
+                    ShouldUsePhysicalBatchPresentation(false, 3, true),
+                Is.False);
+            Assert.That(
+                CraftLivePad1TransferController.
+                    ShouldUsePhysicalBatchPresentation(true, 0, true),
+                Is.False);
+            Assert.That(
+                CraftLivePad1TransferController.
+                    ShouldUsePhysicalBatchPresentation(true, 3, false),
+                Is.False);
+        }
+
+        [Test]
+        public void CaptureQueuedFormation_IncludesEveryFrameForBatchLaunch()
+        {
+            GameObject controllerObject =
+                new GameObject("BatchCaptureController");
+            createdObjects.Add(controllerObject);
+            CraftLivePad1TransferController controller =
+                controllerObject.AddComponent<
+                    CraftLivePad1TransferController>();
+            CraftLiveRoomState state = new CraftLiveRoomState();
+
+            FieldInfo visualsField =
+                typeof(CraftLivePad1TransferController).GetField(
+                    "queueVisuals",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(visualsField, Is.Not.Null);
+            Dictionary<int, GameObject> visuals =
+                visualsField.GetValue(controller) as
+                    Dictionary<int, GameObject>;
+            Assert.That(visuals, Is.Not.Null);
+
+            for (int index = 0; index < 4; index++)
+            {
+                int serial = index + 1;
+                state.transferQueue.Add(
+                    new CraftLiveTransferQueueEntry(
+                        serial,
+                        $"ore{serial}",
+                        CraftLiveSlotId.Top));
+                GameObject frame = new GameObject($"Frame{serial}");
+                createdObjects.Add(frame);
+                frame.transform.position =
+                    new Vector3(index * 0.5f, index * 0.1f, 0f);
+                visuals.Add(serial, frame);
+            }
+
+            MethodInfo capture =
+                typeof(CraftLivePad1TransferController).GetMethod(
+                    "CaptureQueuedFormation",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(capture, Is.Not.Null);
+            Assert.That(capture.Invoke(controller, new object[] { state }),
+                Is.True);
+
+            FieldInfo capturedField =
+                typeof(CraftLivePad1TransferController).GetField(
+                    "capturedLaunchPoses",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(capturedField, Is.Not.Null);
+            object captured = capturedField.GetValue(controller);
+            PropertyInfo countProperty =
+                captured.GetType().GetProperty("Count");
+            Assert.That(countProperty, Is.Not.Null);
+            Assert.That(countProperty.GetValue(captured), Is.EqualTo(4));
         }
 
         [Test]
@@ -370,6 +469,7 @@ namespace CraftOrigin.CraftLiveTests
                 session.State.transferBatchSerial,
                 Is.EqualTo(previousBatchSerial));
 
+            session.StartGroup();
             session.State.weaponSelectionConfirmed = true;
             QueueMaterial(session, material, CraftLiveSlotId.Top);
             Assert.That(
@@ -386,9 +486,15 @@ namespace CraftOrigin.CraftLiveTests
         {
             CraftLiveMaterialDefinition material =
                 CreateMaterial("ore", CraftLiveMaterialCategory.Upgrade);
+            CraftLiveMaterialDefinition queuedMaterial =
+                CreateMaterial("ore-next", CraftLiveMaterialCategory.Upgrade);
             CraftLiveSession session = CreateSession(
-                CreateCatalog(material));
+                CreateCatalog(material, queuedMaterial));
             QueueMaterial(session, material, CraftLiveSlotId.Top);
+            QueueMaterial(
+                session,
+                queuedMaterial,
+                CraftLiveSlotId.Left);
             Assert.That(session.BeginSingleTransfer(), Is.True);
             int generation = session.State.groupGeneration;
             int serial = session.State.placement.transferSerial;
@@ -458,6 +564,136 @@ namespace CraftOrigin.CraftLiveTests
                 Is.False);
             Assert.That(session.State.revision, Is.EqualTo(revision));
             Assert.That(session.State.transferQueue, Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void PresentationFailure_CannotBlockAuthoritativePublish()
+        {
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(
+                    CreateMaterial(
+                        "ore",
+                        CraftLiveMaterialCategory.Upgrade)));
+            bool localStatePublished = false;
+            session.StateChanged += _ =>
+                throw new InvalidOperationException(
+                    "intentional presentation failure");
+            session.LocalStateChanged += _ =>
+                localStatePublished = true;
+            LogAssert.Expect(
+                LogType.Error,
+                "CraftLiveSession: local state presentation callback failed; " +
+                "remaining callbacks will continue.");
+            LogAssert.Expect(
+                LogType.Exception,
+                new Regex(
+                    "InvalidOperationException: intentional presentation failure"));
+
+            session.ShowSingleTransferWarning();
+
+            Assert.That(localStatePublished, Is.True);
+        }
+
+        [Test]
+        public void Pad2Arrival_CommitsBeforePresentationAndOnlyOnce()
+        {
+            CraftLiveMaterialDefinition material =
+                CreateMaterial(
+                    "ore",
+                    CraftLiveMaterialCategory.Upgrade);
+            CraftLiveSession session = CreateSession(
+                CreateCatalog(material));
+            QueueMaterial(
+                session,
+                material,
+                CraftLiveSlotId.Top);
+            Assert.That(session.BeginSingleTransfer(), Is.True);
+            int generation = session.State.groupGeneration;
+            int serial = session.State.placement.transferSerial;
+            CraftLiveRoomState arrival = null;
+            session.StateChanged += next =>
+            {
+                if (next.placement.status ==
+                    CraftLivePlacementStatus.Pad2Arriving)
+                {
+                    arrival = next.Clone();
+                }
+            };
+
+            GameObject receiverObject =
+                new GameObject("ImmediateCommitReceiver");
+            createdObjects.Add(receiverObject);
+            CraftLivePad2TransferReceiver receiver =
+                receiverObject.AddComponent<
+                    CraftLivePad2TransferReceiver>();
+            SetField(receiver, "session", session);
+            MethodInfo onEnable =
+                typeof(CraftLivePad2TransferReceiver).GetMethod(
+                    "OnEnable",
+                    BindingFlags.Instance |
+                    BindingFlags.NonPublic);
+            Assert.That(onEnable, Is.Not.Null);
+            onEnable.Invoke(receiver, null);
+
+            Assert.That(
+                session.MarkTransferLaunching(generation, serial),
+                Is.True);
+            Assert.That(
+                session.MarkTransferArriving(generation, serial),
+                Is.True);
+
+            Assert.That(arrival, Is.Not.Null);
+            int transferSerial = arrival.placement.transferSerial;
+            Assert.That(session.State.slots.top, Is.EqualTo("ore"));
+            Assert.That(
+                session.State.lastCompletedTransferSerial,
+                Is.EqualTo(transferSerial));
+            Assert.That(
+                session.State.placement.status,
+                Is.EqualTo(CraftLivePlacementStatus.Idle));
+
+            long committedRevision = session.State.revision;
+            Assert.That(
+                receiver.TryCommitArrivalBeforePresentation(arrival),
+                Is.False);
+            Assert.That(session.State.revision, Is.EqualTo(committedRevision));
+            Assert.That(session.State.slots.top, Is.EqualTo("ore"));
+        }
+
+        [Test]
+        public void Bootstrap_ProvisionsOnePlacementWatchdog()
+        {
+            GameObject system = new GameObject("CraftLiveSystem");
+            createdObjects.Add(system);
+            system.AddComponent<CraftLiveSession>();
+            CraftLiveBootstrap bootstrap =
+                system.AddComponent<CraftLiveBootstrap>();
+            MethodInfo awake = typeof(CraftLiveBootstrap).GetMethod(
+                "Awake",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.That(awake, Is.Not.Null);
+
+            awake.Invoke(bootstrap, null);
+            awake.Invoke(bootstrap, null);
+
+            Assert.That(
+                system.GetComponents<CraftLivePlacementWatchdog>(),
+                Has.Length.EqualTo(1));
+        }
+
+        [Test]
+        public void PlacementWatchdog_StopsWaitingAfterRecoveryTimeout()
+        {
+            Assert.That(
+                CraftLivePlacementWatchdog.ShouldWaitForReceiver(
+                    true,
+                    false),
+                Is.True);
+            Assert.That(
+                CraftLivePlacementWatchdog.ShouldWaitForReceiver(
+                    true,
+                    true),
+                Is.False);
         }
 
         [Test]
@@ -550,8 +786,16 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(session.BeginAllQueuedTransfers(), Is.True);
             session.MarkTransferLaunching();
             session.MarkTransferArriving();
+            long slotsRevisionBefore = session.State.slotsRevision;
             session.CompleteCurrentPlacement();
             int firstSerial = session.State.placement.transferSerial;
+
+            Assert.That(
+                session.State.slotsRevision,
+                Is.GreaterThan(slotsRevisionBefore));
+            Assert.That(
+                session.State.slots.top,
+                Is.EqualTo(first.MaterialId));
 
             Assert.That(
                 session.ContinueAfterPlacement(firstSerial + 1),
@@ -564,13 +808,23 @@ namespace CraftOrigin.CraftLiveTests
                 Is.True);
             Assert.That(
                 session.State.placement.status,
-                Is.EqualTo(CraftLivePlacementStatus.Idle));
+                Is.EqualTo(CraftLivePlacementStatus.Pad1Loading));
             Assert.That(
                 session.State.transferQueue,
-                Has.Count.EqualTo(1));
+                Is.Empty);
             Assert.That(
-                session.State.transferQueue[0].materialId,
+                session.State.placement.materialId,
                 Is.EqualTo(second.MaterialId));
+
+            int secondSerial = session.State.placement.transferSerial;
+            long secondRevision = session.State.revision;
+            Assert.That(
+                session.ContinueAfterPlacement(firstSerial),
+                Is.False);
+            Assert.That(
+                session.State.placement.transferSerial,
+                Is.EqualTo(secondSerial));
+            Assert.That(session.State.revision, Is.EqualTo(secondRevision));
         }
 
         [Test]

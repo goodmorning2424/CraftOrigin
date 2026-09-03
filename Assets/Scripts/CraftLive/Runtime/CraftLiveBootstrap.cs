@@ -46,6 +46,16 @@ namespace CraftOrigin.CraftLive
                 session = GetComponent<CraftLiveSession>();
             }
 
+            // The watchdog is part of the documented common system, but old
+            // bootstrap scenes never serialized it. Provision it at runtime
+            // so a stopped WebGL coroutine cannot leave a transfer locked.
+            if (session != null &&
+                session.GetComponent<CraftLivePlacementWatchdog>() == null)
+            {
+                session.gameObject.AddComponent<
+                    CraftLivePlacementWatchdog>();
+            }
+
             if (transport == null)
             {
                 transport = GetComponent<CraftLiveRoomTransport>();
@@ -72,6 +82,8 @@ namespace CraftOrigin.CraftLive
             showConnectionSetup =
                 CraftLiveLaunchQuery.ShouldShowConnectionSetup();
             transport?.SetPresencePublishingEnabled(!showConnectionSetup);
+            transport?.SetSimulatorGroupNumber(
+                CraftLiveLaunchQuery.ReadSimulatorGroupNumber());
             session?.Configure(ResolvedRoomId, ResolvedRole);
 
             if (transport != null && launchConfig != null)
@@ -604,6 +616,23 @@ namespace CraftOrigin.CraftLive
                     return true;
                 default:
                     return false;
+            }
+        }
+
+        public static string ReadSimulatorGroupNumber()
+        {
+            switch (Read("simulator", "0").Trim().ToLowerInvariant())
+            {
+                case "1":
+                case "true":
+                case "on":
+                case "yes":
+                    string value = Read("debugGroup", string.Empty);
+                    return CraftLiveRoomTransport.IsFiveDigitGroupNumber(value)
+                        ? value.Trim()
+                        : string.Empty;
+                default:
+                    return string.Empty;
             }
         }
 

@@ -1084,9 +1084,21 @@ namespace CraftOrigin.CraftLive
             bool hasPoint = false;
             Renderer[] renderers =
                 visualRoot.GetComponentsInChildren<Renderer>(true);
+            bool hasNonParticleRenderer = false;
             foreach (Renderer renderer in renderers)
             {
-                if (renderer == null)
+                if (renderer != null &&
+                    !(renderer is ParticleSystemRenderer))
+                {
+                    hasNonParticleRenderer = true;
+                    break;
+                }
+            }
+            foreach (Renderer renderer in renderers)
+            {
+                if (renderer == null ||
+                    (hasNonParticleRenderer &&
+                     renderer is ParticleSystemRenderer))
                 {
                     continue;
                 }

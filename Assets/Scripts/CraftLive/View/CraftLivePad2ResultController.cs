@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
+using UnityEngine.Video;
 
 namespace CraftOrigin.CraftLive
 {
@@ -11,6 +12,16 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private CraftLivePad2Bindings bindings;
         [SerializeField] private bool createFallbackVisuals = true;
         [SerializeField, Min(0f)] private float staffRestartDelaySeconds = 12f;
+        [Header("Start Screen Transition")]
+        [SerializeField, Min(0.05f)] private float startScreenSlideDuration = 0.85f;
+        [SerializeField, Min(0.1f)] private float startScreenSlideDistance = 12f;
+        [Header("Start Tutorial Video")]
+        [SerializeField]
+        [Tooltip("Pad2のクラフト開始後に再生する説明動画です。未設定の場合は動画を待たず開始します。")]
+        private VideoClip startTutorialVideo;
+        [SerializeField, Min(1f)]
+        [Tooltip("動画の準備に失敗して進行不能になることを防ぐ待機上限です。")]
+        private float tutorialPrepareTimeoutSeconds = 10f;
         [Header("Text Readability")]
         [SerializeField, Range(0.026f, 0.08f)]
         [Tooltip("完成結果に表示する攻撃・防御・回避ラベルの文字サイズです。")]
@@ -18,6 +29,8 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(0.035f, 0.09f)]
         [Tooltip("完成結果に表示する属性・技能行の文字サイズです。")]
         private float resultTraitTextSize = 0.05f;
+        [Header("Remaining Time Warnings")]
+        [SerializeField, Min(0.5f)] private float timeWarningPopupDuration = 3f;
         [SerializeField] private UnityEvent<bool> onResultVisible;
         [SerializeField] private UnityEvent<string> onWeaponNameChanged;
         [SerializeField] private UnityEvent<string> onRankChanged;
@@ -32,13 +45,96 @@ namespace CraftOrigin.CraftLive
         private GameObject generatedPanel;
         private int displayedResultSerial = -1;
         private int displayedHistoryCount = -1;
+        private string displayedGroupNumber = string.Empty;
+        private bool displayedCompletionReady;
         private CraftLiveSessionPhase displayedPhase =
             (CraftLiveSessionPhase)(-1);
         private Coroutine staffRestartRoutine;
+        private Coroutine startScreenSlideRoutine;
+        private Coroutine tutorialPlaybackRoutine;
+        private GameObject departingStartPanel;
+        private GameObject tutorialPlaceholder;
+        private TextMesh tutorialPlaceholderLabel;
+        private CraftLiveWorldButton tutorialStartButton;
+        private CraftLiveTutorialVideoTapSurface tutorialTapSurface;
+        private VideoPlayer tutorialVideoPlayer;
+        private RenderTexture tutorialRenderTexture;
+        private bool tutorialPrepared;
+        private bool tutorialFinished;
+        private bool tutorialFailed;
+        private bool tutorialAwaitingTap;
+        private int warningGroupGeneration = -1;
+        private bool minuteWarningShown;
+        private bool thirtySecondWarningShown;
+        private string timeWarningMessage = string.Empty;
+        private float timeWarningStartedAt = float.NegativeInfinity;
+        private GUIStyle timeWarningStyle;
+
+        public bool TutorialAwaitingTap => tutorialAwaitingTap;
 
         private void Awake()
         {
             ResolveReferences();
+        }
+
+        private void Update()
+        {
+            RefreshTimeWarning();
+        }
+
+        private void OnGUI()
+        {
+            if (string.IsNullOrWhiteSpace(timeWarningMessage))
+            {
+                return;
+            }
+
+            float elapsed = Time.realtimeSinceStartup - timeWarningStartedAt;
+            float duration = Mathf.Max(0.5f, timeWarningPopupDuration);
+            if (elapsed >= duration)
+            {
+                timeWarningMessage = string.Empty;
+                return;
+            }
+
+            if (timeWarningStyle == null)
+            {
+                timeWarningStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = Mathf.Clamp(
+                        Mathf.RoundToInt(Screen.height * 0.034f),
+                        22,
+                        42),
+                    fontStyle = FontStyle.Bold,
+                    wordWrap = true
+                };
+                timeWarningStyle.normal.textColor =
+                    new Color(1f, 0.91f, 0.58f);
+            }
+
+            float fade = Mathf.Min(
+                Mathf.Clamp01(elapsed / 0.18f),
+                Mathf.Clamp01((duration - elapsed) / 0.35f));
+            float width = Mathf.Min(Screen.width * 0.82f, 760f);
+            float height = Mathf.Clamp(Screen.height * 0.095f, 72f, 112f);
+            float slide = (1f - Mathf.Clamp01(elapsed / 0.22f)) * -height;
+            Rect popup = new Rect(
+                (Screen.width - width) * 0.5f,
+                Mathf.Max(18f, Screen.height * 0.035f) + slide,
+                width,
+                height);
+
+            Color previousColor = GUI.color;
+            Color previousBackground = GUI.backgroundColor;
+            int previousDepth = GUI.depth;
+            GUI.depth = -1100;
+            GUI.color = new Color(1f, 1f, 1f, fade);
+            GUI.backgroundColor = new Color(0.1f, 0.055f, 0.018f, 0.96f);
+            GUI.Box(popup, timeWarningMessage, timeWarningStyle);
+            GUI.color = previousColor;
+            GUI.backgroundColor = previousBackground;
+            GUI.depth = previousDepth;
         }
 
         private void OnEnable()
@@ -64,6 +160,90 @@ namespace CraftOrigin.CraftLive
                 StopCoroutine(staffRestartRoutine);
                 staffRestartRoutine = null;
             }
+
+            if (startScreenSlideRoutine != null)
+            {
+                StopCoroutine(startScreenSlideRoutine);
+                startScreenSlideRoutine = null;
+            }
+
+            CancelTutorialPlayback();
+            timeWarningMessage = string.Empty;
+
+            DestroySafely(departingStartPanel);
+            departingStartPanel = null;
+        }
+
+        private void RefreshTimeWarning()
+        {
+            if (session == null || session.State == null)
+            {
+                return;
+            }
+
+            CraftLiveRoomState state = session.State;
+            if (warningGroupGeneration != state.groupGeneration)
+            {
+                warningGroupGeneration = state.groupGeneration;
+                minuteWarningShown = false;
+                thirtySecondWarningShown = false;
+                timeWarningMessage = string.Empty;
+            }
+
+            bool timedPhase =
+                state.sessionEndsAtUnixMs > 0 &&
+                (state.sessionPhase == CraftLiveSessionPhase.StartScreen ||
+                 state.sessionPhase == CraftLiveSessionPhase.Playing);
+            if (!timedPhase)
+            {
+                return;
+            }
+
+            int warning = ResolveTimeWarningSecond(
+                session.GetRemainingSessionSeconds(),
+                minuteWarningShown,
+                thirtySecondWarningShown);
+            if (warning == 60)
+            {
+                minuteWarningShown = true;
+                ShowTimeWarning("残り1分です");
+            }
+            else if (warning == 30)
+            {
+                minuteWarningShown = true;
+                thirtySecondWarningShown = true;
+                ShowTimeWarning("残り30秒です");
+            }
+        }
+
+        public static int ResolveTimeWarningSecond(
+            float remainingSeconds,
+            bool minuteShown,
+            bool thirtySecondsShown)
+        {
+            if (remainingSeconds <= 0f)
+            {
+                return 0;
+            }
+
+            if (remainingSeconds <= 30f && !thirtySecondsShown)
+            {
+                return 30;
+            }
+
+            if (remainingSeconds <= 60f && !minuteShown)
+            {
+                return 60;
+            }
+
+            return 0;
+        }
+
+        private void ShowTimeWarning(string message)
+        {
+            timeWarningMessage = message;
+            timeWarningStartedAt = Time.realtimeSinceStartup;
+            CraftLiveAudio.Play(CraftLiveSound.HeartbeatWarning, 0.62f);
         }
 
         public void Configure(CraftLivePad2Bindings targetBindings)
@@ -89,7 +269,51 @@ namespace CraftOrigin.CraftLive
 
         public void StartGroup()
         {
-            session?.StartGroup();
+            if (session == null ||
+                !IsAuthoritativeStartRole(session.Role) ||
+                session.State == null ||
+                session.State.sessionPhase != CraftLiveSessionPhase.StartScreen ||
+                tutorialPlaybackRoutine != null)
+            {
+                return;
+            }
+
+            if (startTutorialVideo == null)
+            {
+                session.StartGroup();
+                return;
+            }
+
+            tutorialAwaitingTap = true;
+            tutorialStartButton?.SetInteractable(false);
+            if (tutorialStartButton != null)
+            {
+                tutorialStartButton.gameObject.SetActive(false);
+            }
+            tutorialTapSurface?.SetInteractable(true);
+            if (tutorialPlaceholderLabel != null)
+            {
+                tutorialPlaceholderLabel.text = "動画をタップして再生";
+            }
+        }
+
+        public void StartTutorialFromTap()
+        {
+            if (!tutorialAwaitingTap ||
+                tutorialPlaybackRoutine != null ||
+                tutorialVideoPlayer == null)
+            {
+                return;
+            }
+
+            tutorialAwaitingTap = false;
+            tutorialTapSurface?.SetInteractable(false);
+            if (tutorialPlaceholderLabel != null)
+            {
+                tutorialPlaceholderLabel.text = "動画を準備しています…";
+            }
+            tutorialPlaybackRoutine = StartCoroutine(
+                PlayTutorialThenStart());
         }
 
         private void ResolveReferences()
@@ -119,17 +343,20 @@ namespace CraftOrigin.CraftLive
                 displayedPhase != state.sessionPhase ||
                 displayedResultSerial !=
                     state.result.resultSerial ||
-                displayedHistoryCount != historyCount;
+                displayedHistoryCount != historyCount ||
+                displayedGroupNumber != (state.finalWeaponCode ?? string.Empty) ||
+                displayedCompletionReady !=
+                    state.craft.completionPresentationReady;
+            CraftLiveSessionPhase previousPhase = displayedPhase;
             displayedPhase = state.sessionPhase;
             displayedResultSerial =
                 state.result.resultSerial;
             displayedHistoryCount = historyCount;
+            displayedGroupNumber = state.finalWeaponCode ?? string.Empty;
+            displayedCompletionReady =
+                state.craft.completionPresentationReady;
 
-            bool visible =
-                state.craft.status ==
-                    CraftLiveCraftStatus.Complete ||
-                state.sessionPhase !=
-                    CraftLiveSessionPhase.Playing;
+            bool visible = ShouldShowResult(state);
             onResultVisible?.Invoke(visible);
             PublishResult(state.result);
             onHistoryCountChanged?.Invoke(historyCount);
@@ -137,8 +364,217 @@ namespace CraftOrigin.CraftLive
                 state.finalWeaponCode ?? string.Empty);
             if (changed && createFallbackVisuals)
             {
+                if (previousPhase == CraftLiveSessionPhase.StartScreen &&
+                    state.sessionPhase != CraftLiveSessionPhase.StartScreen)
+                {
+                    BeginStartScreenSlide();
+                }
+
                 RebuildFallback(state);
             }
+        }
+
+        private void BeginStartScreenSlide()
+        {
+            if (generatedPanel == null ||
+                generatedPanel.name != "Generated_StartScreen")
+            {
+                return;
+            }
+
+
+            CancelTutorialPlayback(false);
+
+            if (startScreenSlideRoutine != null)
+            {
+                StopCoroutine(startScreenSlideRoutine);
+            }
+
+            DestroySafely(departingStartPanel);
+            departingStartPanel = generatedPanel;
+            generatedPanel = null;
+            startScreenSlideRoutine = StartCoroutine(
+                SlideStartScreenOut(departingStartPanel));
+        }
+
+        private IEnumerator SlideStartScreenOut(GameObject panel)
+        {
+            if (panel == null)
+            {
+                startScreenSlideRoutine = null;
+                yield break;
+            }
+
+            Vector3 start = panel.transform.localPosition;
+            Vector3 end = start + Vector3.up * startScreenSlideDistance;
+            float elapsed = 0f;
+            float duration = Mathf.Max(0.05f, startScreenSlideDuration);
+            while (panel != null && elapsed < duration)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float normalized = Mathf.Clamp01(elapsed / duration);
+                float eased = 1f - Mathf.Pow(1f - normalized, 3f);
+                panel.transform.localPosition = Vector3.LerpUnclamped(
+                    start,
+                    end,
+                    eased);
+                yield return null;
+            }
+
+            DestroySafely(panel);
+            if (departingStartPanel == panel)
+            {
+                departingStartPanel = null;
+            }
+
+            startScreenSlideRoutine = null;
+            ReleaseTutorialRenderTexture();
+        }
+
+        private IEnumerator PlayTutorialThenStart()
+        {
+            if (tutorialVideoPlayer == null)
+            {
+                CompleteTutorialAndStart();
+                yield break;
+            }
+
+            tutorialPrepared = false;
+            tutorialFinished = false;
+            tutorialFailed = false;
+            tutorialVideoPlayer.prepareCompleted += HandleTutorialPrepared;
+            tutorialVideoPlayer.started += HandleTutorialStarted;
+            tutorialVideoPlayer.loopPointReached += HandleTutorialFinished;
+            tutorialVideoPlayer.errorReceived += HandleTutorialError;
+            tutorialVideoPlayer.Prepare();
+
+            float prepareElapsed = 0f;
+            while (!tutorialPrepared && !tutorialFailed &&
+                   prepareElapsed < tutorialPrepareTimeoutSeconds)
+            {
+                prepareElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            if (!tutorialPrepared || tutorialFailed)
+            {
+                CompleteTutorialAndStart();
+                yield break;
+            }
+
+            if (tutorialPlaceholder != null)
+            {
+                tutorialPlaceholder.SetActive(false);
+            }
+
+            tutorialVideoPlayer.Play();
+            double clipLength = startTutorialVideo != null
+                ? startTutorialVideo.length
+                : 0d;
+            float playbackTimeout = Mathf.Max(
+                tutorialPrepareTimeoutSeconds,
+                (float)clipLength + 5f);
+            float playbackElapsed = 0f;
+            while (!tutorialFinished && !tutorialFailed &&
+                   playbackElapsed < playbackTimeout)
+            {
+                playbackElapsed += Time.unscaledDeltaTime;
+                yield return null;
+            }
+
+            CompleteTutorialAndStart();
+        }
+
+        private void HandleTutorialPrepared(VideoPlayer source)
+        {
+            tutorialPrepared = true;
+        }
+
+        private void HandleTutorialStarted(VideoPlayer source)
+        {
+            session?.BeginTimedIntroduction();
+        }
+
+        private void HandleTutorialFinished(VideoPlayer source)
+        {
+            tutorialFinished = true;
+        }
+
+        private void HandleTutorialError(VideoPlayer source, string message)
+        {
+            tutorialFailed = true;
+            Debug.LogWarning(
+                $"Craft-live start tutorial could not play: {message}",
+                this);
+        }
+
+        private void CompleteTutorialAndStart()
+        {
+            UnsubscribeTutorialPlayer();
+            tutorialPlaybackRoutine = null;
+            if (session != null &&
+                IsAuthoritativeStartRole(session.Role) &&
+                session.State != null &&
+                session.State.sessionPhase == CraftLiveSessionPhase.StartScreen)
+            {
+                session.StartGroup();
+            }
+        }
+
+        public static bool IsAuthoritativeStartRole(CraftLiveRole role)
+        {
+            return role == CraftLiveRole.WorkbenchPad;
+        }
+
+        private void CancelTutorialPlayback(bool releaseTexture = true)
+        {
+            if (tutorialPlaybackRoutine != null)
+            {
+                StopCoroutine(tutorialPlaybackRoutine);
+                tutorialPlaybackRoutine = null;
+            }
+
+            UnsubscribeTutorialPlayer();
+            if (tutorialVideoPlayer != null)
+            {
+                tutorialVideoPlayer.Stop();
+                tutorialVideoPlayer = null;
+            }
+
+            tutorialStartButton = null;
+            tutorialTapSurface = null;
+            tutorialPlaceholder = null;
+            tutorialPlaceholderLabel = null;
+            tutorialAwaitingTap = false;
+            if (releaseTexture)
+            {
+                ReleaseTutorialRenderTexture();
+            }
+        }
+
+        private void UnsubscribeTutorialPlayer()
+        {
+            if (tutorialVideoPlayer == null)
+            {
+                return;
+            }
+
+            tutorialVideoPlayer.prepareCompleted -= HandleTutorialPrepared;
+            tutorialVideoPlayer.started -= HandleTutorialStarted;
+            tutorialVideoPlayer.loopPointReached -= HandleTutorialFinished;
+            tutorialVideoPlayer.errorReceived -= HandleTutorialError;
+        }
+
+        private void ReleaseTutorialRenderTexture()
+        {
+            if (tutorialRenderTexture == null)
+            {
+                return;
+            }
+
+            tutorialRenderTexture.Release();
+            DestroySafely(tutorialRenderTexture);
+            tutorialRenderTexture = null;
         }
 
         private void PublishResult(CraftLiveResultState result)
@@ -195,10 +631,19 @@ namespace CraftOrigin.CraftLive
             }
 
             if (state.craft.status ==
-                CraftLiveCraftStatus.Complete)
+                    CraftLiveCraftStatus.Complete &&
+                state.craft.completionPresentationReady)
             {
                 BuildResultPanel(state);
             }
+        }
+
+        public static bool ShouldShowResult(CraftLiveRoomState state)
+        {
+            return state != null &&
+                   ((state.craft.status == CraftLiveCraftStatus.Complete &&
+                     state.craft.completionPresentationReady) ||
+                    state.sessionPhase != CraftLiveSessionPhase.Playing);
         }
 
         private void BuildStartScreen()
@@ -287,6 +732,8 @@ namespace CraftOrigin.CraftLive
             hammerHeadCut.transform.localRotation =
                 Quaternion.Euler(0f, 0f, 37f);
 
+            BuildTutorialVideoFrame(generatedPanel.transform);
+
             GameObject start = CreateButton(
                 generatedPanel.transform,
                 "Start",
@@ -296,6 +743,96 @@ namespace CraftOrigin.CraftLive
                 new Vector3(3.85f, 0.92f, 0.25f));
             start.GetComponent<CraftLiveWorldButton>()
                 .AddListener(StartGroup);
+            tutorialStartButton = start.GetComponent<CraftLiveWorldButton>();
+        }
+
+        private void BuildTutorialVideoFrame(Transform parent)
+        {
+            CreateDecorativePart(
+                parent,
+                "TutorialVideoFrameShadow",
+                new Vector3(0.07f, 0.46f, -0.72f),
+                new Vector3(5.72f, 3.42f, 0.13f),
+                new Color(0.04f, 0.025f, 0.02f),
+                0f,
+                0.06f,
+                0.15f);
+            CreateDecorativePart(
+                parent,
+                "TutorialVideoFrame",
+                new Vector3(0f, 0.52f, -0.77f),
+                new Vector3(5.62f, 3.32f, 0.12f),
+                CraftLiveForgeUITheme.Brass,
+                0.22f,
+                0.72f,
+                0.55f);
+            GameObject surface = CreateDecorativePart(
+                parent,
+                "TutorialVideoSurface",
+                new Vector3(0f, 0.52f, -0.86f),
+                new Vector3(5.32f, 2.99f, 0.045f),
+                new Color(0.012f, 0.016f, 0.02f),
+                0f,
+                0.05f,
+                0.08f);
+            surface.AddComponent<BoxCollider>();
+            tutorialTapSurface =
+                surface.AddComponent<CraftLiveTutorialVideoTapSurface>();
+            tutorialTapSurface.Configure(this, false);
+
+            tutorialPlaceholder = new GameObject("TutorialVideoPlaceholder");
+            tutorialPlaceholder.transform.SetParent(parent, false);
+            tutorialPlaceholder.transform.localPosition =
+                new Vector3(0f, 0.52f, -0.91f);
+            tutorialPlaceholder.AddComponent<CraftLiveGeneratedRuntimeVisual>();
+            tutorialPlaceholderLabel = CreateText(
+                tutorialPlaceholder.transform,
+                "TutorialVideoLabel",
+                startTutorialVideo != null
+                    ? "操作説明動画"
+                    : "操作説明動画\n（動画を割り当ててください）",
+                Vector3.zero,
+                0.038f,
+                new Color(0.82f, 0.77f, 0.67f));
+
+            if (startTutorialVideo == null)
+            {
+                return;
+            }
+
+            tutorialRenderTexture = new RenderTexture(
+                640,
+                360,
+                0,
+                RenderTextureFormat.ARGB32)
+            {
+                name = "Generated_StartTutorialTexture"
+            };
+            tutorialRenderTexture.Create();
+            Renderer surfaceRenderer = surface.GetComponent<Renderer>();
+            if (surfaceRenderer != null)
+            {
+                Material material = surfaceRenderer.material;
+                if (material.HasProperty("_BaseMap"))
+                {
+                    material.SetTexture("_BaseMap", tutorialRenderTexture);
+                }
+                if (material.HasProperty("_MainTex"))
+                {
+                    material.SetTexture("_MainTex", tutorialRenderTexture);
+                }
+            }
+
+            tutorialVideoPlayer = generatedPanel.AddComponent<VideoPlayer>();
+            tutorialVideoPlayer.playOnAwake = false;
+            tutorialVideoPlayer.isLooping = false;
+            tutorialVideoPlayer.waitForFirstFrame = true;
+            tutorialVideoPlayer.skipOnDrop = true;
+            tutorialVideoPlayer.source = VideoSource.VideoClip;
+            tutorialVideoPlayer.clip = startTutorialVideo;
+            tutorialVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
+            tutorialVideoPlayer.targetTexture = tutorialRenderTexture;
+            tutorialVideoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
         }
 
         private void BuildResultPanel(CraftLiveRoomState state)
@@ -462,7 +999,9 @@ namespace CraftOrigin.CraftLive
             CreateText(
                 generatedPanel.transform,
                 "Title",
-                "次の部屋へ\n進んでください",
+                string.IsNullOrWhiteSpace(state.finalWeaponCode)
+                    ? "グループ番号を\n発行しています"
+                    : "グループ番号",
                 new Vector3(0f, 1.4f, -0.7f),
                 0.06f,
                 Color.white);
@@ -477,10 +1016,23 @@ namespace CraftOrigin.CraftLive
             CreateText(
                 generatedPanel.transform,
                 "Code",
-                state.finalWeaponCode,
+                string.IsNullOrWhiteSpace(state.finalWeaponCode)
+                    ? "通信中…"
+                    : state.finalWeaponCode,
                 new Vector3(0f, -0.7f, -0.7f),
                 0.065f,
                 Color.white);
+            if (string.IsNullOrWhiteSpace(state.finalWeaponCode) &&
+                !string.IsNullOrWhiteSpace(state.message))
+            {
+                CreateText(
+                    generatedPanel.transform,
+                    "IssueStatus",
+                    BuildGroupIssueStatus(state.message),
+                    new Vector3(0f, -1.52f, -0.7f),
+                    0.031f,
+                    Color.white);
+            }
 
             GameObject restart = CreateButton(
                 generatedPanel.transform,
@@ -507,16 +1059,37 @@ namespace CraftOrigin.CraftLive
             }
         }
 
+        public static string BuildGroupIssueStatus(string message)
+        {
+            string value = (message ?? string.Empty).Trim();
+            if (value.Contains("Database Rules"))
+            {
+                return "Firebase権限エラー\nDatabase Rulesを確認";
+            }
+
+            if (value.Contains("再接続") || value.Contains("再試行"))
+            {
+                return "Firebaseへ再接続中";
+            }
+
+            return value.Length <= 22
+                ? value
+                : value.Substring(0, 22) + "…";
+        }
+
         private static void BuildSecretResultEffect(
             Transform parent,
             string weaponId)
         {
+            Color gold = new Color(1f, 0.72f, 0.08f);
             Color accent = weaponId ==
                            CraftLiveCalculator.SecretPikopikoWeaponId
-                ? new Color(1f, 0.28f, 0.72f)
+                ? Color.Lerp(gold, new Color(1f, 0.28f, 0.72f), 0.36f)
                 : weaponId == CraftLiveCalculator.SecretKazikiWeaponId
-                    ? new Color(0.12f, 0.82f, 1f)
-                    : new Color(1f, 0.78f, 0.18f);
+                    ? Color.Lerp(gold, new Color(0.12f, 0.82f, 1f), 0.32f)
+                    : gold;
+
+            BuildSecretGoldenBurst(parent, gold);
             CreateText(
                 parent,
                 "SecretLabel",
@@ -564,6 +1137,83 @@ namespace CraftOrigin.CraftLive
                 sparkle.transform.localRotation =
                     Quaternion.Euler(0f, 0f, 45f);
                 sparkle.AddComponent<CraftLiveSecretResultEffect>();
+            }
+
+            if (ShouldBuildBareHandsSmoke(weaponId))
+            {
+                BuildBareHandsSmoke(parent);
+            }
+        }
+
+        public static bool ShouldBuildBareHandsSmoke(string weaponId)
+        {
+            return weaponId == CraftLiveCalculator.SecretBareHandsWeaponId;
+        }
+
+        private static void BuildSecretGoldenBurst(
+            Transform parent,
+            Color gold)
+        {
+            const int rayCount = 16;
+            for (int index = 0; index < rayCount; index++)
+            {
+                float angle = index * (360f / rayCount);
+                float radians = angle * Mathf.Deg2Rad;
+                Vector3 direction = new Vector3(
+                    Mathf.Cos(radians),
+                    Mathf.Sin(radians),
+                    0f);
+                float length = index % 2 == 0 ? 1.15f : 0.72f;
+                GameObject ray = CreateDecorativePart(
+                    parent,
+                    $"SecretGoldenRay_{index}",
+                    direction * 2.45f + new Vector3(0f, 0.65f, -0.67f),
+                    new Vector3(length, 0.045f, 0.025f),
+                    Color.Lerp(gold, Color.white, index % 3 == 0 ? 0.55f : 0.2f),
+                    2.4f,
+                    0.18f,
+                    0.9f);
+                ray.transform.localRotation = Quaternion.Euler(0f, 0f, angle);
+                ray.AddComponent<CraftLiveSecretResultEffect>();
+            }
+        }
+
+        private static void BuildBareHandsSmoke(Transform parent)
+        {
+            Vector3[] positions =
+            {
+                new Vector3(-0.9f, 0.95f, -0.78f),
+                new Vector3(-0.55f, 1.05f, -0.79f),
+                new Vector3(-0.18f, 0.9f, -0.8f),
+                new Vector3(0.2f, 1.02f, -0.8f),
+                new Vector3(0.58f, 0.92f, -0.79f),
+                new Vector3(0.92f, 1.08f, -0.78f),
+                new Vector3(-0.42f, 1.3f, -0.81f),
+                new Vector3(0f, 1.24f, -0.82f),
+                new Vector3(0.44f, 1.34f, -0.81f)
+            };
+            for (int index = 0; index < positions.Length; index++)
+            {
+                GameObject puff = GameObject.CreatePrimitive(
+                    PrimitiveType.Sphere);
+                puff.name = $"BareHandsSmoke_{index}";
+                puff.transform.SetParent(parent, false);
+                puff.transform.localPosition = positions[index];
+                float size = index % 3 == 0 ? 0.42f : 0.3f;
+                puff.transform.localScale = new Vector3(size, size, 0.08f);
+                DestroySafely(puff.GetComponent<Collider>());
+                Color smoke = index % 2 == 0
+                    ? new Color(0.34f, 0.35f, 0.36f)
+                    : new Color(0.5f, 0.49f, 0.47f);
+                CraftLiveForgeUITheme.ApplyForgeSurface(
+                    puff.GetComponent<Renderer>(),
+                    smoke,
+                    0f,
+                    0f,
+                    0.05f);
+                CraftLiveSecretSmokeEffect effect =
+                    puff.AddComponent<CraftLiveSecretSmokeEffect>();
+                effect.Configure(index);
             }
         }
 
@@ -938,6 +1588,59 @@ namespace CraftOrigin.CraftLive
                                Time.unscaledTime * 5.2f + phase) + 1f) *
                           0.31f;
             transform.localScale = baseScale * pulse;
+        }
+    }
+
+    public sealed class CraftLiveSecretSmokeEffect : MonoBehaviour
+    {
+        private Vector3 basePosition;
+        private Vector3 baseScale;
+        private float startedAt;
+        private float delay;
+        private float driftDirection;
+
+        private void Awake()
+        {
+            basePosition = transform.localPosition;
+            baseScale = transform.localScale;
+            startedAt = Time.unscaledTime;
+            transform.localScale = Vector3.zero;
+        }
+
+        public void Configure(int index)
+        {
+            delay = index * 0.055f;
+            driftDirection = index % 2 == 0 ? -1f : 1f;
+        }
+
+        private void Update()
+        {
+            const float lifetime = 1.65f;
+            float elapsed = Time.unscaledTime - startedAt - delay;
+            if (elapsed < 0f)
+            {
+                return;
+            }
+
+            float normalized = Mathf.Clamp01(elapsed / lifetime);
+            float appear = Mathf.Clamp01(normalized / 0.16f);
+            float disappear = Mathf.Clamp01((1f - normalized) / 0.24f);
+            float scale = Mathf.Lerp(0.35f, 1.9f, normalized) *
+                          Mathf.Min(appear, disappear);
+            transform.localScale = baseScale * scale;
+            transform.localPosition = basePosition + new Vector3(
+                driftDirection * 0.22f * normalized,
+                0.82f * normalized,
+                0f);
+            transform.localRotation = Quaternion.Euler(
+                0f,
+                0f,
+                driftDirection * normalized * 24f);
+
+            if (normalized >= 1f)
+            {
+                Destroy(gameObject);
+            }
         }
     }
 }

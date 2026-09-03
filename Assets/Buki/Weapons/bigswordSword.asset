@@ -16,9 +16,9 @@ MonoBehaviour:
   displayName: "\u5927\u5263"
   weaponType: 0
   baseStats:
-    attackRate: 50
-    defenseRate: 50
-    evasionRate: 10
+    attackRate: 700
+    defenseRate: 400
+    evasionRate: 300
     elementBoost: 0
   icon: {fileID: 21300000, guid: 2563ced709e67564a8e08a51e33e7df4, type: 3}
   workbenchPrefab: {fileID: 7779154831352022519, guid: 4dd7b087a6980bf4185a93fd3c6aec21, type: 3}

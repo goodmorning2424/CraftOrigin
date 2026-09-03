@@ -213,7 +213,7 @@ namespace CraftOrigin.CraftLive
             float maximum = session != null &&
                             session.Rules != null
                 ? session.Rules.MaximumStat
-                : 100f;
+                : 1000f;
             currentValue = Mathf.Max(0f, value);
             targetNormalized =
                 NormalizeValue(currentValue, maximum);
@@ -239,7 +239,7 @@ namespace CraftOrigin.CraftLive
             currentValue = stats.Get(statType);
             float maximum = session.Rules != null
                 ? session.Rules.MaximumStat
-                : 100f;
+                : 1000f;
             targetNormalized =
                 NormalizeValue(currentValue, maximum);
             onValueChanged?.Invoke(currentValue);

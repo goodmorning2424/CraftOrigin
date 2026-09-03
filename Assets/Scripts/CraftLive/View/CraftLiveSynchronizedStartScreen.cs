@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace CraftOrigin.CraftLive
@@ -14,9 +15,15 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private Transform displayRoot;
         [SerializeField, Min(0.1f)] private float slideDuration = 0.85f;
         [SerializeField, Min(1f)] private float slideDistance = 12f;
+        [SerializeField, Min(0.5f)] private float cameraDepth = 1f;
+        [SerializeField, Range(1f, 1.15f)] private float viewportCoverage = 1.03f;
 
         private GameObject generatedScreen;
         private Coroutine slideRoutine;
+        private readonly List<Renderer> hiddenSceneRenderers =
+            new List<Renderer>();
+        private readonly List<Collider> disabledSceneColliders =
+            new List<Collider>();
         private CraftLiveSessionPhase displayedPhase =
             (CraftLiveSessionPhase)(-1);
 
@@ -54,6 +61,26 @@ namespace CraftOrigin.CraftLive
             if (session != null)
             {
                 session.StateChanged -= HandleStateChanged;
+            }
+
+            if (slideRoutine != null)
+            {
+                StopCoroutine(slideRoutine);
+                slideRoutine = null;
+            }
+
+            RestoreSceneRenderers();
+            RestoreSceneColliders();
+            DestroySafely(generatedScreen);
+            generatedScreen = null;
+        }
+
+        private void LateUpdate()
+        {
+            if (displayedPhase == CraftLiveSessionPhase.StartScreen &&
+                generatedScreen != null && slideRoutine == null)
+            {
+                SuppressSceneRenderers();
             }
         }
 
@@ -111,6 +138,8 @@ namespace CraftOrigin.CraftLive
                 }
                 else if (slideRoutine == null)
                 {
+                    RestoreSceneRenderers();
+                    RestoreSceneColliders();
                     DestroySafely(generatedScreen);
                     generatedScreen = null;
                 }
@@ -135,16 +164,29 @@ namespace CraftOrigin.CraftLive
             }
 
             DestroySafely(generatedScreen);
+            generatedScreen = null;
+            RestoreSceneRenderers();
+            RestoreSceneColliders();
+            HideSceneRenderers();
             generatedScreen = new GameObject("Generated_SynchronizedStartScreen");
             generatedScreen.transform.SetParent(displayRoot, false);
             generatedScreen.transform.localPosition = Vector3.zero;
             generatedScreen.transform.localRotation = Quaternion.identity;
-            generatedScreen.transform.localScale = Vector3.one * 0.72f;
+            generatedScreen.transform.localScale = Vector3.one;
             generatedScreen.AddComponent<CraftLiveGeneratedRuntimeVisual>();
 
             Color wood = new Color(0.44f, 0.19f, 0.065f);
             Color inset = new Color(0.19f, 0.065f, 0.018f);
             Color highlight = new Color(0.62f, 0.31f, 0.11f);
+
+            // A generous camera-facing occluder prevents the underlying pad
+            // background from leaking around the decorative frame on devices
+            // whose browser viewport is slightly taller than 3:4.
+            CreatePart(
+                "FullViewportOccluder",
+                new Vector3(0f, 0f, 0.3f),
+                new Vector3(9.4f, 9.8f, 0.18f),
+                CraftLiveForgeUITheme.DeepIron);
 
             // Match the Pad 2 start panel frame so all four devices present a
             // single continuous forge wall before the authoritative button is
@@ -237,6 +279,8 @@ namespace CraftOrigin.CraftLive
             headHighlight.transform.localRotation =
                 Quaternion.Euler(0f, 0f, 37f);
 
+            PositionInFrontOfCamera();
+
             // Pads 1, 3 and 4 are synchronized waiting displays only. The
             // single authoritative start button stays on Pad 2, preventing
             // staff from starting the group from an unintended station.
@@ -249,14 +293,99 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
+            // Reveal the normal pad content at the same instant on every pad;
+            // the start panel then slides over it instead of leaving always-on
+            // TextMesh labels visible through the panel.
+            RestoreSceneRenderers();
+            RestoreSceneColliders();
             slideRoutine = StartCoroutine(SlideOut());
+        }
+
+        private void HideSceneRenderers()
+        {
+            hiddenSceneRenderers.Clear();
+            SuppressSceneRenderers();
+        }
+
+        private void SuppressSceneRenderers()
+        {
+            if (displayRoot == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = FindObjectsByType<Renderer>(
+                FindObjectsInactive.Exclude);
+            foreach (Renderer candidate in renderers)
+            {
+                if (candidate == null || !candidate.enabled ||
+                    candidate.gameObject.scene != displayRoot.gameObject.scene ||
+                    (generatedScreen != null &&
+                     candidate.transform.IsChildOf(generatedScreen.transform)))
+                {
+                    continue;
+                }
+
+                candidate.enabled = false;
+                if (!hiddenSceneRenderers.Contains(candidate))
+                {
+                    hiddenSceneRenderers.Add(candidate);
+                }
+            }
+
+            Collider[] colliders = FindObjectsByType<Collider>(
+                FindObjectsInactive.Exclude);
+            foreach (Collider candidate in colliders)
+            {
+                if (candidate == null || !candidate.enabled ||
+                    candidate.gameObject.scene != displayRoot.gameObject.scene ||
+                    (generatedScreen != null &&
+                     candidate.transform.IsChildOf(generatedScreen.transform)))
+                {
+                    continue;
+                }
+
+                candidate.enabled = false;
+                if (!disabledSceneColliders.Contains(candidate))
+                {
+                    disabledSceneColliders.Add(candidate);
+                }
+            }
+        }
+
+        private void RestoreSceneRenderers()
+        {
+            foreach (Renderer candidate in hiddenSceneRenderers)
+            {
+                if (candidate != null)
+                {
+                    candidate.enabled = true;
+                }
+            }
+
+            hiddenSceneRenderers.Clear();
+        }
+
+        private void RestoreSceneColliders()
+        {
+            foreach (Collider candidate in disabledSceneColliders)
+            {
+                if (candidate != null)
+                {
+                    candidate.enabled = true;
+                }
+            }
+
+            disabledSceneColliders.Clear();
         }
 
         private IEnumerator SlideOut()
         {
             GameObject screen = generatedScreen;
-            Vector3 start = screen.transform.localPosition;
-            Vector3 end = start + Vector3.up * slideDistance;
+            Vector3 start = screen.transform.position;
+            Vector3 end = start + screen.transform.up * Mathf.Max(
+                slideDistance * Mathf.Abs(screen.transform.lossyScale.y),
+                1f);
             float elapsed = 0f;
             float duration = Mathf.Max(0.1f, slideDuration);
             while (screen != null && elapsed < duration)
@@ -264,7 +393,7 @@ namespace CraftOrigin.CraftLive
                 elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(elapsed / duration);
                 float eased = t * t * (3f - 2f * t);
-                screen.transform.localPosition =
+                screen.transform.position =
                     Vector3.LerpUnclamped(start, end, eased);
                 yield return null;
             }
@@ -276,6 +405,73 @@ namespace CraftOrigin.CraftLive
             }
 
             slideRoutine = null;
+        }
+
+        private void PositionInFrontOfCamera()
+        {
+            Camera camera = ResolveDisplayCamera();
+            if (camera == null || generatedScreen == null)
+            {
+                generatedScreen.transform.localScale = Vector3.one * 0.72f;
+                return;
+            }
+
+            float depth = Mathf.Clamp(
+                cameraDepth,
+                camera.nearClipPlane + 0.2f,
+                Mathf.Max(camera.nearClipPlane + 0.21f,
+                    camera.farClipPlane - 0.2f));
+            float visibleHeight = camera.orthographic
+                ? camera.orthographicSize * 2f
+                : 2f * depth * Mathf.Tan(
+                    camera.fieldOfView * 0.5f * Mathf.Deg2Rad);
+            float visibleWidth = visibleHeight * camera.aspect;
+            float fittedScale = Mathf.Max(
+                visibleWidth / 7.48f,
+                visibleHeight / 7.86f) *
+                Mathf.Clamp(viewportCoverage, 1f, 1.15f);
+
+            generatedScreen.transform.SetPositionAndRotation(
+                camera.ViewportToWorldPoint(
+                    new Vector3(0.5f, 0.5f, depth)),
+                camera.transform.rotation);
+            SetWorldScale(
+                generatedScreen.transform,
+                Vector3.one * Mathf.Max(0.01f, fittedScale));
+        }
+
+        private Camera ResolveDisplayCamera()
+        {
+            if (displayRoot != null)
+            {
+                Camera[] cameras = FindObjectsByType<Camera>(
+                    FindObjectsInactive.Exclude);
+                foreach (Camera candidate in cameras)
+                {
+                    if (candidate != null && candidate.enabled &&
+                        candidate.gameObject.activeInHierarchy &&
+                        candidate.gameObject.scene == displayRoot.gameObject.scene)
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            return Camera.main != null
+                ? Camera.main
+                : FindAnyObjectByType<Camera>();
+        }
+
+        private static void SetWorldScale(
+            Transform target,
+            Vector3 desiredWorldScale)
+        {
+            target.localScale = Vector3.one;
+            Vector3 current = target.lossyScale;
+            target.localScale = new Vector3(
+                desiredWorldScale.x / Mathf.Max(0.0001f, Mathf.Abs(current.x)),
+                desiredWorldScale.y / Mathf.Max(0.0001f, Mathf.Abs(current.y)),
+                desiredWorldScale.z / Mathf.Max(0.0001f, Mathf.Abs(current.z)));
         }
 
         private GameObject CreatePart(

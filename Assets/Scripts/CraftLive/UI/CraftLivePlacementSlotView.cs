@@ -27,6 +27,7 @@ namespace CraftOrigin.CraftLive
         private string previewMaterialId;
         private bool available;
         private bool subscribed;
+        private MaterialPropertyBlock highlightBlock;
 
         public CraftLiveSlotId Slot => slot;
         public bool Available => available;
@@ -238,7 +239,11 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            MaterialPropertyBlock block = new MaterialPropertyBlock();
+            if (highlightBlock == null)
+            {
+                highlightBlock = new MaterialPropertyBlock();
+            }
+
             foreach (Renderer targetRenderer in highlightRenderers)
             {
                 if (targetRenderer == null)
@@ -246,11 +251,13 @@ namespace CraftOrigin.CraftLive
                     continue;
                 }
 
-                targetRenderer.GetPropertyBlock(block);
-                block.SetColor("_BaseColor", color);
-                block.SetColor("_Color", color);
-                block.SetColor("_EmissionColor", color * emission);
-                targetRenderer.SetPropertyBlock(block);
+                targetRenderer.GetPropertyBlock(highlightBlock);
+                highlightBlock.SetColor("_BaseColor", color);
+                highlightBlock.SetColor("_Color", color);
+                highlightBlock.SetColor(
+                    "_EmissionColor",
+                    color * emission);
+                targetRenderer.SetPropertyBlock(highlightBlock);
             }
         }
 

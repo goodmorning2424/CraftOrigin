@@ -215,7 +215,8 @@ namespace CraftOrigin.CraftLiveEditor
                 serialized.FindProperty("sessionDurationSeconds");
             if (duration.floatValue <= 0f)
             {
-                duration.floatValue = 300f;
+                duration.floatValue =
+                    CraftLiveRules.DefaultSessionDurationSeconds;
                 changed = true;
             }
 

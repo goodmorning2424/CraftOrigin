@@ -1,0 +1,13 @@
+<linker>
+  <!--
+    CraftLive creates fallback meshes with GameObject.CreatePrimitive at
+    runtime. WebGL engine-code stripping cannot infer the collider types from
+    the PrimitiveType enum, so keep the primitive colliders explicitly.
+  -->
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.MeshCollider" preserve="all" />
+  </assembly>
+</linker>

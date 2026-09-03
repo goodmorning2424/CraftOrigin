@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: skill_double_strike
   displayName: "\u4E8C\u56DE\u653B\u6483"
-  description: "\u4E00\u5B9A\u78BA\u7387\u3067\u4E8C\u56DE\u653B\u6483\u3067\u304D\u307E\u3059\u3002"
+  description: "30%で同じ攻撃をもう一度行います。"
   category: 1
   requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: 7c209531198518646ba4de5e080ced93, type: 3}
@@ -51,8 +51,8 @@ MonoBehaviour:
   skillDisplayName: "\u4E8C\u56DE\u653B\u6483"
   skillDescription: 
   skillEffect:
-    type: 0
-    activationChancePercent: 0
+    type: 2
+    activationChancePercent: 30
     primaryValue: 0
     secondaryValue: 0
     intervalSeconds: 0

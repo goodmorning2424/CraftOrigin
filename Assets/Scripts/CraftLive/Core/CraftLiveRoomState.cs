@@ -44,6 +44,66 @@ namespace CraftOrigin.CraftLive
         }
     }
 
+    /// <summary>
+    /// Durable copy of the latest authoritative transfer stage.
+    /// Unlike placement, this record is not cleared when the presentation
+    /// advances. It lets another Pad replay an arrival after a Firebase
+    /// snapshot conflict or a temporarily occupied presentation coroutine.
+    /// </summary>
+    [Serializable]
+    public sealed class CraftLiveTransferSignal
+    {
+        public int transferSerial;
+        public CraftLivePlacementStatus status;
+        public string materialId;
+        public bool hasConfirmedSlot;
+        public CraftLiveSlotId confirmedSlot;
+        public long changedAtUnixMs;
+
+        public bool IsTransferStage =>
+            transferSerial > 0 &&
+            (status == CraftLivePlacementStatus.Pad1Loading ||
+             status == CraftLivePlacementStatus.Pad1Launching ||
+             status == CraftLivePlacementStatus.Pad2Arriving ||
+             status == CraftLivePlacementStatus.PlacementComplete);
+
+        public void Capture(CraftLivePlacementFlow placement)
+        {
+            if (placement == null || placement.transferSerial <= 0)
+            {
+                return;
+            }
+
+            transferSerial = placement.transferSerial;
+            status = placement.status;
+            materialId = placement.materialId ?? string.Empty;
+            hasConfirmedSlot = placement.hasConfirmedSlot;
+            confirmedSlot = placement.confirmedSlot;
+            changedAtUnixMs = placement.statusChangedAtUnixMs;
+        }
+
+        public void Normalize()
+        {
+            transferSerial = Mathf.Max(0, transferSerial);
+            materialId = materialId ?? string.Empty;
+            changedAtUnixMs = Math.Max(0L, changedAtUnixMs);
+            if (!IsTransferStage)
+            {
+                transferSerial = 0;
+                status = CraftLivePlacementStatus.Idle;
+                materialId = string.Empty;
+                hasConfirmedSlot = false;
+                changedAtUnixMs = 0L;
+            }
+        }
+
+        public CraftLiveTransferSignal Clone()
+        {
+            return JsonUtility.FromJson<CraftLiveTransferSignal>(
+                JsonUtility.ToJson(this));
+        }
+    }
+
     [Serializable]
     public sealed class CraftLiveTransferQueueEntry
     {
@@ -221,7 +281,7 @@ namespace CraftOrigin.CraftLive
     [Serializable]
     public sealed class CraftLiveRoomState
     {
-        public const int CurrentSchemaVersion = 7;
+        public const int CurrentSchemaVersion = 9;
 
         public int schemaVersion = CurrentSchemaVersion;
         public long revision;
@@ -238,6 +298,9 @@ namespace CraftOrigin.CraftLive
         public List<string> qrUnlockedMaterialIds = new List<string>();
 
         public CraftLivePlacementFlow placement = new CraftLivePlacementFlow();
+        public CraftLiveTransferSignal transferSignal =
+            new CraftLiveTransferSignal();
+        [Min(0)] public int lastCompletedTransferSerial;
         public List<CraftLiveTransferQueueEntry> transferQueue =
             new List<CraftLiveTransferQueueEntry>();
         public int transferQueueSerial;
@@ -247,6 +310,7 @@ namespace CraftOrigin.CraftLive
         public int lastRegistrationDelta;
         public int registrationSerial;
         public CraftLiveSlots slots = new CraftLiveSlots();
+        public long slotsRevision;
         public CraftLiveStats displayedStats;
         public int statusDisplaySerial;
         public CraftLiveCraftState craft = new CraftLiveCraftState();
@@ -298,6 +362,8 @@ namespace CraftOrigin.CraftLive
             qrUnlockedMaterialIds =
                 qrUnlockedMaterialIds ?? new List<string>();
             placement = placement ?? new CraftLivePlacementFlow();
+            transferSignal = transferSignal ??
+                new CraftLiveTransferSignal();
             transferQueue =
                 transferQueue ??
                 new List<CraftLiveTransferQueueEntry>();
@@ -318,8 +384,13 @@ namespace CraftOrigin.CraftLive
             NormalizeRegisteredMaterialIds();
 
             placement.materialId = placement.materialId ?? string.Empty;
+            transferSignal.Normalize();
+            lastCompletedTransferSerial = Mathf.Max(
+                0,
+                lastCompletedTransferSerial);
             NormalizeTransferQueue();
             slots.Normalize();
+            slotsRevision = Math.Max(0L, slotsRevision);
             result.Normalize();
             NormalizeCompletedWeapons();
             displayedStats = displayedStats.Sanitize();
@@ -357,6 +428,223 @@ namespace CraftOrigin.CraftLive
                 transferBatchRemaining,
                 0,
                 transferQueue.Count);
+
+            ReconcilePlacementFromTransferSignal();
+        }
+
+        /// <summary>
+        /// Merges only the monotonic transfer domain. This is intentionally
+        /// separate from ordinary room-state last-writer-wins handling: an
+        /// arrival command must never disappear merely because another Pad
+        /// published an unrelated room snapshot with a newer revision.
+        /// </summary>
+        public bool MergeTransferReliabilityFrom(
+            CraftLiveRoomState source)
+        {
+            if (source == null || source.groupGeneration != groupGeneration)
+            {
+                return false;
+            }
+
+            source.transferSignal = source.transferSignal ??
+                new CraftLiveTransferSignal();
+            source.transferSignal.Normalize();
+            transferSignal = transferSignal ??
+                new CraftLiveTransferSignal();
+            transferSignal.Normalize();
+
+            bool changed = false;
+            int previousCompleted = lastCompletedTransferSerial;
+            if (source.lastCompletedTransferSerial >
+                lastCompletedTransferSerial)
+            {
+                lastCompletedTransferSerial =
+                    source.lastCompletedTransferSerial;
+                changed = true;
+            }
+
+            // Slot state has its own revision because a preview-only Pad 1
+            // acknowledgement can advance the completed transfer serial
+            // without committing a material. Conversely, an explicit later
+            // removal must remain newer than an older placement snapshot.
+            if (source.slotsRevision > slotsRevision)
+            {
+                slots = source.slots != null
+                    ? JsonUtility.FromJson<CraftLiveSlots>(
+                        JsonUtility.ToJson(source.slots))
+                    : new CraftLiveSlots();
+                slots.Normalize();
+                slotsRevision = source.slotsRevision;
+                changed = true;
+            }
+
+            if (CompareTransferSignal(
+                    source.transferSignal,
+                    transferSignal) > 0)
+            {
+                transferSignal = source.transferSignal.Clone();
+                transferBatchRemaining =
+                    source.transferBatchRemaining;
+                changed = true;
+            }
+
+            int oldQueueSerial = transferQueueSerial;
+            int oldBatchSerial = transferBatchSerial;
+            transferQueueSerial = Mathf.Max(
+                transferQueueSerial,
+                source.transferQueueSerial);
+            transferBatchSerial = Mathf.Max(
+                transferBatchSerial,
+                source.transferBatchSerial);
+            changed |= oldQueueSerial != transferQueueSerial ||
+                       oldBatchSerial != transferBatchSerial;
+
+            changed |= MergePendingTransferQueue(source.transferQueue);
+            if (previousCompleted != lastCompletedTransferSerial)
+            {
+                RemoveAcknowledgedTransfersFromQueue();
+            }
+
+            changed |= ReconcilePlacementFromTransferSignal();
+            return changed;
+        }
+
+        public static int CompareTransferSignal(
+            CraftLiveTransferSignal left,
+            CraftLiveTransferSignal right)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return 0;
+            }
+            if (left == null)
+            {
+                return -1;
+            }
+            if (right == null)
+            {
+                return 1;
+            }
+
+            int serialComparison =
+                left.transferSerial.CompareTo(right.transferSerial);
+            if (serialComparison != 0)
+            {
+                return serialComparison;
+            }
+
+            int stageComparison = TransferStageRank(left.status)
+                .CompareTo(TransferStageRank(right.status));
+            return stageComparison != 0
+                ? stageComparison
+                : left.changedAtUnixMs.CompareTo(
+                    right.changedAtUnixMs);
+        }
+
+        private bool ReconcilePlacementFromTransferSignal()
+        {
+            if (transferSignal == null ||
+                !transferSignal.IsTransferStage ||
+                transferSignal.transferSerial <=
+                    lastCompletedTransferSerial ||
+                !transferSignal.hasConfirmedSlot)
+            {
+                return false;
+            }
+
+            bool signalIsAhead = placement == null ||
+                placement.transferSerial < transferSignal.transferSerial ||
+                (placement.transferSerial == transferSignal.transferSerial &&
+                 TransferStageRank(placement.status) <
+                    TransferStageRank(transferSignal.status));
+            if (!signalIsAhead)
+            {
+                return false;
+            }
+
+            placement = placement ?? new CraftLivePlacementFlow();
+            placement.materialId = transferSignal.materialId;
+            placement.hasCandidateSlot = false;
+            placement.hasConfirmedSlot = true;
+            placement.confirmedSlot = transferSignal.confirmedSlot;
+            placement.transferSerial = transferSignal.transferSerial;
+            placement.status = transferSignal.status;
+            placement.statusChangedAtUnixMs =
+                transferSignal.changedAtUnixMs;
+            return true;
+        }
+
+        private bool MergePendingTransferQueue(
+            List<CraftLiveTransferQueueEntry> sourceQueue)
+        {
+            if (sourceQueue == null || sourceQueue.Count == 0)
+            {
+                return false;
+            }
+
+            transferQueue = transferQueue ??
+                new List<CraftLiveTransferQueueEntry>();
+            HashSet<int> existing = new HashSet<int>();
+            foreach (CraftLiveTransferQueueEntry entry in transferQueue)
+            {
+                if (entry != null)
+                {
+                    existing.Add(entry.serial);
+                }
+            }
+
+            bool changed = false;
+            foreach (CraftLiveTransferQueueEntry entry in sourceQueue)
+            {
+                if (entry == null ||
+                    entry.serial <= lastCompletedTransferSerial ||
+                    (transferSignal != null &&
+                     entry.serial == transferSignal.transferSerial) ||
+                    !existing.Add(entry.serial))
+                {
+                    continue;
+                }
+
+                transferQueue.Add(new CraftLiveTransferQueueEntry(
+                    entry.serial,
+                    entry.materialId,
+                    entry.slot));
+                changed = true;
+            }
+
+            if (changed)
+            {
+                transferQueue.Sort((left, right) =>
+                    left.serial.CompareTo(right.serial));
+            }
+            return changed;
+        }
+
+        private void RemoveAcknowledgedTransfersFromQueue()
+        {
+            transferQueue?.RemoveAll(entry =>
+                entry == null ||
+                entry.serial <= lastCompletedTransferSerial ||
+                (transferSignal != null &&
+                 entry.serial == transferSignal.transferSerial));
+        }
+
+        private static int TransferStageRank(
+            CraftLivePlacementStatus status)
+        {
+            switch (status)
+            {
+                case CraftLivePlacementStatus.Pad1Loading:
+                    return 1;
+                case CraftLivePlacementStatus.Pad1Launching:
+                    return 2;
+                case CraftLivePlacementStatus.Pad2Arriving:
+                    return 3;
+                case CraftLivePlacementStatus.PlacementComplete:
+                    return 4;
+                default:
+                    return 0;
+            }
         }
 
         public bool IsSlotReserved(CraftLiveSlotId slot)

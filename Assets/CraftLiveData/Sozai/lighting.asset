@@ -14,7 +14,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveMaterialDefinition
   materialId: attribute_lighting
   displayName: "\u96F7"
-  description: "\u4E00\u5B9A\u78BA\u7387\u3067\u5168\u4F53\u653B\u6483\u306B\u306A\u308A\u307E\u3059\u3002"
+  description: "50%で攻撃対象が敵全体になります。"
   category: 0
   requiresQrUnlock: 1
   icon: {fileID: 21300000, guid: dd14360dc1f5aa447b0dad3064e3804f, type: 3}
@@ -44,7 +44,7 @@ MonoBehaviour:
   attributeDisplayName: 
   elementEffect:
     type: 3
-    activationChancePercent: 48.9
+    activationChancePercent: 50
     effectAmount: 0
     durationSeconds: 0
   skillId: regeneration

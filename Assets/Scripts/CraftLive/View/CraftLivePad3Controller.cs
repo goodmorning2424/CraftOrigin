@@ -42,6 +42,8 @@ namespace CraftOrigin.CraftLive
         [Header("Remaining Time")]
         [SerializeField, Min(0.05f)]
         private float timerRefreshInterval = 0.2f;
+        [SerializeField] private Color timerUrgentColor =
+            new Color(1f, 0.12f, 0.08f, 1f);
 
         [Header("Events")]
         [SerializeField] private UnityEvent<bool>
@@ -59,6 +61,8 @@ namespace CraftOrigin.CraftLive
         private int observedRegistrationSerial = -1;
         private float nextTimerRefreshTime;
         private string displayedTimerText;
+        private bool timerNormalColorCaptured;
+        private Color timerNormalColor;
 
         private void Awake()
         {
@@ -610,7 +614,7 @@ namespace CraftOrigin.CraftLive
             {
                 remainingSeconds = session.Rules != null
                     ? session.Rules.SessionDurationSeconds
-                    : 300f;
+                    : CraftLiveRules.DefaultSessionDurationSeconds;
             }
             else
             {
@@ -620,6 +624,8 @@ namespace CraftOrigin.CraftLive
             string value =
                 CraftLiveSessionTimerController.FormatTime(
                     remainingSeconds);
+            ApplyTimerColor(
+                ShouldUseUrgentTimerColor(state, remainingSeconds));
             if (string.Equals(value, displayedTimerText))
             {
                 return;
@@ -627,6 +633,38 @@ namespace CraftOrigin.CraftLive
 
             displayedTimerText = value;
             bindings.NoticeBoard.SetComment(value);
+        }
+
+        public static bool ShouldUseUrgentTimerColor(
+            CraftLiveRoomState state,
+            float remainingSeconds)
+        {
+            return state != null &&
+                   state.sessionPhase == CraftLiveSessionPhase.Playing &&
+                   remainingSeconds > 0f &&
+                   remainingSeconds <= 60f;
+        }
+
+        private void ApplyTimerColor(bool urgent)
+        {
+            TextMesh timerText = bindings != null &&
+                                 bindings.NoticeBoard != null
+                ? bindings.NoticeBoard.CommentText
+                : null;
+            if (timerText == null)
+            {
+                return;
+            }
+
+            if (!timerNormalColorCaptured)
+            {
+                timerNormalColor = timerText.color;
+                timerNormalColorCaptured = true;
+            }
+
+            timerText.color = urgent
+                ? timerUrgentColor
+                : timerNormalColor;
         }
 
         private void HandleScanCompleted(

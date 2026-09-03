@@ -292,10 +292,6 @@ namespace CraftOrigin.CraftLive
                 {
                     slotView.gameObject.SetActive(showPlacementSlots);
                 }
-                else if (showPlacementSlots)
-                {
-                    slotView.RefreshNow();
-                }
             }
 
             bool canConfirm = CanConfirmPlacement(state);

@@ -7,8 +7,11 @@ namespace CraftOrigin.CraftLive
         fileName = "CraftLiveRules")]
     public sealed class CraftLiveRules : ScriptableObject
     {
+        public const float DefaultSessionDurationSeconds = 330f;
+
         [Header("Session")]
-        [SerializeField, Min(1f)] private float sessionDurationSeconds = 300f;
+        [SerializeField, Min(1f)] private float sessionDurationSeconds =
+            DefaultSessionDurationSeconds;
 
         [Header("Required Materials")]
         [SerializeField] private bool requireAttributeSlot = true;
@@ -34,7 +37,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0f)] private float successBonus = 5f;
         [SerializeField, Min(0f)] private float greatSuccessBonus = 10f;
         [SerializeField, Min(0f)] private float superSuccessBonus = 15f;
-        [SerializeField, Min(1f)] private float maximumStat = 100f;
+        [SerializeField, Min(1f)] private float maximumStat = 1000f;
 
         public float SessionDurationSeconds =>
             Mathf.Max(1f, sessionDurationSeconds);

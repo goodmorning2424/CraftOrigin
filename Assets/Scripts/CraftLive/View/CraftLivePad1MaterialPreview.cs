@@ -103,7 +103,7 @@ namespace CraftOrigin.CraftLive
         [FormerlySerializedAs("hologramFontSize")]
         [SerializeField, Range(0.008f, 0.05f)]
         [Tooltip("板からはみ出さない範囲で使用する最大文字サイズです。")]
-        private float hologramMaxCharacterSize = 0.032f;
+        private float hologramMaxCharacterSize = 0.045f;
         [SerializeField] private Color hologramTextColor = Color.white;
 
         [Header("Transfer Button")]
@@ -148,6 +148,7 @@ namespace CraftOrigin.CraftLive
         [SerializeField] private UnityEvent<Color> onThemeColorChanged;
 
         private GameObject spawnedModel;
+        private Material generatedFirePreviewMaterial;
         private GameObject fallbackHologram;
         private Transform fallbackPanel;
         private Renderer fallbackPanelRenderer;
@@ -171,6 +172,7 @@ namespace CraftOrigin.CraftLive
         private float fallbackPanelWidth = 1f;
         private float fallbackPanelHeight = 1f;
         private Transform selectionAnchor;
+        private CraftLiveMaterialPaintingView suppressedPainting;
         private string selectionAnchorMaterialId = string.Empty;
         private string displayedMaterialId = string.Empty;
         private bool detailsOnlyWhileTransferWaiting;
@@ -206,6 +208,7 @@ namespace CraftOrigin.CraftLive
 
             StopReveal();
             StopReturn();
+            RestoreSuppressedPainting();
         }
 
         private void OnDestroy()
@@ -302,10 +305,17 @@ namespace CraftOrigin.CraftLive
         {
             StopReveal();
             StopReturn();
+            RestoreSuppressedPainting();
             if (spawnedModel != null)
             {
                 Destroy(spawnedModel);
                 spawnedModel = null;
+            }
+
+            if (generatedFirePreviewMaterial != null)
+            {
+                Destroy(generatedFirePreviewMaterial);
+                generatedFirePreviewMaterial = null;
             }
 
             if (fallbackHologram != null)
@@ -316,6 +326,33 @@ namespace CraftOrigin.CraftLive
             {
                 fallbackReturnButton.gameObject.SetActive(false);
             }
+        }
+
+        private void SuppressSelectionPainting(Transform anchor)
+        {
+            RestoreSuppressedPainting();
+            if (anchor == null)
+            {
+                return;
+            }
+
+            suppressedPainting =
+                anchor.GetComponentInParent<CraftLiveMaterialPaintingView>();
+            if (suppressedPainting != null)
+            {
+                suppressedPainting.SetPreviewSuppressed(true);
+            }
+        }
+
+        private void RestoreSuppressedPainting()
+        {
+            if (suppressedPainting == null)
+            {
+                return;
+            }
+
+            suppressedPainting.SetPreviewSuppressed(false);
+            suppressedPainting = null;
         }
 
         private void ResolveReferences()
@@ -346,6 +383,7 @@ namespace CraftOrigin.CraftLive
             Vector3 revealStartPosition = PositionPresentationRoots(
                 presentationCamera,
                 resolvedAnchor);
+            SuppressSelectionPainting(resolvedAnchor);
 
             if (useMaterialWorldPrefab &&
                 material.WorldPrefab != null)
@@ -358,6 +396,7 @@ namespace CraftOrigin.CraftLive
                 GameObject content = Instantiate(
                     material.WorldPrefab,
                     spawnedModel.transform);
+                CraftLiveForgeUITheme.EnsureCompatibleSurfaces(content);
                 PrepareParticlePreview(content);
                 bool fitted = CraftLiveRuntimeVisualUtility.FitAndCenter(
                     content.transform,
@@ -366,6 +405,16 @@ namespace CraftOrigin.CraftLive
                 if (!fitted || IsParticleOnlyVisual(content))
                 {
                     CreateParticlePreviewCore(
+                        spawnedModel.transform,
+                        material.EffectColor,
+                        targetModelSize * material.Pad1PreviewScale);
+                }
+
+
+                if (material.ElementEffect.type ==
+                    CraftLiveElementType.Fire)
+                {
+                    CreateReliableFirePreview(
                         spawnedModel.transform,
                         material.EffectColor,
                         targetModelSize * material.Pad1PreviewScale);
@@ -409,6 +458,7 @@ namespace CraftOrigin.CraftLive
                 0.68f);
             if (spawnedModel == null)
             {
+                RestoreSuppressedPainting();
                 return;
             }
 
@@ -792,12 +842,12 @@ namespace CraftOrigin.CraftLive
                     0.5f * Mathf.Deg2Rad);
             float worldWidth = worldHeight * presentationCamera.aspect;
             float panelWidth = Mathf.Clamp(
-                worldWidth * 0.34f *
+                worldWidth * 0.4f *
                 Mathf.Max(0.1f, hologramPanelSizeMultiplier.x),
                 0.25f,
                 10f);
             float panelHeight = Mathf.Clamp(
-                worldHeight * 0.62f *
+                worldHeight * 0.66f *
                 Mathf.Max(0.1f, hologramPanelSizeMultiplier.y),
                 0.25f,
                 10f);
@@ -2384,11 +2434,11 @@ namespace CraftOrigin.CraftLive
 
             int charactersPerLine = Mathf.Clamp(
                 Mathf.RoundToInt(
-                    16f * fallbackPanelWidth /
+                    21f * fallbackPanelWidth /
                     Mathf.Max(0.65f, fallbackPanelHeight)),
-                12,
-                18);
-            string wrapped = WrapText(details, charactersPerLine, 8);
+                16,
+                26);
+            string wrapped = WrapText(details, charactersPerLine, 7);
             string[] lines = wrapped.Split('\n');
             int longestLine = 1;
             foreach (string line in lines)
@@ -2397,11 +2447,11 @@ namespace CraftOrigin.CraftLive
             }
 
             float sizeByWidth =
-                fallbackPanelWidth * 0.82f /
-                (longestLine * 0.68f);
+                fallbackPanelWidth * 0.86f /
+                (longestLine * 0.62f);
             float sizeByHeight =
-                fallbackPanelHeight * 0.76f /
-                (Mathf.Max(1, lines.Length) * 1.25f);
+                fallbackPanelHeight * 0.8f /
+                (Mathf.Max(1, lines.Length) * 1.18f);
             ApplyFont(fallbackText);
             fallbackText.color = readableHologramTextColor;
             CraftLiveForgeUITheme.ApplyCrispTextMetrics(
@@ -2441,8 +2491,8 @@ namespace CraftOrigin.CraftLive
 
             float fit = Mathf.Min(
                 1f,
-                panelSize.x * 0.82f / textSize.x,
-                panelSize.y * 0.76f / textSize.y);
+                panelSize.x * 0.86f / textSize.x,
+                panelSize.y * 0.8f / textSize.y);
             fallbackText.characterSize *= Mathf.Clamp(fit, 0.05f, 1f);
         }
 
@@ -2705,6 +2755,68 @@ namespace CraftOrigin.CraftLive
             }
 
             ApplyColor(core.GetComponent<Renderer>(), color, true);
+        }
+
+        private void CreateReliableFirePreview(
+            Transform parent,
+            Color color,
+            float targetSize)
+        {
+            if (parent == null)
+            {
+                return;
+            }
+
+            GameObject effect = new GameObject("ReliableFirePreview");
+            effect.transform.SetParent(parent, false);
+            effect.transform.localPosition =
+                new Vector3(0f, -targetSize * 0.2f, -targetSize * 0.18f);
+
+            ParticleSystem particles = effect.AddComponent<ParticleSystem>();
+            particles.Stop(
+                true,
+                ParticleSystemStopBehavior.StopEmittingAndClear);
+            ParticleSystem.MainModule main = particles.main;
+            main.loop = true;
+            main.playOnAwake = false;
+            main.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+            main.simulationSpace = ParticleSystemSimulationSpace.Local;
+            main.maxParticles = 48;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(
+                targetSize * 0.18f,
+                targetSize * 0.42f);
+            main.startSize = new ParticleSystem.MinMaxCurve(
+                targetSize * 0.07f,
+                targetSize * 0.16f);
+            Color hot = Color.Lerp(color, Color.yellow, 0.55f);
+            Color warm = new Color(color.r, color.g, color.b, 0.12f);
+            main.startColor = new ParticleSystem.MinMaxGradient(hot, warm);
+
+            ParticleSystem.EmissionModule emission = particles.emission;
+            emission.rateOverTime = 28f;
+            ParticleSystem.ShapeModule shape = particles.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 13f;
+            shape.radius = targetSize * 0.08f;
+            ParticleSystem.NoiseModule noise = particles.noise;
+            noise.enabled = true;
+            noise.strength = targetSize * 0.08f;
+            noise.frequency = 0.75f;
+
+            ParticleSystemRenderer particleRenderer =
+                effect.GetComponent<ParticleSystemRenderer>();
+            generatedFirePreviewMaterial =
+                CraftLiveForgeUITheme.CreateCompatibleParticleMaterial(
+                    "Generated_Pad1FirePreviewMaterial");
+            if (generatedFirePreviewMaterial != null)
+            {
+                particleRenderer.sharedMaterial =
+                    generatedFirePreviewMaterial;
+            }
+
+            particles.Simulate(0.18f, true, true, true);
+            particles.Play(true);
         }
 
         private static string WrapText(

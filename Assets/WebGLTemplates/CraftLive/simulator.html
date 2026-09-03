@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta
+      name="viewport"
+      content="width=device-width,height=device-height,initial-scale=1">
+    <title>CraftOrigin 3 Pad Firebase Simulator</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #07090c;
+        color: #f5f7fa;
+      }
+
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-width: 1080px; min-height: 100%; }
+      body { background: #07090c; }
+
+      .toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        display: grid;
+        grid-template-columns: minmax(540px, 1.2fr) minmax(440px, 1fr);
+        gap: 14px;
+        padding: 12px 16px;
+        border-bottom: 1px solid #2a3543;
+        background: rgba(10, 14, 19, 0.98);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34);
+      }
+
+      h1 { margin: 0 0 8px; font-size: 18px; }
+      .fields { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+      label { display: grid; gap: 4px; color: #aeb8c5; font-size: 12px; }
+      input, button {
+        min-height: 38px;
+        border: 1px solid #42536a;
+        border-radius: 6px;
+        font: inherit;
+      }
+      input { padding: 7px 9px; background: #111822; color: #fff; }
+      #room-id { width: 150px; }
+      #group-number { width: 116px; font-size: 18px; font-weight: 750; letter-spacing: 0.12em; }
+      #firebase-url { width: 330px; }
+      button {
+        padding: 7px 13px;
+        cursor: pointer;
+        background: #26364a;
+        color: #fff;
+        font-weight: 700;
+      }
+      button:hover { background: #314761; }
+      button.primary { border-color: #31b9d6; background: #087f98; }
+      button.verify { border-color: #77d58a; background: #28723a; }
+
+      .hint { margin: 7px 0 0; color: #97a5b5; font-size: 12px; line-height: 1.4; }
+      .verify-panel {
+        min-height: 78px;
+        padding: 9px 11px;
+        border: 1px solid #2d3b4d;
+        border-radius: 7px;
+        background: #0d131b;
+      }
+      #verify-summary { font-size: 14px; font-weight: 750; }
+      #verify-summary.idle { color: #b7c1cd; }
+      #verify-summary.waiting { color: #f2cd69; }
+      #verify-summary.success { color: #76df8b; }
+      #verify-summary.error { color: #ff7f7f; }
+      #verify-details { margin-top: 6px; color: #b9c4d0; font-size: 12px; line-height: 1.4; }
+
+      .pads {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(340px, 1fr));
+        gap: 10px;
+        align-items: start;
+        padding: 12px;
+      }
+      .pad {
+        overflow: hidden;
+        border: 1px solid #33445a;
+        border-radius: 9px;
+        background: #0c1118;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.34);
+      }
+      .pad-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 34px;
+        padding: 0 11px;
+        background: #152131;
+        font-weight: 800;
+      }
+      .pad-title small { color: #8fd9e6; font-weight: 600; }
+      iframe {
+        display: block;
+        width: 100%;
+        aspect-ratio: 3 / 4;
+        border: 0;
+        background: #000;
+      }
+      dialog {
+        width: min(900px, 88vw);
+        max-height: 80vh;
+        border: 1px solid #4a5f78;
+        border-radius: 8px;
+        background: #0d131b;
+        color: #f5f7fa;
+      }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.72); }
+      pre { overflow: auto; white-space: pre-wrap; word-break: break-all; color: #c9d6e4; }
+      .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    </style>
+  </head>
+  <body>
+    <header class="toolbar">
+      <section>
+        <h1>CraftOrigin 3 Pad Firebase Simulator</h1>
+        <div class="fields">
+          <label>共通ルームID
+            <input id="room-id" value="sim-10000" autocomplete="off">
+          </label>
+          <label>5桁デバッグ番号
+            <input id="group-number" value="10000" inputmode="numeric" maxlength="5" pattern="[0-9]{5}">
+          </label>
+          <button id="new-number" type="button">新しい番号</button>
+          <button id="launch" class="primary" type="button">3台を起動・再読込</button>
+        </div>
+        <p class="hint">3つのPadは常時動作します。完成武器は通常の本番処理を通り、指定番号へ保存されます。</p>
+      </section>
+      <section>
+        <div class="fields">
+          <label>Firebase Realtime Database URL
+            <input id="firebase-url" value="https://craft-live-default-rtdb.firebaseio.com" autocomplete="off">
+          </label>
+          <button id="verify" class="verify" type="button">Firebase保存を確認</button>
+          <button id="show-json" type="button" disabled>JSON</button>
+        </div>
+        <div class="verify-panel" aria-live="polite">
+          <div id="verify-summary" class="idle">未確認：武器完成後に保存確認を押してください。</div>
+          <div id="verify-details">グループ番号・ルームID・本番武器項目・合成結果をFirebaseから再取得して照合します。</div>
+        </div>
+      </section>
+    </header>
+
+    <main class="pads">
+      <section class="pad">
+        <div class="pad-title"><span>PAD 1</span><small>素材ギャラリー</small></div>
+        <iframe id="pad1" title="Pad 1 素材ギャラリー" allow="camera; fullscreen"></iframe>
+      </section>
+      <section class="pad">
+        <div class="pad-title"><span>PAD 2</span><small>武器クラフト</small></div>
+        <iframe id="pad2" title="Pad 2 武器クラフト" allow="camera; fullscreen"></iframe>
+      </section>
+      <section class="pad">
+        <div class="pad-title"><span>PAD 3</span><small>ステータス / QR</small></div>
+        <iframe id="pad3" title="Pad 3 ステータス / QR" allow="camera; fullscreen"></iframe>
+      </section>
+    </main>
+
+    <dialog id="json-dialog">
+      <h2>Firebaseから再取得した武器データ</h2>
+      <pre id="json-output"></pre>
+      <div class="dialog-actions"><button id="close-json" type="button">閉じる</button></div>
+    </dialog>
+
+    <script>
+      const roomInput = document.querySelector("#room-id");
+      const groupInput = document.querySelector("#group-number");
+      const firebaseInput = document.querySelector("#firebase-url");
+      const summary = document.querySelector("#verify-summary");
+      const details = document.querySelector("#verify-details");
+      const jsonButton = document.querySelector("#show-json");
+      const jsonDialog = document.querySelector("#json-dialog");
+      const jsonOutput = document.querySelector("#json-output");
+      let lastRecord = null;
+
+      function createFiveDigitNumber() {
+        const values = new Uint32Array(1);
+        window.crypto.getRandomValues(values);
+        return String(10000 + (values[0] % 90000));
+      }
+
+      function normalizedGroupNumber() {
+        const value = groupInput.value.trim();
+        if (!/^[1-9][0-9]{4}$/.test(value)) {
+          throw new Error("グループ番号は10000～99999の5桁で入力してください。");
+        }
+        return value;
+      }
+
+      function normalizedRoomId() {
+        const value = roomInput.value.trim();
+        if (!value || !/^[A-Za-z0-9_-]{1,48}$/.test(value)) {
+          throw new Error("ルームIDは英数字・ハイフン・下線で入力してください。");
+        }
+        return value;
+      }
+
+      function normalizedFirebaseUrl() {
+        const value = firebaseInput.value.trim().replace(/\/+$/, "");
+        const url = new URL(value);
+        if (url.protocol !== "https:") {
+          throw new Error("Firebase URLはhttps://で入力してください。");
+        }
+        return value;
+      }
+
+      function setStatus(kind, message, detail) {
+        summary.className = kind;
+        summary.textContent = message;
+        details.textContent = detail || "";
+      }
+
+      function saveSettings(room, group) {
+        try {
+          localStorage.setItem("craftlive-simulator-room", room);
+          localStorage.setItem("craftlive-simulator-group", group);
+          localStorage.setItem("craftlive-simulator-firebase", firebaseInput.value.trim());
+        } catch (_) {}
+      }
+
+      function launchPads() {
+        try {
+          const room = normalizedRoomId();
+          const group = normalizedGroupNumber();
+          normalizedFirebaseUrl();
+          saveSettings(room, group);
+          const base = new URL("index.html", window.location.href);
+          ["pad1", "pad2", "pad3"].forEach(name => {
+            const url = new URL(base);
+            url.searchParams.set("screen", name);
+            url.searchParams.set("room", room);
+            url.searchParams.set("simulator", "1");
+            url.searchParams.set("debugGroup", group);
+            url.searchParams.set("build-refresh", Date.now().toString());
+            document.querySelector("#" + name).src = url.toString();
+          });
+          lastRecord = null;
+          jsonButton.disabled = true;
+          setStatus(
+            "waiting",
+            "3台を起動しました。",
+            "Pad2で最終武器を決定した後、「Firebase保存を確認」を押してください。");
+        } catch (error) {
+          setStatus("error", "起動設定を確認してください。", error.message);
+        }
+      }
+
+      function validateRecord(record, group, room) {
+        const checks = [
+          [record && record.groupNumber === group, "グループ番号"],
+          [record && record.status === "ready", "ready状態"],
+          [record && record.sourceRoomId === room, "送信元ルームID"],
+          [record && Number.isFinite(record.createdAtUnixMs), "作成日時"],
+          [record && Number.isFinite(record.expiresAtUnixMs), "有効期限"],
+          [record && record.weapon && typeof record.weapon.weaponId === "string", "武器ID"],
+          [record && record.weapon && typeof record.weapon.weaponName === "string", "武器名"],
+          [record && record.weapon && Number.isFinite(record.weapon.attack), "攻撃力"],
+          [record && record.weapon && Number.isFinite(record.weapon.defense), "防御力"],
+          [record && record.weapon && Number.isFinite(record.weapon.evasion), "回避率"],
+          [record && record.weapon && typeof record.weapon.attribute === "string", "属性"],
+          [record && record.weapon && typeof record.weapon.skillAId === "string", "共通技"],
+          [record && record.weapon && typeof record.weapon.skillBId === "string", "属性技"],
+          [record && record.weapon && typeof record.weapon.ultimateSkillId === "string", "必殺技"],
+          [record && record.weapon && typeof record.weapon.motionType === "string", "攻撃モーション"],
+          [record && record.craftResult && record.craftResult.resultSerial > 0, "本番合成結果"]
+        ];
+        return {
+          checks,
+          passed: checks.filter(item => item[0]).length,
+          failed: checks.filter(item => !item[0]).map(item => item[1])
+        };
+      }
+
+      async function verifyFirebase() {
+        try {
+          const group = normalizedGroupNumber();
+          const room = normalizedRoomId();
+          const firebase = normalizedFirebaseUrl();
+          setStatus("waiting", "Firebaseから再取得しています…", `weaponGroups/${group}`);
+          const response = await fetch(
+            `${firebase}/weaponGroups/${encodeURIComponent(group)}.json`,
+            { cache: "no-store" });
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: FirebaseルールとURLを確認してください。`);
+          }
+          const record = await response.json();
+          if (!record) {
+            throw new Error("まだ武器データがありません。Pad2で最終武器を決定してください。");
+          }
+          const result = validateRecord(record, group, room);
+          lastRecord = record;
+          jsonButton.disabled = false;
+          if (result.failed.length > 0) {
+            throw new Error(
+              `${result.passed}/${result.checks.length}項目成功。不一致: ${result.failed.join("、")}`);
+          }
+          setStatus(
+            "success",
+            `保存確認成功：${group}`,
+            `${result.passed}/${result.checks.length}項目一致。武器「${record.weapon.weaponName || record.weapon.weaponId}」を本番形式で再取得できました。`);
+        } catch (error) {
+          setStatus("error", "保存確認に失敗しました。", error.message);
+        }
+      }
+
+      // Keep the verifier inspectable for automated browser QA without
+      // exposing any Unity or RealRPG runtime object.
+      window.CraftLiveSimulator = Object.freeze({ validateRecord });
+
+      document.querySelector("#new-number").addEventListener("click", () => {
+        const group = createFiveDigitNumber();
+        groupInput.value = group;
+        roomInput.value = "sim-" + group;
+        setStatus("idle", "新しいデバッグ番号を用意しました。", "3台を起動・再読込してください。");
+      });
+      document.querySelector("#launch").addEventListener("click", launchPads);
+      document.querySelector("#verify").addEventListener("click", verifyFirebase);
+      jsonButton.addEventListener("click", () => {
+        jsonOutput.textContent = JSON.stringify(lastRecord, null, 2);
+        jsonDialog.showModal();
+      });
+      document.querySelector("#close-json").addEventListener("click", () => jsonDialog.close());
+
+      try {
+        if (window.location.protocol === "file:") {
+          document.querySelector(".pads").hidden = true;
+          document.querySelector("#launch").disabled = true;
+          document.querySelector("#verify").disabled = true;
+          document.querySelector("#new-number").disabled = true;
+          setStatus(
+            "error",
+            "HTMLファイルの直接開きでは起動できません。",
+            "Unity WebGLのデータとWebAssemblyはHTTP経由で読み込む必要があります。" +
+              " このフォルダーにある「Start-CraftLiveSimulator.cmd」をダブルクリックしてください。");
+        } else {
+          const storedGroup = localStorage.getItem("craftlive-simulator-group");
+          const storedRoom = localStorage.getItem("craftlive-simulator-room");
+          const storedFirebase = localStorage.getItem("craftlive-simulator-firebase");
+          const group = storedGroup && /^[1-9][0-9]{4}$/.test(storedGroup)
+            ? storedGroup
+            : createFiveDigitNumber();
+          groupInput.value = group;
+          roomInput.value = storedRoom || ("sim-" + group);
+          if (storedFirebase) firebaseInput.value = storedFirebase;
+          launchPads();
+        }
+      } catch (_) {
+        if (window.location.protocol !== "file:") {
+          const group = createFiveDigitNumber();
+          groupInput.value = group;
+          roomInput.value = "sim-" + group;
+          launchPads();
+        }
+      }
+    </script>
+  </body>
+</html>
