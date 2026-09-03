@@ -739,6 +739,19 @@ namespace CraftOrigin.CraftLiveTests
                 Is.EqualTo(expected));
         }
 
+        [TestCase(60, "残り60秒")]
+        [TestCase(30, "残り30秒")]
+        [TestCase(-1, "残り0秒")]
+        public void Pad2TimeWarning_UsesSecondsMessage(
+            int remainingSeconds,
+            string expected)
+        {
+            Assert.That(
+                CraftLivePad2ResultController.BuildTimeWarningMessage(
+                    remainingSeconds),
+                Is.EqualTo(expected));
+        }
+
         [TestCase(CraftLiveSessionPhase.Playing, 60f, true)]
         [TestCase(CraftLiveSessionPhase.Playing, 30f, true)]
         [TestCase(CraftLiveSessionPhase.Playing, 60.1f, false)]
@@ -793,7 +806,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void SecretResult_BuildsGoldenBurstAndBareHandsSmoke()
+        public void SecretResult_BuildsRedBurstAndBareHandsSmoke()
         {
             GameObject host = new GameObject("SecretResultVisualTest");
             created.Add(host);
@@ -812,7 +825,7 @@ namespace CraftOrigin.CraftLiveTests
                 });
 
             Assert.That(
-                host.transform.Find("SecretGoldenRay_0"),
+                host.transform.Find("SecretRedRay_0"),
                 Is.Not.Null);
             Transform smoke = host.transform.Find("BareHandsSmoke_0");
             Assert.That(smoke, Is.Not.Null);

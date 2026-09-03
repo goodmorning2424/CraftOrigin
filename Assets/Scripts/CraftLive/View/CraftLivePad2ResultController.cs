@@ -103,9 +103,9 @@ namespace CraftOrigin.CraftLive
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontSize = Mathf.Clamp(
-                        Mathf.RoundToInt(Screen.height * 0.034f),
-                        22,
-                        42),
+                        Mathf.RoundToInt(Screen.height * 0.052f),
+                        32,
+                        64),
                     fontStyle = FontStyle.Bold,
                     wordWrap = true
                 };
@@ -117,7 +117,7 @@ namespace CraftOrigin.CraftLive
                 Mathf.Clamp01(elapsed / 0.18f),
                 Mathf.Clamp01((duration - elapsed) / 0.35f));
             float width = Mathf.Min(Screen.width * 0.82f, 760f);
-            float height = Mathf.Clamp(Screen.height * 0.095f, 72f, 112f);
+            float height = Mathf.Clamp(Screen.height * 0.13f, 96f, 150f);
             float slide = (1f - Mathf.Clamp01(elapsed / 0.22f)) * -height;
             Rect popup = new Rect(
                 (Screen.width - width) * 0.5f,
@@ -206,14 +206,19 @@ namespace CraftOrigin.CraftLive
             if (warning == 60)
             {
                 minuteWarningShown = true;
-                ShowTimeWarning("残り1分です");
+                ShowTimeWarning(BuildTimeWarningMessage(warning));
             }
             else if (warning == 30)
             {
                 minuteWarningShown = true;
                 thirtySecondWarningShown = true;
-                ShowTimeWarning("残り30秒です");
+                ShowTimeWarning(BuildTimeWarningMessage(warning));
             }
+        }
+
+        public static string BuildTimeWarningMessage(int remainingSeconds)
+        {
+            return $"残り{Mathf.Max(0, remainingSeconds)}秒";
         }
 
         public static int ResolveTimeWarningSecond(
@@ -1081,15 +1086,15 @@ namespace CraftOrigin.CraftLive
             Transform parent,
             string weaponId)
         {
-            Color gold = new Color(1f, 0.72f, 0.08f);
-            Color accent = weaponId ==
-                           CraftLiveCalculator.SecretPikopikoWeaponId
-                ? Color.Lerp(gold, new Color(1f, 0.28f, 0.72f), 0.36f)
-                : weaponId == CraftLiveCalculator.SecretKazikiWeaponId
-                    ? Color.Lerp(gold, new Color(0.12f, 0.82f, 1f), 0.32f)
-                    : gold;
+            Color secretRed = new Color(1f, 0.035f, 0.015f);
+            Color accent = Color.Lerp(
+                secretRed,
+                Color.white,
+                weaponId == CraftLiveCalculator.SecretBareHandsWeaponId
+                    ? 0.08f
+                    : 0.18f);
 
-            BuildSecretGoldenBurst(parent, gold);
+            BuildSecretRedBurst(parent, secretRed);
             CreateText(
                 parent,
                 "SecretLabel",
@@ -1150,9 +1155,9 @@ namespace CraftOrigin.CraftLive
             return weaponId == CraftLiveCalculator.SecretBareHandsWeaponId;
         }
 
-        private static void BuildSecretGoldenBurst(
+        private static void BuildSecretRedBurst(
             Transform parent,
-            Color gold)
+            Color red)
         {
             const int rayCount = 16;
             for (int index = 0; index < rayCount; index++)
@@ -1166,10 +1171,10 @@ namespace CraftOrigin.CraftLive
                 float length = index % 2 == 0 ? 1.15f : 0.72f;
                 GameObject ray = CreateDecorativePart(
                     parent,
-                    $"SecretGoldenRay_{index}",
+                    $"SecretRedRay_{index}",
                     direction * 2.45f + new Vector3(0f, 0.65f, -0.67f),
                     new Vector3(length, 0.045f, 0.025f),
-                    Color.Lerp(gold, Color.white, index % 3 == 0 ? 0.55f : 0.2f),
+                    Color.Lerp(red, Color.white, index % 3 == 0 ? 0.32f : 0.08f),
                     2.4f,
                     0.18f,
                     0.9f);

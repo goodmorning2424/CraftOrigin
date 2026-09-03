@@ -273,9 +273,9 @@ namespace CraftOrigin.CraftLive
                 {
                     alignment = TextAnchor.MiddleCenter,
                     fontSize = Mathf.Clamp(
-                        Mathf.RoundToInt(Screen.height * 0.034f),
-                        22,
-                        42),
+                        Mathf.RoundToInt(Screen.height * 0.052f),
+                        32,
+                        64),
                     fontStyle = FontStyle.Bold,
                     wordWrap = true
                 };
@@ -287,7 +287,7 @@ namespace CraftOrigin.CraftLive
                 Mathf.Clamp01(elapsed / 0.18f),
                 Mathf.Clamp01((duration - elapsed) / 0.35f));
             float width = Mathf.Min(Screen.width * 0.82f, 760f);
-            float height = Mathf.Clamp(Screen.height * 0.095f, 72f, 112f);
+            float height = Mathf.Clamp(Screen.height * 0.13f, 96f, 150f);
             float slide = (1f - Mathf.Clamp01(elapsed / 0.22f)) * -height;
             Rect popup = new Rect(
                 (Screen.width - width) * 0.5f,

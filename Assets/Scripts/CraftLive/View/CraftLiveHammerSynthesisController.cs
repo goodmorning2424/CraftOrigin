@@ -132,9 +132,9 @@ namespace CraftOrigin.CraftLive
             {
                 EnsureSecretCompletionTexture();
                 GUI.color = new Color(
-                    1f,
-                    0.66f,
-                    0.08f,
+                    0.86f,
+                    0.015f,
+                    0.01f,
                     secretCompletionAlpha * 0.34f);
                 GUI.DrawTexture(
                     new Rect(0f, 0f, Screen.width, Screen.height),
@@ -143,7 +143,11 @@ namespace CraftOrigin.CraftLive
 
                 float size = Mathf.Max(Screen.width, Screen.height) *
                              Mathf.Max(0.05f, secretCompletionScale);
-                GUI.color = new Color(1f, 0.82f, 0.22f, secretCompletionAlpha);
+                GUI.color = new Color(
+                    1f,
+                    0.055f,
+                    0.02f,
+                    secretCompletionAlpha);
                 GUI.DrawTexture(
                     new Rect(
                         (Screen.width - size) * 0.5f,
@@ -199,7 +203,7 @@ namespace CraftOrigin.CraftLive
                         1f - Mathf.Clamp01(distance),
                         1.7f);
                     pixels[y * textureSize + x] =
-                        new Color(1f, 0.75f, 0.12f, alpha);
+                        new Color(1f, 0.025f, 0.01f, alpha);
                 }
             }
 
