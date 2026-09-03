@@ -408,6 +408,10 @@ namespace CraftOrigin.CraftLiveEditor
                 root.GetComponent<CraftLivePadSceneRoot>(),
                 "backgroundColor",
                 Color.black);
+            SetBool(
+                root.GetComponent<CraftLivePadSceneRoot>(),
+                "mirrorHorizontally",
+                true);
             CraftLivePad4Bindings bindings =
                 root.AddComponent<CraftLivePad4Bindings>();
 

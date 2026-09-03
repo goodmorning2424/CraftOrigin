@@ -1220,8 +1220,9 @@ namespace CraftOrigin.CraftLive
             {
                 next.selectedFinalResultSerial =
                     selected.resultSerial;
-                // The transport normally reserves a two-digit group number in
-                // Firebase. The browser-only three-pad simulator may reserve a
+                // The transport reserves two-digit group numbers first, then
+                // uses three-digit numbers after 01-99 are occupied. The
+                // browser-only three-pad simulator may reserve a
                 // five-digit debug number so test data cannot be mistaken for a
                 // visitor's production number.
                 // Keep the field empty until that reservation is confirmed so an
@@ -1243,10 +1244,8 @@ namespace CraftOrigin.CraftLive
             bool allowFiveDigitDebugNumber = false)
         {
             string normalized = (groupNumber ?? string.Empty).Trim();
-            int productionNumber = 0;
-            bool validProductionNumber = normalized.Length == 2 &&
-                int.TryParse(normalized, out productionNumber) &&
-                productionNumber >= 1 && productionNumber <= 99;
+            bool validProductionNumber =
+                CraftLiveRoomTransport.IsProductionGroupNumber(normalized);
             bool validDebugNumber = allowFiveDigitDebugNumber &&
                 CraftLiveRoomTransport.IsFiveDigitGroupNumber(normalized);
             if (state == null ||
@@ -1261,9 +1260,7 @@ namespace CraftOrigin.CraftLive
 
             Mutate(next =>
             {
-                next.finalWeaponCode = validDebugNumber
-                    ? normalized
-                    : productionNumber.ToString("00");
+                next.finalWeaponCode = normalized;
                 next.message =
                     $"完成しました。グループ番号は " +
                     $"{next.finalWeaponCode} です。";

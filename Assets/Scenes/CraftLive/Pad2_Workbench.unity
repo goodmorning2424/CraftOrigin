@@ -148,7 +148,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.RenderPipelines.Universal.Runtime::UnityEngine.Rendering.Universal.UniversalAdditionalCameraData
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
@@ -534,7 +534,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 25189ee27578d5a4f8727952f444e97a, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLivePad2WeaponCarousel
   session: {fileID: 0}
   bindings: {fileID: 1760931043}
@@ -985,6 +985,7 @@ MonoBehaviour:
   orthographicSize: 5
   fieldOfView: 60
   backgroundColor: {r: 0.018, g: 0.012, b: 0.008, a: 1}
+  mirrorHorizontally: 0
   sceneFont: {fileID: 0}
   applyFontToAllTextMeshes: 1
   fontRefreshInterval: 0.5
@@ -1064,6 +1065,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLivePad2TransferReceiver
   session: {fileID: 0}
   bindings: {fileID: 1760931043}
+  liquidFlowController: {fileID: 0}
   fallbackTicketPrefab: {fileID: 0}
   fallbackMaterialPrefab: {fileID: 0}
   arrivalDelay: 0.35
@@ -1102,8 +1104,15 @@ MonoBehaviour:
   bindings: {fileID: 1760931043}
   createFallbackVisuals: 1
   staffRestartDelaySeconds: 12
+  startScreenSlideDuration: 0.85
+  startScreenSlideDistance: 12
+  startTutorialVideo: {fileID: 0}
+  startTutorialVideoRelativeUrl: OperationGuide.mp4
+  tutorialVideoVolume: 0.7
+  tutorialPrepareTimeoutSeconds: 10
   resultStatLabelSize: 0.04
   resultTraitTextSize: 0.05
+  timeWarningPopupDuration: 3
   onResultVisible:
     m_PersistentCalls:
       m_Calls: []
@@ -1172,6 +1181,11 @@ MonoBehaviour:
   onStartRejected:
     m_PersistentCalls:
       m_Calls: []
+  completionRevealDelay: 2
+  completionFadeDuration: 0.55
+  completionFadeInDuration: 0.4
+  completionFlashOpacity: 0.7
+  secretCompletionRevealDelay: 2.6
 --- !u!114 &1760931050
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1182,7 +1196,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 3d2754c3723dc2246be1b957b0d68c7c, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveLiquidFlowController
   session: {fileID: 0}
   bindings: {fileID: 1760931043}
@@ -1212,7 +1226,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2138f480a3f04aac85057a61e4bdff42, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveHammerStrikePresentation
   bindings: {fileID: 1760931043}
   targetCamera: {fileID: 0}
@@ -1229,6 +1243,7 @@ MonoBehaviour:
   impactHammerEuler: {x: 0, y: 0, z: 65}
   alignImpactPointToWeapon: 1
   hammerImpactLocalOffset: {x: 0, y: 0, z: -0.035}
+  hammerCameraClearance: 0.12
   strikeDownDuration: 0.16
   impactHoldDuration: 0.055
   returnDuration: 0.28
@@ -1927,8 +1942,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 172515602e62fb746b5d573b38a5fe58, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_IsGlobal: 1
   priority: 10
   blendDistance: 0

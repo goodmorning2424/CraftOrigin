@@ -165,7 +165,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 123861657}
-  - component: {fileID: 123861658}
   m_Layer: 0
   m_Name: DefenseTubeRoot
   m_TagString: Untagged
@@ -188,47 +187,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 118004586}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &123861658
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 123861656}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0a68cfbb11cac1c43bfd5efd6926b9d9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveStatusTubeView
-  session: {fileID: 0}
-  statType: 2
-  glassTubePrefab: {fileID: 0}
-  liquidFill: {fileID: 0}
-  liquidRenderers: []
-  fillCoordinateSpace: {fileID: 0}
-  fillStartPoint: {fileID: 0}
-  fillEndPoint: {fileID: 0}
-  fillStartLocalPosition: {x: -2.1, y: 0, z: 0}
-  fillEndLocalPosition: {x: 2.1, y: 0, z: 0}
-  fillWidth: 0.22
-  animationSeconds: 0.55
-  liquidColor: {r: 0.12, g: 0.48, b: 0.88, a: 1}
-  createFallbackVisual: 1
-  glowAmount: 0.35
-  emissionStrength: 5
-  coreWhiteBlend: 0.28
-  glowShellRadiusMultiplier: 1.5
-  glowShellAlpha: 0.2
-  glowPulseSpeed: 2.4
-  createGlowLight: 1
-  glowLightIntensity: 1.35
-  glowLightRange: 1.25
-  onValueChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  onNormalizedChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!1 &142148199
 GameObject:
   m_ObjectHideFlags: 0
@@ -693,6 +651,37 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 90, y: 0, z: 0}
+--- !u!1 &921411489
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 921411490}
+  m_Layer: 0
+  m_Name: QrFeedbackRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &921411490
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 921411489}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1263749525}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &946471765
 GameObject:
   m_ObjectHideFlags: 0
@@ -702,8 +691,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 946471766}
-  - component: {fileID: 946471767}
-  - component: {fileID: 946471768}
   m_Layer: 0
   m_Name: AttackTubeRoot
   m_TagString: Untagged
@@ -726,88 +713,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 118004586}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &946471767
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 946471765}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0a68cfbb11cac1c43bfd5efd6926b9d9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveStatusTubeView
-  session: {fileID: 0}
-  statType: 1
-  glassTubePrefab: {fileID: 0}
-  liquidFill: {fileID: 0}
-  liquidRenderers: []
-  fillCoordinateSpace: {fileID: 0}
-  fillStartPoint: {fileID: 0}
-  fillEndPoint: {fileID: 0}
-  fillStartLocalPosition: {x: -2.1, y: 0, z: 0}
-  fillEndLocalPosition: {x: 2.1, y: 0, z: 0}
-  fillWidth: 0.22
-  animationSeconds: 0.55
-  liquidColor: {r: 0.88, g: 0.17, b: 0.12, a: 1}
-  createFallbackVisual: 1
-  glowAmount: 0.35
-  emissionStrength: 5
-  coreWhiteBlend: 0.28
-  glowShellRadiusMultiplier: 1.5
-  glowShellAlpha: 0.2
-  glowPulseSpeed: 2.4
-  createGlowLight: 1
-  glowLightIntensity: 1.35
-  glowLightRange: 1.25
-  onValueChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  onNormalizedChanged:
-    m_PersistentCalls:
-      m_Calls: []
---- !u!114 &946471768
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 946471765}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0a68cfbb11cac1c43bfd5efd6926b9d9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveStatusTubeView
-  session: {fileID: 0}
-  statType: 1
-  glassTubePrefab: {fileID: 0}
-  liquidFill: {fileID: 0}
-  liquidRenderers: []
-  fillCoordinateSpace: {fileID: 0}
-  fillStartPoint: {fileID: 0}
-  fillEndPoint: {fileID: 0}
-  fillStartLocalPosition: {x: -2.1, y: 0, z: 0}
-  fillEndLocalPosition: {x: 2.1, y: 0, z: 0}
-  fillWidth: 0.42
-  animationSeconds: 0.55
-  liquidColor: {r: 0.85, g: 0.18, b: 0.13, a: 1}
-  createFallbackVisual: 1
-  glowAmount: 0.35
-  emissionStrength: 3
-  coreWhiteBlend: 0.28
-  glowShellRadiusMultiplier: 1.5
-  glowShellAlpha: 0.2
-  glowPulseSpeed: 2.4
-  createGlowLight: 1
-  glowLightIntensity: 1.35
-  glowLightRange: 1.25
-  onValueChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  onNormalizedChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!1 &1016577734
 GameObject:
   m_ObjectHideFlags: 0
@@ -979,7 +884,8 @@ Transform:
   m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
-  m_Children: []
+  m_Children:
+  - {fileID: 921411490}
   m_Father: {fileID: 1760931045}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1447460341
@@ -991,7 +897,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 1447460342}
-  - component: {fileID: 1447460343}
   m_Layer: 0
   m_Name: EvasionTubeRoot
   m_TagString: Untagged
@@ -1014,47 +919,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 118004586}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1447460343
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1447460341}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0a68cfbb11cac1c43bfd5efd6926b9d9, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveStatusTubeView
-  session: {fileID: 0}
-  statType: 3
-  glassTubePrefab: {fileID: 0}
-  liquidFill: {fileID: 0}
-  liquidRenderers: []
-  fillCoordinateSpace: {fileID: 0}
-  fillStartPoint: {fileID: 0}
-  fillEndPoint: {fileID: 0}
-  fillStartLocalPosition: {x: -2.1, y: 0, z: 0}
-  fillEndLocalPosition: {x: 2.1, y: 0, z: 0}
-  fillWidth: 0.22
-  animationSeconds: 0.55
-  liquidColor: {r: 0.18, g: 0.82, b: 0.48, a: 1}
-  createFallbackVisual: 1
-  glowAmount: 0.35
-  emissionStrength: 3
-  coreWhiteBlend: 0.28
-  glowShellRadiusMultiplier: 1.5
-  glowShellAlpha: 0.2
-  glowPulseSpeed: 2.4
-  createGlowLight: 1
-  glowLightIntensity: 1.35
-  glowLightRange: 1.25
-  onValueChanged:
-    m_PersistentCalls:
-      m_Calls: []
-  onNormalizedChanged:
-    m_PersistentCalls:
-      m_Calls: []
 --- !u!1 &1566212531
 GameObject:
   m_ObjectHideFlags: 0
@@ -1607,7 +1471,7 @@ MonoBehaviour:
   defenseTubeRoot: {fileID: 449604768}
   evasionTubeRoot: {fileID: 2973499245606523555}
   qrReadButtonRoot: {fileID: 1113570685}
-  qrFeedbackRoot: {fileID: 0}
+  qrFeedbackRoot: {fileID: 921411490}
   uiRoot: {fileID: 1263749525}
   referenceCamera: {fileID: 1597678933}
   woodPanel: {fileID: 6488394813042112958}
@@ -1637,6 +1501,7 @@ MonoBehaviour:
   orthographicSize: 5
   fieldOfView: 60
   backgroundColor: {r: 0.03, g: 0.03, b: 0.03, a: 1}
+  mirrorHorizontally: 0
   sceneFont: {fileID: 0}
   applyFontToAllTextMeshes: 1
   fontRefreshInterval: 0.5
@@ -1688,6 +1553,8 @@ MonoBehaviour:
   qrButtonPositionOffset: {x: 0, y: 0, z: 0}
   qrButtonCameraOffset: 1.05
   qrFeedbackCameraOffset: 0.82
+  timerRefreshInterval: 0.2
+  timerUrgentColor: {r: 1, g: 0.12, b: 0.08, a: 1}
   onScanningChanged:
     m_PersistentCalls:
       m_Calls: []
@@ -1938,7 +1805,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveStatusTubeView
   session: {fileID: 0}
   statType: 3
-  glassTubePrefab: {fileID: 6338203708909339032}
+  glassTubePrefab: {fileID: 0}
   liquidFill: {fileID: 0}
   liquidRenderers: []
   fillCoordinateSpace: {fileID: 118004586}

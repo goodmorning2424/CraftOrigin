@@ -145,7 +145,48 @@ namespace CraftOrigin.CraftLiveTests
                 host.transform.Find(
                     "TutorialVideoPlaceholder/TutorialVideoLabel"),
                 Is.Not.Null);
-            Assert.That(host.GetComponent<VideoPlayer>(), Is.Null);
+            VideoPlayer player = host.GetComponent<VideoPlayer>();
+            Assert.That(player, Is.Not.Null);
+            Assert.That(player.source, Is.EqualTo(VideoSource.Url));
+            StringAssert.EndsWith("OperationGuide.mp4", player.url);
+            Assert.That(player.GetDirectAudioVolume(0),
+                Is.EqualTo(0.7f).Within(0.001f));
+        }
+
+        [Test]
+        public void Pad2Scene_UsesDeferredOperationGuideVideo()
+        {
+            WithScene(
+                CraftLiveStep2SceneGenerator.Pad2ScenePath,
+                scene =>
+                {
+                    CraftLivePad2ResultController controller =
+                        FindSingle<CraftLivePad2ResultController>(scene);
+                    SerializedObject serialized =
+                        new SerializedObject(controller);
+                    VideoClip clip = serialized
+                        .FindProperty("startTutorialVideo")
+                        .objectReferenceValue as VideoClip;
+                    Assert.That(clip, Is.Null);
+                    Assert.That(
+                        serialized.FindProperty(
+                                "startTutorialVideoRelativeUrl")
+                            .stringValue,
+                        Is.EqualTo("OperationGuide.mp4"));
+                });
+        }
+
+        [Test]
+        public void TutorialVideoUrl_ResolvesBesideWebGlPage()
+        {
+            Assert.That(
+                CraftLivePad2ResultController.ResolveTutorialVideoUrl(
+                    "OperationGuide.mp4",
+                    "C:/Project/Assets",
+                    "https://example.test/game/index.html?screen=pad2",
+                    false),
+                Is.EqualTo(
+                    "https://example.test/game/OperationGuide.mp4"));
         }
 
         [Test]
@@ -201,6 +242,7 @@ namespace CraftOrigin.CraftLiveTests
         [TestCase("PikopikoSword 1.asset", 300f, 300f, 800f)]
         [TestCase("YariThrust.asset", 500f, 200f, 600f)]
         [TestCase("KobushiThrust 1.asset", 200f, 200f, 200f)]
+        [TestCase("BareHands.asset", 200f, 200f, 200f)]
         [TestCase("KazikiThrust 1.asset", 1000f, 100f, 100f)]
         [TestCase("TueStaff.asset", 400f, 400f, 400f)]
         [TestCase("FudeThrust 1.asset", 450f, 300f, 500f)]
@@ -217,6 +259,35 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(weapon.BaseStats.attackRate, Is.EqualTo(attack));
             Assert.That(weapon.BaseStats.defenseRate, Is.EqualTo(defense));
             Assert.That(weapon.BaseStats.evasionRate, Is.EqualTo(evasion));
+        }
+
+        [Test]
+        public void DefaultCatalog_SeparatesFistFromSecretBareHands()
+        {
+            CraftLiveCatalog catalog =
+                AssetDatabase.LoadAssetAtPath<CraftLiveCatalog>(
+                    "Assets/CraftLiveData/DefaultCraftLiveCatalog.asset");
+            Assert.That(catalog, Is.Not.Null);
+
+            CraftLiveWeaponDefinition fist =
+                catalog.FindWeapon("weapon_kobushi");
+            Assert.That(fist, Is.Not.Null);
+            Assert.That(fist.DisplayName, Is.EqualTo("こぶし"));
+            Assert.That(fist.VisibleInSelection, Is.True);
+            Assert.That(fist.HidePresentationModel, Is.False);
+            Assert.That(fist.WorkbenchPrefab, Is.Not.Null);
+            Assert.That(
+                CraftLiveCalculator.IsSecretWeaponId(fist.WeaponId),
+                Is.False);
+
+            CraftLiveWeaponDefinition bareHands =
+                catalog.FindWeapon(
+                    CraftLiveCalculator.SecretBareHandsWeaponId);
+            Assert.That(bareHands, Is.Not.Null);
+            Assert.That(bareHands.DisplayName, Is.EqualTo("素手"));
+            Assert.That(bareHands.VisibleInSelection, Is.False);
+            Assert.That(bareHands.HidePresentationModel, Is.True);
+            Assert.That(bareHands.WorkbenchPrefab, Is.Null);
         }
 
         [TestCase("attack.asset", 50f, 0f, 0f, "最大1000")]
@@ -280,6 +351,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [TestCase("2NN400", "weapon_bigsword_sword")]
+        [TestCase("1NN000", "weapon_bare_hands")]
         [TestCase("3NN040", "weapon_fude_staff")]
         [TestCase("4NN004", "weapon_katate_sword")]
         [TestCase("5FN000", "weapon_kaziki")]
@@ -347,6 +419,19 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 CraftLiveWeaponCode.Generate(result),
                 Is.EqualTo("7NN000"));
+        }
+
+        [Test]
+        public void WeaponCode_BareHandsHasOwnSecretCode()
+        {
+            CraftLiveResultState result = new CraftLiveResultState
+            {
+                weaponId = CraftLiveCalculator.SecretBareHandsWeaponId,
+                attackMaterialCount = 4
+            };
+            Assert.That(
+                CraftLiveWeaponCode.Generate(result),
+                Is.EqualTo("1NN000"));
         }
 
         [TestCase(0f, "00:00")]
@@ -509,6 +594,104 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 setup.session.State.sessionPhase,
                 Is.EqualTo(CraftLiveSessionPhase.Finished));
+        }
+
+        [Test]
+        public void FinalSelection_AcceptsThreeDigitProductionGroupNumber()
+        {
+            TestSetup setup = CreateValidSetup();
+            setup.session.StartSynthesis();
+            setup.session.CompleteSynthesis();
+            int serial = setup.session.State.result.resultSerial;
+            setup.session.ExpireSession();
+            Assert.That(setup.session.SelectFinalWeapon(serial), Is.True);
+
+            Assert.That(
+                setup.session.ApplyIssuedGroupNumber(
+                    setup.session.State.groupGeneration,
+                    serial,
+                    "123"),
+                Is.True);
+            Assert.That(
+                setup.session.State.finalWeaponCode,
+                Is.EqualTo("123"));
+        }
+
+        [Test]
+        public void GroupCandidates_UseAllTwoDigitsBeforeThreeDigits()
+        {
+            HashSet<string> candidates = new HashSet<string>();
+            for (int offset = 0;
+                 offset < CraftLiveRoomTransport.ProductionGroupNumberCount;
+                 offset++)
+            {
+                string candidate =
+                    CraftLiveRoomTransport.CreateGroupCandidate(
+                        "001",
+                        1,
+                        1,
+                        offset);
+                Assert.That(candidates.Add(candidate), Is.True, candidate);
+                Assert.That(
+                    candidate.Length,
+                    Is.EqualTo(offset < 99 ? 2 : 3),
+                    candidate);
+            }
+
+            Assert.That(candidates, Has.Count.EqualTo(999));
+        }
+
+        [TestCase("01", true)]
+        [TestCase("99", true)]
+        [TestCase("100", true)]
+        [TestCase("999", true)]
+        [TestCase("1", false)]
+        [TestCase("001", false)]
+        [TestCase("1000", false)]
+        public void ProductionGroupNumber_ValidatesExpectedRange(
+            string value,
+            bool expected)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.IsProductionGroupNumber(value),
+                Is.EqualTo(expected));
+        }
+
+        [Test]
+        public void OccupiedGroupSnapshot_ParsesProductionAndDebugNumbers()
+        {
+            HashSet<string> occupied =
+                CraftLiveRoomTransport.ParseOccupiedGroupNumbers(
+                    "{\"01\":true,\"99\":true,\"100\":true," +
+                    "\"999\":true,\"54321\":true,\"bad\":true}");
+
+            Assert.That(occupied,
+                Is.EquivalentTo(new[]
+                {
+                    "01", "99", "100", "999", "54321"
+                }));
+        }
+
+        [TestCase(null)]
+        [TestCase("")]
+        [TestCase("null")]
+        [TestCase("{}")]
+        public void OccupiedGroupSnapshot_EmptyPayloadHasNoNumbers(
+            string json)
+        {
+            Assert.That(
+                CraftLiveRoomTransport.ParseOccupiedGroupNumbers(json),
+                Is.Empty);
+        }
+
+        [Test]
+        public void DefaultRules_RequireThreeHammerStrikes()
+        {
+            CraftLiveRules rules =
+                AssetDatabase.LoadAssetAtPath<CraftLiveRules>(
+                    "Assets/CraftLiveData/DefaultCraftLiveRules.asset");
+            Assert.That(rules, Is.Not.Null);
+            Assert.That(rules.RequiredHammerPasses, Is.EqualTo(3));
         }
 
         [Test]
@@ -1234,6 +1417,52 @@ namespace CraftOrigin.CraftLiveTests
                         NewSceneMode.Single);
                 }
             }
+        }
+
+        private static void WithScene(
+            string path,
+            Action<Scene> action)
+        {
+            SceneSetup[] setup =
+                EditorSceneManager.GetSceneManagerSetup();
+            try
+            {
+                Scene scene = EditorSceneManager.OpenScene(
+                    path,
+                    OpenSceneMode.Single);
+                action(scene);
+            }
+            finally
+            {
+                bool restore = false;
+                foreach (SceneSetup item in setup)
+                {
+                    restore |= item.isLoaded && item.isActive;
+                }
+                if (restore)
+                {
+                    EditorSceneManager.RestoreSceneManagerSetup(setup);
+                }
+                else
+                {
+                    EditorSceneManager.NewScene(
+                        NewSceneSetup.EmptyScene,
+                        NewSceneMode.Single);
+                }
+            }
+        }
+
+        private static T FindSingle<T>(Scene scene)
+            where T : Component
+        {
+            List<T> found = new List<T>();
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                found.AddRange(root.GetComponentsInChildren<T>(true));
+            }
+
+            Assert.That(found, Has.Count.EqualTo(1));
+            return found[0];
         }
 
         private readonly struct TestSetup

@@ -341,6 +341,7 @@ MonoBehaviour:
   orthographicSize: 5
   fieldOfView: 60
   backgroundColor: {r: 0, g: 0, b: 0, a: 1}
+  mirrorHorizontally: 1
   sceneFont: {fileID: 0}
   applyFontToAllTextMeshes: 1
   fontRefreshInterval: 0.5

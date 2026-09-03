@@ -1,5 +1,4 @@
 using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace CraftOrigin.CraftLive
@@ -20,10 +19,6 @@ namespace CraftOrigin.CraftLive
 
         private GameObject generatedScreen;
         private Coroutine slideRoutine;
-        private readonly List<Renderer> hiddenSceneRenderers =
-            new List<Renderer>();
-        private readonly List<Collider> disabledSceneColliders =
-            new List<Collider>();
         private CraftLiveSessionPhase displayedPhase =
             (CraftLiveSessionPhase)(-1);
 
@@ -69,19 +64,8 @@ namespace CraftOrigin.CraftLive
                 slideRoutine = null;
             }
 
-            RestoreSceneRenderers();
-            RestoreSceneColliders();
             DestroySafely(generatedScreen);
             generatedScreen = null;
-        }
-
-        private void LateUpdate()
-        {
-            if (displayedPhase == CraftLiveSessionPhase.StartScreen &&
-                generatedScreen != null && slideRoutine == null)
-            {
-                SuppressSceneRenderers();
-            }
         }
 
         private void ResolveReferences()
@@ -138,8 +122,6 @@ namespace CraftOrigin.CraftLive
                 }
                 else if (slideRoutine == null)
                 {
-                    RestoreSceneRenderers();
-                    RestoreSceneColliders();
                     DestroySafely(generatedScreen);
                     generatedScreen = null;
                 }
@@ -165,9 +147,6 @@ namespace CraftOrigin.CraftLive
 
             DestroySafely(generatedScreen);
             generatedScreen = null;
-            RestoreSceneRenderers();
-            RestoreSceneColliders();
-            HideSceneRenderers();
             generatedScreen = new GameObject("Generated_SynchronizedStartScreen");
             generatedScreen.transform.SetParent(displayRoot, false);
             generatedScreen.transform.localPosition = Vector3.zero;
@@ -186,7 +165,8 @@ namespace CraftOrigin.CraftLive
                 "FullViewportOccluder",
                 new Vector3(0f, 0f, 0.3f),
                 new Vector3(9.4f, 9.8f, 0.18f),
-                CraftLiveForgeUITheme.DeepIron);
+                CraftLiveForgeUITheme.DeepIron,
+                true);
 
             // Match the Pad 2 start panel frame so all four devices present a
             // single continuous forge wall before the authoritative button is
@@ -293,90 +273,7 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            // Reveal the normal pad content at the same instant on every pad;
-            // the start panel then slides over it instead of leaving always-on
-            // TextMesh labels visible through the panel.
-            RestoreSceneRenderers();
-            RestoreSceneColliders();
             slideRoutine = StartCoroutine(SlideOut());
-        }
-
-        private void HideSceneRenderers()
-        {
-            hiddenSceneRenderers.Clear();
-            SuppressSceneRenderers();
-        }
-
-        private void SuppressSceneRenderers()
-        {
-            if (displayRoot == null)
-            {
-                return;
-            }
-
-            Renderer[] renderers = FindObjectsByType<Renderer>(
-                FindObjectsInactive.Exclude);
-            foreach (Renderer candidate in renderers)
-            {
-                if (candidate == null || !candidate.enabled ||
-                    candidate.gameObject.scene != displayRoot.gameObject.scene ||
-                    (generatedScreen != null &&
-                     candidate.transform.IsChildOf(generatedScreen.transform)))
-                {
-                    continue;
-                }
-
-                candidate.enabled = false;
-                if (!hiddenSceneRenderers.Contains(candidate))
-                {
-                    hiddenSceneRenderers.Add(candidate);
-                }
-            }
-
-            Collider[] colliders = FindObjectsByType<Collider>(
-                FindObjectsInactive.Exclude);
-            foreach (Collider candidate in colliders)
-            {
-                if (candidate == null || !candidate.enabled ||
-                    candidate.gameObject.scene != displayRoot.gameObject.scene ||
-                    (generatedScreen != null &&
-                     candidate.transform.IsChildOf(generatedScreen.transform)))
-                {
-                    continue;
-                }
-
-                candidate.enabled = false;
-                if (!disabledSceneColliders.Contains(candidate))
-                {
-                    disabledSceneColliders.Add(candidate);
-                }
-            }
-        }
-
-        private void RestoreSceneRenderers()
-        {
-            foreach (Renderer candidate in hiddenSceneRenderers)
-            {
-                if (candidate != null)
-                {
-                    candidate.enabled = true;
-                }
-            }
-
-            hiddenSceneRenderers.Clear();
-        }
-
-        private void RestoreSceneColliders()
-        {
-            foreach (Collider candidate in disabledSceneColliders)
-            {
-                if (candidate != null)
-                {
-                    candidate.enabled = true;
-                }
-            }
-
-            disabledSceneColliders.Clear();
         }
 
         private IEnumerator SlideOut()
@@ -478,14 +375,18 @@ namespace CraftOrigin.CraftLive
             string name,
             Vector3 position,
             Vector3 scale,
-            Color color)
+            Color color,
+            bool keepCollider = false)
         {
             GameObject part = GameObject.CreatePrimitive(PrimitiveType.Cube);
             part.name = name;
             part.transform.SetParent(generatedScreen.transform, false);
             part.transform.localPosition = position;
             part.transform.localScale = scale;
-            DestroySafely(part.GetComponent<Collider>());
+            if (!keepCollider)
+            {
+                DestroySafely(part.GetComponent<Collider>());
+            }
 
             part.AddComponent<CraftLiveGeneratedRuntimeVisual>();
             CraftLiveForgeUITheme.ApplyForgeSurface(

@@ -5,7 +5,7 @@ namespace CraftOrigin.CraftLive
         public const string SecretPikopikoWeaponId =
             "weapon_pikopiko_sword";
         public const string SecretKazikiWeaponId = "weapon_kaziki";
-        public const string SecretBareHandsWeaponId = "weapon_kobushi";
+        public const string SecretBareHandsWeaponId = "weapon_bare_hands";
         public const string SecretPikopikoMaterialId = "ore_evasion";
         public const string SecretKazikiMaterialId = "ore_attack";
         private static readonly CraftLiveSlotId[] BaseStatSlots =

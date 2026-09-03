@@ -514,7 +514,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveWebPresentation
   targetCamera: {fileID: 1263749525}
+  session: {fileID: 0}
   targetFrameRate: 30
+  idleRenderFrameInterval: 2
   targetAspect: {x: 3, y: 4}
   letterboxCamera: 0
   respectSafeArea: 1

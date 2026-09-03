@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Text;
+using System.Text.RegularExpressions;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Networking;
@@ -105,6 +106,10 @@ namespace CraftOrigin.CraftLive
     [DefaultExecutionOrder(-100)]
     public sealed class CraftLiveRoomTransport : MonoBehaviour
     {
+        public const int ProductionGroupNumberCount = 999;
+        private const int TwoDigitGroupNumberCount = 99;
+        private const int ThreeDigitGroupNumberCount = 900;
+
         private static readonly Dictionary<string, CraftLiveRoomState>
             LocalRooms = new Dictionary<string, CraftLiveRoomState>();
         private static readonly List<CraftLiveRoomTransport> LocalClients =
@@ -604,6 +609,24 @@ namespace CraftOrigin.CraftLive
             int resultSerial,
             CraftLiveResultState result)
         {
+            HashSet<string> occupiedNumbers = null;
+            bool useOccupancySnapshot =
+                string.IsNullOrWhiteSpace(simulatorGroupNumber);
+            if (useOccupancySnapshot)
+            {
+                using (UnityWebRequest snapshot = UnityWebRequest.Get(
+                           BuildWeaponGroupsRootUrl() + "?shallow=true"))
+                {
+                    snapshot.timeout = Mathf.CeilToInt(requestTimeoutSeconds);
+                    yield return snapshot.SendWebRequest();
+                    if (snapshot.result == UnityWebRequest.Result.Success)
+                    {
+                        occupiedNumbers = ParseOccupiedGroupNumbers(
+                            snapshot.downloadHandler.text);
+                    }
+                }
+            }
+
             while (enabled && IsGroupIssuePending(generation, resultSerial))
             {
                 bool issued = false;
@@ -611,7 +634,7 @@ namespace CraftOrigin.CraftLive
                 string publishFailure = string.Empty;
                 int candidateCount = string.IsNullOrWhiteSpace(
                     simulatorGroupNumber)
-                    ? 99
+                    ? ProductionGroupNumberCount
                     : 1;
                 for (int offset = 0; offset < candidateCount && !issued; offset++)
                 {
@@ -623,6 +646,13 @@ namespace CraftOrigin.CraftLive
                             resultSerial,
                             offset)
                         : simulatorGroupNumber;
+                    if (useOccupancySnapshot &&
+                        occupiedNumbers != null &&
+                        occupiedNumbers.Contains(number))
+                    {
+                        continue;
+                    }
+
                     string url = BuildWeaponGroupUrl(number);
                     string etag = string.Empty;
                     bool available = false;
@@ -726,6 +756,10 @@ namespace CraftOrigin.CraftLive
 
                 if (issued)
                     break;
+                // If the snapshot was stale, or every number existed only as
+                // an expired record, the retry performs the original guarded
+                // per-number scan so reuse semantics are preserved.
+                useOccupancySnapshot = false;
                 session.ReportGroupNumberRetry(
                     generation,
                     resultSerial,
@@ -784,9 +818,62 @@ namespace CraftOrigin.CraftLive
                     hash ^= value;
                     hash *= 16777619;
                 }
-                int number = (int)((hash + (uint)Mathf.Max(0, offset)) % 99u) + 1;
-                return number.ToString("00");
+                int normalizedOffset = Mathf.Max(0, offset);
+                if (normalizedOffset < TwoDigitGroupNumberCount)
+                {
+                    int number = (int)(
+                        (hash + (uint)normalizedOffset) %
+                        TwoDigitGroupNumberCount) + 1;
+                    return number.ToString("00");
+                }
+
+                int threeDigitOffset =
+                    (normalizedOffset - TwoDigitGroupNumberCount) %
+                    ThreeDigitGroupNumberCount;
+                int threeDigitNumber = (int)(
+                    (hash + (uint)threeDigitOffset) %
+                    ThreeDigitGroupNumberCount) + 100;
+                return threeDigitNumber.ToString("000");
             }
+        }
+
+        public static bool IsProductionGroupNumber(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            if (!int.TryParse(normalized, out int numeric))
+            {
+                return false;
+            }
+
+            return (normalized.Length == 2 &&
+                    numeric >= 1 && numeric <= 99) ||
+                   (normalized.Length == 3 &&
+                    numeric >= 100 && numeric <= 999);
+        }
+
+        public static HashSet<string> ParseOccupiedGroupNumbers(string json)
+        {
+            HashSet<string> numbers = new HashSet<string>();
+            if (string.IsNullOrWhiteSpace(json) ||
+                string.Equals(json.Trim(), "null",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return numbers;
+            }
+
+            foreach (Match match in Regex.Matches(
+                         json,
+                         "\\\"(?<number>[0-9]{2,5})\\\"\\s*:"))
+            {
+                string number = match.Groups["number"].Value;
+                if (IsProductionGroupNumber(number) ||
+                    IsFiveDigitGroupNumber(number))
+                {
+                    numbers.Add(number);
+                }
+            }
+
+            return numbers;
         }
 
         public static bool IsFiveDigitGroupNumber(string value)
@@ -1159,7 +1246,9 @@ namespace CraftOrigin.CraftLive
                 hash *= 16777619;
             }
 
-            return $"CraftLive.Room.{hash:X8}.{suffix}";
+            // V2 intentionally leaves pre-event browser caches behind. Old
+            // room snapshots must not be restored after the production reset.
+            return $"CraftLive.Room.V2.{hash:X8}.{suffix}";
         }
 
         private string BuildRoomUrl()
@@ -1174,6 +1263,12 @@ namespace CraftOrigin.CraftLive
             string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
             return $"{baseUrl}/weaponGroups/" +
                    $"{UnityWebRequest.EscapeURL(groupNumber)}.json";
+        }
+
+        private string BuildWeaponGroupsRootUrl()
+        {
+            string baseUrl = firebaseDatabaseUrl.Trim().TrimEnd('/');
+            return $"{baseUrl}/weaponGroups.json";
         }
 
         private string BuildPresenceRoomUrl()

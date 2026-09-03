@@ -108,6 +108,7 @@ namespace CraftOrigin.CraftLive
         {
             switch (weaponId)
             {
+                case "weapon_bare_hands": return '1';
                 case "weapon_bigsword_sword": return '2';
                 case "weapon_fude_staff": return '3';
                 case "weapon_katate_sword": return '4';
@@ -124,6 +125,7 @@ namespace CraftOrigin.CraftLive
         {
             switch (symbol)
             {
+                case '1': weaponId = "weapon_bare_hands"; return true;
                 case '2': weaponId = "weapon_bigsword_sword"; return true;
                 case '3': weaponId = "weapon_fude_staff"; return true;
                 case '4': weaponId = "weapon_katate_sword"; return true;

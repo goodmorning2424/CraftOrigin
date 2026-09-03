@@ -1,4 +1,5 @@
 using System.Collections;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.Video;
@@ -17,8 +18,14 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Min(0.1f)] private float startScreenSlideDistance = 12f;
         [Header("Start Tutorial Video")]
         [SerializeField]
-        [Tooltip("Pad2のクラフト開始後に再生する説明動画です。未設定の場合は動画を待たず開始します。")]
+        [Tooltip("Editor用の任意VideoClipです。WebGL本番では下のURLを優先し、動画を初期データから分離します。")]
         private VideoClip startTutorialVideo;
+        [SerializeField]
+        [Tooltip("WebGL出力のルートに配置する操作説明動画の相対URLです。")]
+        private string startTutorialVideoRelativeUrl = "OperationGuide.mp4";
+        [SerializeField, Range(0f, 1f)]
+        [Tooltip("操作説明動画の再生音量です。")]
+        private float tutorialVideoVolume = 0.7f;
         [SerializeField, Min(1f)]
         [Tooltip("動画の準備に失敗して進行不能になることを防ぐ待機上限です。")]
         private float tutorialPrepareTimeoutSeconds = 10f;
@@ -59,6 +66,7 @@ namespace CraftOrigin.CraftLive
         private CraftLiveTutorialVideoTapSurface tutorialTapSurface;
         private VideoPlayer tutorialVideoPlayer;
         private RenderTexture tutorialRenderTexture;
+        private Material tutorialVideoMaterial;
         private bool tutorialPrepared;
         private bool tutorialFinished;
         private bool tutorialFailed;
@@ -283,7 +291,7 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-            if (startTutorialVideo == null)
+            if (!HasTutorialVideo())
             {
                 session.StartGroup();
                 return;
@@ -473,9 +481,7 @@ namespace CraftOrigin.CraftLive
             }
 
             tutorialVideoPlayer.Play();
-            double clipLength = startTutorialVideo != null
-                ? startTutorialVideo.length
-                : 0d;
+            double clipLength = tutorialVideoPlayer.length;
             float playbackTimeout = Mathf.Max(
                 tutorialPrepareTimeoutSeconds,
                 (float)clipLength + 5f);
@@ -572,14 +578,15 @@ namespace CraftOrigin.CraftLive
 
         private void ReleaseTutorialRenderTexture()
         {
-            if (tutorialRenderTexture == null)
+            if (tutorialRenderTexture != null)
             {
-                return;
+                tutorialRenderTexture.Release();
+                DestroySafely(tutorialRenderTexture);
+                tutorialRenderTexture = null;
             }
 
-            tutorialRenderTexture.Release();
-            DestroySafely(tutorialRenderTexture);
-            tutorialRenderTexture = null;
+            DestroySafely(tutorialVideoMaterial);
+            tutorialVideoMaterial = null;
         }
 
         private void PublishResult(CraftLiveResultState result)
@@ -793,14 +800,14 @@ namespace CraftOrigin.CraftLive
             tutorialPlaceholderLabel = CreateText(
                 tutorialPlaceholder.transform,
                 "TutorialVideoLabel",
-                startTutorialVideo != null
+                HasTutorialVideo()
                     ? "操作説明動画"
                     : "操作説明動画\n（動画を割り当ててください）",
                 Vector3.zero,
                 0.038f,
                 new Color(0.82f, 0.77f, 0.67f));
 
-            if (startTutorialVideo == null)
+            if (!HasTutorialVideo())
             {
                 return;
             }
@@ -815,29 +822,126 @@ namespace CraftOrigin.CraftLive
             };
             tutorialRenderTexture.Create();
             Renderer surfaceRenderer = surface.GetComponent<Renderer>();
-            if (surfaceRenderer != null)
+            if (surfaceRenderer != null &&
+                surfaceRenderer.sharedMaterial != null)
             {
-                Material material = surfaceRenderer.material;
-                if (material.HasProperty("_BaseMap"))
+                tutorialVideoMaterial = new Material(
+                    surfaceRenderer.sharedMaterial)
                 {
-                    material.SetTexture("_BaseMap", tutorialRenderTexture);
+                    name = "Generated_StartTutorialVideoMaterial",
+                    hideFlags = HideFlags.HideAndDontSave
+                };
+                surfaceRenderer.sharedMaterial = tutorialVideoMaterial;
+                if (tutorialVideoMaterial.HasProperty("_BaseMap"))
+                {
+                    tutorialVideoMaterial.SetTexture(
+                        "_BaseMap",
+                        tutorialRenderTexture);
+#if UNITY_WEBGL && !UNITY_EDITOR
+                    tutorialVideoMaterial.SetTextureScale(
+                        "_BaseMap",
+                        new Vector2(-1f, -1f));
+                    tutorialVideoMaterial.SetTextureOffset(
+                        "_BaseMap",
+                        new Vector2(1f, 1f));
+#endif
                 }
-                if (material.HasProperty("_MainTex"))
+                if (tutorialVideoMaterial.HasProperty("_MainTex"))
                 {
-                    material.SetTexture("_MainTex", tutorialRenderTexture);
+                    tutorialVideoMaterial.SetTexture(
+                        "_MainTex",
+                        tutorialRenderTexture);
+#if UNITY_WEBGL && !UNITY_EDITOR
+                    tutorialVideoMaterial.SetTextureScale(
+                        "_MainTex",
+                        new Vector2(-1f, -1f));
+                    tutorialVideoMaterial.SetTextureOffset(
+                        "_MainTex",
+                        new Vector2(1f, 1f));
+#endif
                 }
             }
 
-            tutorialVideoPlayer = generatedPanel.AddComponent<VideoPlayer>();
+            // Use the supplied parent as a safe fallback for isolated editor
+            // tests and custom scene setups where generatedPanel is absent.
+            GameObject videoPlayerHost = generatedPanel != null
+                ? generatedPanel
+                : parent.gameObject;
+            tutorialVideoPlayer = videoPlayerHost.AddComponent<VideoPlayer>();
             tutorialVideoPlayer.playOnAwake = false;
             tutorialVideoPlayer.isLooping = false;
             tutorialVideoPlayer.waitForFirstFrame = true;
             tutorialVideoPlayer.skipOnDrop = true;
-            tutorialVideoPlayer.source = VideoSource.VideoClip;
-            tutorialVideoPlayer.clip = startTutorialVideo;
+            string videoUrl = ResolveTutorialVideoUrl(
+                startTutorialVideoRelativeUrl,
+                Application.dataPath,
+                Application.absoluteURL,
+                Application.isEditor);
+            if (!string.IsNullOrWhiteSpace(videoUrl))
+            {
+                tutorialVideoPlayer.source = VideoSource.Url;
+                tutorialVideoPlayer.url = videoUrl;
+            }
+            else
+            {
+                tutorialVideoPlayer.source = VideoSource.VideoClip;
+                tutorialVideoPlayer.clip = startTutorialVideo;
+            }
             tutorialVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
             tutorialVideoPlayer.targetTexture = tutorialRenderTexture;
             tutorialVideoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
+            tutorialVideoPlayer.SetDirectAudioVolume(
+                0,
+                Mathf.Clamp01(tutorialVideoVolume));
+        }
+
+        private bool HasTutorialVideo()
+        {
+            return startTutorialVideo != null ||
+                   !string.IsNullOrWhiteSpace(
+                       startTutorialVideoRelativeUrl);
+        }
+
+        public static string ResolveTutorialVideoUrl(
+            string relativeUrl,
+            string dataPath,
+            string absoluteUrl,
+            bool isEditor)
+        {
+            string normalized = (relativeUrl ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return string.Empty;
+            }
+
+            if (System.Uri.TryCreate(
+                    normalized,
+                    System.UriKind.Absolute,
+                    out System.Uri absoluteMediaUri))
+            {
+                return absoluteMediaUri.AbsoluteUri;
+            }
+
+            if (isEditor)
+            {
+                string assetPath = Path.GetFullPath(
+                    Path.Combine(
+                        dataPath,
+                        "CraftLiveData",
+                        "Video",
+                        Path.GetFileName(normalized)));
+                return new System.Uri(assetPath).AbsoluteUri;
+            }
+
+            if (System.Uri.TryCreate(
+                    absoluteUrl,
+                    System.UriKind.Absolute,
+                    out System.Uri pageUri))
+            {
+                return new System.Uri(pageUri, normalized).AbsoluteUri;
+            }
+
+            return normalized;
         }
 
         private void BuildResultPanel(CraftLiveRoomState state)

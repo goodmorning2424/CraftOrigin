@@ -21,7 +21,7 @@ namespace CraftOrigin.CraftLive
         [Header("Mixing")]
         [SerializeField, Min(0.5f)] private float mixingDurationSeconds = 5f;
         [SerializeField, Min(0.1f)] private float powerPerRadian = 7.5f;
-        [SerializeField, Min(1)] private int requiredHammerPasses = 6;
+        [SerializeField, Min(1)] private int requiredHammerPasses = 3;
         [SerializeField, Min(20f)] private float hammerStrokePixels = 120f;
 
         [Header("Results")]

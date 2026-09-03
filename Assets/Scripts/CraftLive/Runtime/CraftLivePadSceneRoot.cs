@@ -1,7 +1,113 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace CraftOrigin.CraftLive
 {
+    [DisallowMultipleComponent]
+    [RequireComponent(typeof(Camera))]
+    public sealed class CraftLiveCameraMirror : MonoBehaviour
+    {
+        [SerializeField] private bool mirrorHorizontally = true;
+
+        private Camera targetCamera;
+
+        public bool MirrorHorizontally => mirrorHorizontally;
+
+        public void Configure(bool horizontal)
+        {
+            mirrorHorizontally = horizontal;
+            enabled = horizontal;
+            if (!horizontal)
+            {
+                ResolveCamera()?.ResetProjectionMatrix();
+            }
+        }
+
+        private void OnEnable()
+        {
+            RenderPipelineManager.beginCameraRendering -=
+                HandleBeginCameraRendering;
+            RenderPipelineManager.beginCameraRendering +=
+                HandleBeginCameraRendering;
+            RenderPipelineManager.endCameraRendering -=
+                HandleEndCameraRendering;
+            RenderPipelineManager.endCameraRendering +=
+                HandleEndCameraRendering;
+        }
+
+        private void OnPreCull()
+        {
+            ApplyMirror(ResolveCamera());
+            GL.invertCulling = mirrorHorizontally;
+        }
+
+        private void OnPostRender()
+        {
+            GL.invertCulling = false;
+        }
+
+        private void HandleBeginCameraRendering(
+            ScriptableRenderContext context,
+            Camera camera)
+        {
+            if (camera != ResolveCamera())
+            {
+                return;
+            }
+
+            ApplyMirror(camera);
+            GL.invertCulling = mirrorHorizontally;
+        }
+
+        private void HandleEndCameraRendering(
+            ScriptableRenderContext context,
+            Camera camera)
+        {
+            if (camera == ResolveCamera())
+            {
+                GL.invertCulling = false;
+            }
+        }
+
+        private void ApplyMirror(Camera camera)
+        {
+            if (camera == null)
+            {
+                return;
+            }
+
+            camera.ResetProjectionMatrix();
+            if (!mirrorHorizontally)
+            {
+                return;
+            }
+
+            Matrix4x4 projection = camera.projectionMatrix;
+            projection.m00 = -projection.m00;
+            camera.projectionMatrix = projection;
+        }
+
+        private void OnDisable()
+        {
+            RenderPipelineManager.beginCameraRendering -=
+                HandleBeginCameraRendering;
+            RenderPipelineManager.endCameraRendering -=
+                HandleEndCameraRendering;
+            GL.invertCulling = false;
+            ResolveCamera()?.ResetProjectionMatrix();
+        }
+
+        private Camera ResolveCamera()
+        {
+            if (targetCamera == null)
+            {
+                targetCamera = GetComponent<Camera>();
+            }
+
+            return targetCamera;
+        }
+    }
+
     [ExecuteAlways]
     public sealed class CraftLivePadSceneRoot : MonoBehaviour
     {
@@ -12,6 +118,9 @@ namespace CraftOrigin.CraftLive
         [SerializeField, Range(1f, 179f)] private float fieldOfView = 60f;
         [SerializeField] private Color backgroundColor =
             new Color(0.03f, 0.03f, 0.03f, 1f);
+        [SerializeField, Tooltip(
+            "Mirrors the complete pad output for reflected displays such as Pad4's acrylic plate.")]
+        private bool mirrorHorizontally;
 
         [Header("Scene Font")]
         [SerializeField, Tooltip(
@@ -29,6 +138,7 @@ namespace CraftOrigin.CraftLive
         public CraftLiveRole Role => role;
         public Transform CameraAnchor => cameraAnchor;
         public Font SceneFont => sceneFont;
+        public bool MirrorHorizontally => mirrorHorizontally;
 
         private void Awake()
         {
@@ -72,6 +182,19 @@ namespace CraftOrigin.CraftLive
                 Mathf.Max(0.01f, orthographicSize);
             targetCamera.fieldOfView = Mathf.Clamp(fieldOfView, 1f, 179f);
             targetCamera.backgroundColor = backgroundColor;
+
+            CraftLiveCameraMirror mirror =
+                targetCamera.GetComponent<CraftLiveCameraMirror>();
+            if (mirrorHorizontally && mirror == null)
+            {
+                mirror = targetCamera.gameObject.AddComponent<
+                    CraftLiveCameraMirror>();
+            }
+
+            if (mirror != null)
+            {
+                mirror.Configure(mirrorHorizontally);
+            }
         }
 
         [ContextMenu("Apply Scene Font Now")]

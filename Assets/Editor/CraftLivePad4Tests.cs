@@ -67,7 +67,31 @@ namespace CraftOrigin.CraftLiveTests
                                 "createFallbackAttributeParticles")
                             .boolValue,
                         Is.True);
+                    Assert.That(sceneRoot.MirrorHorizontally, Is.True);
                 });
+        }
+
+        [Test]
+        public void PadSceneRoot_ConfiguresHorizontalCameraMirror()
+        {
+            GameObject rootObject = new GameObject("PadRoot");
+            GameObject cameraObject = new GameObject("Camera");
+            createdObjects.Add(rootObject);
+            createdObjects.Add(cameraObject);
+            CraftLivePadSceneRoot root =
+                rootObject.AddComponent<CraftLivePadSceneRoot>();
+            Camera camera = cameraObject.AddComponent<Camera>();
+            SerializedObject serialized = new SerializedObject(root);
+            serialized.FindProperty("mirrorHorizontally").boolValue = true;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            root.ApplyCamera(camera);
+
+            CraftLiveCameraMirror mirror =
+                camera.GetComponent<CraftLiveCameraMirror>();
+            Assert.That(mirror, Is.Not.Null);
+            Assert.That(mirror.enabled, Is.True);
+            Assert.That(mirror.MirrorHorizontally, Is.True);
         }
 
         [Test]

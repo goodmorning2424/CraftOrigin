@@ -10,10 +10,10 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cb441c96f57bd72479f67ebb9f5c0529, type: 3}
-  m_Name: KobushiThrust 1
+  m_Name: BareHands
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveWeaponDefinition
-  weaponId: weapon_kobushi
-  displayName: "\u3053\u3076\u3057"
+  weaponId: weapon_bare_hands
+  displayName: "\u7D20\u624B"
   weaponType: 1
   baseStats:
     attackRate: 200
@@ -21,9 +21,11 @@ MonoBehaviour:
     evasionRate: 200
     elementBoost: 0
   icon: {fileID: 21300000, guid: 2563ced709e67564a8e08a51e33e7df4, type: 3}
-  workbenchPrefab: {fileID: 7727810023244711319, guid: 7859948596332fc4392ab4aef5bafbdd, type: 3}
+  workbenchPrefab: {fileID: 0}
   hologramPrefab: {fileID: 0}
-  visibleInSelection: 1
-  hidePresentationModel: 0
-  previewScale: {x: 1.5, y: 1.5, z: 1.5}
-  selectionPreviewScale: 1.5
+  visibleInSelection: 0
+  hidePresentationModel: 1
+  presentationMaterialOverride: {fileID: 0}
+  previewScale: {x: 1, y: 1, z: 1}
+  selectionPreviewScale: 1
+  workbenchCenterScale: 1

@@ -432,7 +432,7 @@ namespace CraftOrigin.CraftLive
             return session != null &&
                    session.Rules != null
                 ? session.Rules.RequiredHammerPasses
-                : 6;
+                : 3;
         }
 
         private void ResolveReferences()

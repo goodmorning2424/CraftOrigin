@@ -123,6 +123,25 @@ namespace CraftOrigin.CraftLiveTests
         [Test]
         public void CraftScene_HasSixUniqueWorkbenchAnchors()
         {
+            bool isLegacySceneEnabled = false;
+            foreach (EditorBuildSettingsScene scene in
+                     EditorBuildSettings.scenes)
+            {
+                if (scene.enabled &&
+                    scene.path == "Assets/Scenes/Craft.unity")
+                {
+                    isLegacySceneEnabled = true;
+                    break;
+                }
+            }
+
+            if (!isLegacySceneEnabled)
+            {
+                Assert.Ignore(
+                    "The legacy Craft.unity scene is not part of the " +
+                    "production build.");
+            }
+
             SceneSetup[] setup = EditorSceneManager.GetSceneManagerSetup();
             try
             {

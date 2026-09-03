@@ -4054,6 +4054,7 @@ MonoBehaviour:
   orthographicSize: 5
   fieldOfView: 60
   backgroundColor: {r: 0.03, g: 0.03, b: 0.03, a: 1}
+  mirrorHorizontally: 0
   sceneFont: {fileID: 0}
   applyFontToAllTextMeshes: 1
   fontRefreshInterval: 0.5
@@ -4187,6 +4188,7 @@ MonoBehaviour:
   surroundThickness: 1
   useAutomaticPortraitFraming: 0
   showLockedMaterials: 0
+  registrationPopupDuration: 3
   applyDefaultLayout: 1
   preservePreplacedHierarchy: 1
   columnSpacing: 2.75

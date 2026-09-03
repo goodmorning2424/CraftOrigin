@@ -105,43 +105,34 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 backing.lossyScale.y,
                 Is.GreaterThanOrEqualTo(visibleHeight));
-            Assert.That(underlyingRenderer.enabled, Is.False);
-            Assert.That(
-                underlying.GetComponent<Collider>().enabled,
-                Is.False);
-
-            underlyingRenderer.enabled = true;
-            GameObject lateVisual = GameObject.CreatePrimitive(
-                PrimitiveType.Cube);
-            lateVisual.name = "LatePadVisual";
-            createdObjects.Add(lateVisual);
-            Renderer lateRenderer = lateVisual.GetComponent<Renderer>();
-            MethodInfo suppress = typeof(CraftLiveSynchronizedStartScreen)
-                .GetMethod(
-                    "SuppressSceneRenderers",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(suppress, Is.Not.Null);
-            suppress.Invoke(screen, null);
-            Assert.That(underlyingRenderer.enabled, Is.False);
-            Assert.That(lateRenderer.enabled, Is.False);
-
-            MethodInfo restore = typeof(CraftLiveSynchronizedStartScreen)
-                .GetMethod(
-                    "RestoreSceneRenderers",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(restore, Is.Not.Null);
-            restore.Invoke(screen, null);
-            MethodInfo restoreColliders =
-                typeof(CraftLiveSynchronizedStartScreen).GetMethod(
-                    "RestoreSceneColliders",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(restoreColliders, Is.Not.Null);
-            restoreColliders.Invoke(screen, null);
             Assert.That(underlyingRenderer.enabled, Is.True);
-            Assert.That(lateRenderer.enabled, Is.True);
             Assert.That(
                 underlying.GetComponent<Collider>().enabled,
                 Is.True);
+            Assert.That(occluder.GetComponent<Collider>(), Is.Not.Null);
+        }
+
+        [TestCase("Assets/Pad1/Prefab/Box.prefab")]
+        [TestCase("Assets/Pad1/Prefab/GreenWall.prefab")]
+        [TestCase("Assets/Pad1/Prefab/BlackWall.prefab")]
+        [TestCase("Assets/Pad1/Prefab/RedWall.prefab")]
+        [TestCase("Assets/Pad1/Prefab/Bane.prefab")]
+        [TestCase("Assets/Pad1/Prefab/Plate.prefab")]
+        [TestCase("Assets/Pad1/Prefab/Hassya.prefab")]
+        public void Pad1AuthoredScenery_KeepsRenderableMesh(string assetPath)
+        {
+            GameObject prefab =
+                UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>(
+                    assetPath);
+            Assert.That(prefab, Is.Not.Null, assetPath);
+            MeshRenderer renderer =
+                prefab.GetComponentInChildren<MeshRenderer>(true);
+            MeshFilter filter =
+                prefab.GetComponentInChildren<MeshFilter>(true);
+            Assert.That(renderer, Is.Not.Null, assetPath);
+            Assert.That(renderer.enabled, Is.True, assetPath);
+            Assert.That(filter, Is.Not.Null, assetPath);
+            Assert.That(filter.sharedMesh, Is.Not.Null, assetPath);
         }
 
         [Test]
@@ -837,6 +828,51 @@ namespace CraftOrigin.CraftLiveTests
 
             Assert.That(renderer.enabled, Is.True);
             Assert.That(collider.enabled, Is.True);
+        }
+
+        [Test]
+        public void MaterialPreview_SuppressesPaintingsAcrossAllWalls()
+        {
+            GameObject previewObject = new GameObject("MaterialPreview");
+            createdObjects.Add(previewObject);
+            CraftLivePad1MaterialPreview preview =
+                previewObject.AddComponent<CraftLivePad1MaterialPreview>();
+
+            CraftLiveMaterialPaintingView[] paintings =
+                new CraftLiveMaterialPaintingView[2];
+            MeshRenderer[] renderers = new MeshRenderer[2];
+            for (int index = 0; index < paintings.Length; index++)
+            {
+                GameObject paintingObject =
+                    new GameObject($"Wall{index}_Painting");
+                createdObjects.Add(paintingObject);
+                renderers[index] =
+                    paintingObject.AddComponent<MeshRenderer>();
+                paintings[index] = paintingObject.AddComponent<
+                    CraftLiveMaterialPaintingView>();
+            }
+
+            InvokeMethod(preview, "SuppressGalleryPaintings");
+
+            foreach (CraftLiveMaterialPaintingView painting in paintings)
+            {
+                Assert.That(painting.PreviewSuppressed, Is.True);
+            }
+            foreach (MeshRenderer renderer in renderers)
+            {
+                Assert.That(renderer.enabled, Is.False);
+            }
+
+            InvokeMethod(preview, "RestoreSuppressedPaintings");
+
+            foreach (CraftLiveMaterialPaintingView painting in paintings)
+            {
+                Assert.That(painting.PreviewSuppressed, Is.False);
+            }
+            foreach (MeshRenderer renderer in renderers)
+            {
+                Assert.That(renderer.enabled, Is.True);
+            }
         }
 
         [Test]

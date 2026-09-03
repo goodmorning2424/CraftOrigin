@@ -18,7 +18,7 @@ MonoBehaviour:
   requireAllFourBaseSlots: 0
   mixingDurationSeconds: 5
   powerPerRadian: 7.5
-  requiredHammerPasses: 6
+  requiredHammerPasses: 3
   hammerStrokePixels: 120
   maximumCompletedWeapons: 12
   weaponCodePrefix: CL

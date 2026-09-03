@@ -98,6 +98,8 @@ namespace CraftOrigin.CraftLiveEditor
                 {
                     CraftLivePad3Bindings bindings =
                         FindSingle<CraftLivePad3Bindings>(scene);
+                    EnsureQrFeedbackRoot(bindings);
+                    RemoveObsoleteTubeControllers(scene, bindings);
                     CraftLiveQrScanner scanner =
                         bindings.QrReadButtonRoot.GetComponent<
                             CraftLiveQrScanner>();
@@ -150,6 +152,57 @@ namespace CraftOrigin.CraftLiveEditor
             }
 
             SetEnum(tube, "statType", (int)statType);
+            SerializedObject serialized = new SerializedObject(tube);
+            SerializedProperty prefab = serialized.FindProperty(
+                "glassTubePrefab");
+            GameObject referenced =
+                prefab.objectReferenceValue as GameObject;
+            if (referenced == root.gameObject ||
+                (referenced != null &&
+                 referenced.transform.IsChildOf(root)))
+            {
+                prefab.objectReferenceValue = null;
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+            }
+        }
+
+        private static void EnsureQrFeedbackRoot(
+            CraftLivePad3Bindings bindings)
+        {
+            if (bindings.QrFeedbackRoot != null)
+            {
+                return;
+            }
+
+            GameObject feedback = new GameObject("QrFeedbackRoot");
+            Transform parent = bindings.UiRoot != null
+                ? bindings.UiRoot
+                : bindings.transform;
+            feedback.transform.SetParent(parent, false);
+            SetObject(bindings, "qrFeedbackRoot", feedback.transform);
+        }
+
+        private static void RemoveObsoleteTubeControllers(
+            Scene scene,
+            CraftLivePad3Bindings bindings)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                foreach (CraftLiveStatusTubeView tube in
+                         root.GetComponentsInChildren<
+                             CraftLiveStatusTubeView>(true))
+                {
+                    Transform target = tube.transform;
+                    bool retained =
+                        target == bindings.AttackTubeRoot ||
+                        target == bindings.DefenseTubeRoot ||
+                        target == bindings.EvasionTubeRoot;
+                    if (!retained)
+                    {
+                        Object.DestroyImmediate(tube, true);
+                    }
+                }
+            }
         }
 
         private static void RunRequestedUpgrade()

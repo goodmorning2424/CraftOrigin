@@ -185,6 +185,14 @@ namespace CraftOrigin.CraftLiveTests
             state.placement.status =
                 CraftLivePlacementStatus.SelectingSlot;
 
+            // The player may return to weapon selection until a weapon has
+            // actually been confirmed. Once confirmed, placement locks it.
+            Assert.That(
+                CraftLivePad2WeaponCarousel.CanChangeWeapon(state),
+                Is.True);
+
+            state.weaponSelectionConfirmed = true;
+
             Assert.That(
                 CraftLivePad2WeaponCarousel.CanChangeWeapon(state),
                 Is.False);

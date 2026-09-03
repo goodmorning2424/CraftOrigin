@@ -1086,6 +1086,7 @@ namespace CraftOrigin.CraftLiveTests
                 {
                     CraftLivePad3Bindings bindings =
                         FindAll<CraftLivePad3Bindings>(scene)[0];
+                    Assert.That(bindings.QrFeedbackRoot, Is.Not.Null);
                     Assert.That(bindings.ReferenceCamera, Is.Not.Null);
                     Assert.That(bindings.WoodPanel, Is.Not.Null);
                     Assert.That(bindings.NoticeBoard, Is.Not.Null);

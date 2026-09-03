@@ -172,7 +172,9 @@ namespace CraftOrigin.CraftLive
         private float fallbackPanelWidth = 1f;
         private float fallbackPanelHeight = 1f;
         private Transform selectionAnchor;
-        private CraftLiveMaterialPaintingView suppressedPainting;
+        private readonly List<CraftLiveMaterialPaintingView>
+            suppressedPaintings =
+                new List<CraftLiveMaterialPaintingView>();
         private string selectionAnchorMaterialId = string.Empty;
         private string displayedMaterialId = string.Empty;
         private bool detailsOnlyWhileTransferWaiting;
@@ -208,7 +210,7 @@ namespace CraftOrigin.CraftLive
 
             StopReveal();
             StopReturn();
-            RestoreSuppressedPainting();
+            RestoreSuppressedPaintings();
         }
 
         private void OnDestroy()
@@ -305,7 +307,7 @@ namespace CraftOrigin.CraftLive
         {
             StopReveal();
             StopReturn();
-            RestoreSuppressedPainting();
+            RestoreSuppressedPaintings();
             if (spawnedModel != null)
             {
                 Destroy(spawnedModel);
@@ -328,31 +330,37 @@ namespace CraftOrigin.CraftLive
             }
         }
 
-        private void SuppressSelectionPainting(Transform anchor)
+        private void SuppressGalleryPaintings()
         {
-            RestoreSuppressedPainting();
-            if (anchor == null)
+            RestoreSuppressedPaintings();
+            CraftLiveMaterialPaintingView[] paintings =
+                FindObjectsByType<CraftLiveMaterialPaintingView>(
+                    FindObjectsInactive.Exclude);
+            foreach (CraftLiveMaterialPaintingView painting in paintings)
             {
-                return;
-            }
+                if (painting == null || painting.PreviewSuppressed ||
+                    painting.gameObject.scene != gameObject.scene)
+                {
+                    continue;
+                }
 
-            suppressedPainting =
-                anchor.GetComponentInParent<CraftLiveMaterialPaintingView>();
-            if (suppressedPainting != null)
-            {
-                suppressedPainting.SetPreviewSuppressed(true);
+                painting.SetPreviewSuppressed(true);
+                suppressedPaintings.Add(painting);
             }
         }
 
-        private void RestoreSuppressedPainting()
+        private void RestoreSuppressedPaintings()
         {
-            if (suppressedPainting == null)
+            foreach (CraftLiveMaterialPaintingView painting in
+                     suppressedPaintings)
             {
-                return;
+                if (painting != null)
+                {
+                    painting.SetPreviewSuppressed(false);
+                }
             }
 
-            suppressedPainting.SetPreviewSuppressed(false);
-            suppressedPainting = null;
+            suppressedPaintings.Clear();
         }
 
         private void ResolveReferences()
@@ -383,7 +391,7 @@ namespace CraftOrigin.CraftLive
             Vector3 revealStartPosition = PositionPresentationRoots(
                 presentationCamera,
                 resolvedAnchor);
-            SuppressSelectionPainting(resolvedAnchor);
+            SuppressGalleryPaintings();
 
             if (useMaterialWorldPrefab &&
                 material.WorldPrefab != null)
@@ -458,7 +466,7 @@ namespace CraftOrigin.CraftLive
                 0.68f);
             if (spawnedModel == null)
             {
-                RestoreSuppressedPainting();
+                RestoreSuppressedPaintings();
                 return;
             }
 
