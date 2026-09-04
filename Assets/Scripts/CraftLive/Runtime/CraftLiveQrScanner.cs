@@ -8,7 +8,6 @@ namespace CraftOrigin.CraftLive
     public sealed class CraftLiveQrScanner : MonoBehaviour
     {
         [SerializeField] private CraftLiveSession session;
-        [SerializeField, Min(1f)] private float timeoutSeconds = 12f;
         [SerializeField, Min(0.1f)] private float callbackCooldownSeconds =
             0.75f;
         [SerializeField] private UnityEvent<string> onScanError;
@@ -18,7 +17,6 @@ namespace CraftOrigin.CraftLive
         private bool callbackHandled;
 
         public bool IsScanning { get; private set; }
-        public float TimeoutSeconds => timeoutSeconds;
         public event Action<string, bool> ScanCompleted;
         public event Action<string> ScanFailed;
         public event Action ScanCancelled;
@@ -26,8 +24,7 @@ namespace CraftOrigin.CraftLive
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern void CraftLiveStartQrScanner(
-            string gameObjectName,
-            int timeoutMs);
+            string gameObjectName);
 
         [DllImport("__Internal")]
         private static extern void CraftLiveStopQrScanner();
@@ -62,8 +59,7 @@ namespace CraftOrigin.CraftLive
             try
             {
                 CraftLiveStartQrScanner(
-                    gameObject.name,
-                    Mathf.RoundToInt(timeoutSeconds * 1000f));
+                    gameObject.name);
             }
             catch (Exception exception)
             {

@@ -349,6 +349,10 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 session.State.sessionEndsAtUnixMs,
                 Is.GreaterThan(session.State.sessionStartedAtUnixMs));
+            Assert.That(
+                session.State.sessionEndsAtUnixMs -
+                session.State.sessionStartedAtUnixMs,
+                Is.EqualTo(270000L));
         }
 
         [Test]

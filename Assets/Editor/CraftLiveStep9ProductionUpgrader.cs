@@ -106,8 +106,6 @@ namespace CraftOrigin.CraftLiveEditor
                 "Assets/WebGLTemplates/CraftLive/simulator.html";
             string bridgePath =
                 "Assets/Plugins/WebGL/CraftLiveWebGL.jslib";
-            string tutorialVideoPath =
-                CraftLiveWebGlMediaCopier.TutorialVideoAssetPath;
             report.Check(
                 File.Exists(GetProjectPath(templatePath)),
                 "Custom WebGL index template exists.");
@@ -120,10 +118,6 @@ namespace CraftOrigin.CraftLiveEditor
             report.Check(
                 File.Exists(GetProjectPath(bridgePath)),
                 "WebGL QR bridge exists.");
-            report.Check(
-                File.Exists(GetProjectPath(tutorialVideoPath)),
-                "Pad 2 tutorial video exists for deferred WebGL loading.");
-
             CraftLiveLaunchConfig launchConfig =
                 AssetDatabase.LoadAssetAtPath<CraftLiveLaunchConfig>(
                     CraftLiveStep2SceneGenerator.LaunchConfigPath);
@@ -500,59 +494,6 @@ namespace CraftOrigin.CraftLiveEditor
                 output.Append(body);
                 File.WriteAllText(path, output.ToString(), Encoding.UTF8);
             }
-        }
-    }
-
-    /// <summary>
-    /// Keeps the large tutorial movie outside Unity's initial WebGL data file.
-    /// The browser downloads it only after the visitor starts the tutorial.
-    /// </summary>
-    public sealed class CraftLiveWebGlMediaCopier :
-        IPostprocessBuildWithReport
-    {
-        public const string TutorialVideoAssetPath =
-            "Assets/CraftLiveData/Video/OperationGuide.mp4";
-        public const string TutorialVideoOutputName =
-            "OperationGuide.mp4";
-
-        public int callbackOrder => 100;
-
-        public void OnPostprocessBuild(BuildReport report)
-        {
-            if (report == null ||
-                report.summary.platform != BuildTarget.WebGL)
-            {
-                return;
-            }
-
-            string outputPath = report.summary.outputPath;
-            string outputDirectory = Directory.Exists(outputPath)
-                ? outputPath
-                : Path.GetDirectoryName(outputPath);
-            if (string.IsNullOrWhiteSpace(outputDirectory))
-            {
-                throw new BuildFailedException(
-                    "Could not resolve the WebGL output directory.");
-            }
-
-            string source = Path.GetFullPath(
-                Path.Combine(
-                    Application.dataPath,
-                    "..",
-                    TutorialVideoAssetPath));
-            if (!File.Exists(source))
-            {
-                throw new BuildFailedException(
-                    $"Tutorial video is missing: {TutorialVideoAssetPath}");
-            }
-
-            Directory.CreateDirectory(outputDirectory);
-            File.Copy(
-                source,
-                Path.Combine(
-                    outputDirectory,
-                    TutorialVideoOutputName),
-                true);
         }
     }
 

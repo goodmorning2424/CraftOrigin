@@ -98,9 +98,6 @@ jobs:
           wasm = next((root / "Build").glob("*.wasm*"), None)
           if wasm is None or wasm.stat().st_size < 8:
               raise SystemExit("WebAssembly artifact is missing or empty")
-          tutorial = root / "OperationGuide.mp4"
-          if not tutorial.is_file() or tutorial.stat().st_size < 1024:
-              raise SystemExit("Deferred Pad2 tutorial video is missing or empty")
           print(f"Validated {len(references)} build references and {wasm.name}")
 
       - name: Configure GitHub Pages

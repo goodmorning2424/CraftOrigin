@@ -7,7 +7,7 @@ namespace CraftOrigin.CraftLive
         fileName = "CraftLiveRules")]
     public sealed class CraftLiveRules : ScriptableObject
     {
-        public const float DefaultSessionDurationSeconds = 330f;
+        public const float DefaultSessionDurationSeconds = 270f;
 
         [Header("Session")]
         [SerializeField, Min(1f)] private float sessionDurationSeconds =

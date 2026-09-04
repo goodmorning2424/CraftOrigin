@@ -8,7 +8,7 @@ mergeInto(LibraryManager.library, {
     return buffer;
   },
 
-  CraftLiveStartQrScanner: function (gameObjectPtr, timeoutMs) {
+  CraftLiveStartQrScanner: function (gameObjectPtr) {
     var gameObjectName = UTF8ToString(gameObjectPtr);
     if (window.CraftLiveQrClose) {
       window.CraftLiveQrClose("", "", true);
@@ -50,13 +50,11 @@ mergeInto(LibraryManager.library, {
     var closed = false;
     var scanner = null;
     var stream = null;
-    var timer = null;
     var animationFrame = 0;
 
     var close = function (method, message, silent) {
       if (closed) return;
       closed = true;
-      if (timer) window.clearTimeout(timer);
       if (animationFrame) window.cancelAnimationFrame(animationFrame);
       if (scanner) {
         try { scanner.stop(); } catch (_) {}
@@ -77,13 +75,6 @@ mergeInto(LibraryManager.library, {
     cancel.addEventListener("click", function () {
       close("OnQrScanCancelled", "", false);
     });
-
-    timer = window.setTimeout(function () {
-      close(
-        "OnQrScanError",
-        "QRコードの読み取り時間が終了しました。",
-        false);
-    }, Math.max(3000, timeoutMs || 12000));
 
     if (!window.isSecureContext ||
         !navigator.mediaDevices ||

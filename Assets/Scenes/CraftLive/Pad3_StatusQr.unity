@@ -848,7 +848,6 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveQrScanner
   session: {fileID: 0}
-  timeoutSeconds: 8
   callbackCooldownSeconds: 0.75
   onScanError:
     m_PersistentCalls:

@@ -1,8 +1,6 @@
 using System.Collections;
-using System.IO;
 using UnityEngine;
 using UnityEngine.Events;
-using UnityEngine.Video;
 
 namespace CraftOrigin.CraftLive
 {
@@ -16,19 +14,6 @@ namespace CraftOrigin.CraftLive
         [Header("Start Screen Transition")]
         [SerializeField, Min(0.05f)] private float startScreenSlideDuration = 0.85f;
         [SerializeField, Min(0.1f)] private float startScreenSlideDistance = 12f;
-        [Header("Start Tutorial Video")]
-        [SerializeField]
-        [Tooltip("Editor用の任意VideoClipです。WebGL本番では下のURLを優先し、動画を初期データから分離します。")]
-        private VideoClip startTutorialVideo;
-        [SerializeField]
-        [Tooltip("WebGL出力のルートに配置する操作説明動画の相対URLです。")]
-        private string startTutorialVideoRelativeUrl = "OperationGuide.mp4";
-        [SerializeField, Range(0f, 1f)]
-        [Tooltip("操作説明動画の再生音量です。")]
-        private float tutorialVideoVolume = 0.7f;
-        [SerializeField, Min(1f)]
-        [Tooltip("動画の準備に失敗して進行不能になることを防ぐ待機上限です。")]
-        private float tutorialPrepareTimeoutSeconds = 10f;
         [Header("Text Readability")]
         [SerializeField, Range(0.026f, 0.08f)]
         [Tooltip("完成結果に表示する攻撃・防御・回避ラベルの文字サイズです。")]
@@ -58,27 +43,13 @@ namespace CraftOrigin.CraftLive
             (CraftLiveSessionPhase)(-1);
         private Coroutine staffRestartRoutine;
         private Coroutine startScreenSlideRoutine;
-        private Coroutine tutorialPlaybackRoutine;
         private GameObject departingStartPanel;
-        private GameObject tutorialPlaceholder;
-        private TextMesh tutorialPlaceholderLabel;
-        private CraftLiveWorldButton tutorialStartButton;
-        private CraftLiveTutorialVideoTapSurface tutorialTapSurface;
-        private VideoPlayer tutorialVideoPlayer;
-        private RenderTexture tutorialRenderTexture;
-        private Material tutorialVideoMaterial;
-        private bool tutorialPrepared;
-        private bool tutorialFinished;
-        private bool tutorialFailed;
-        private bool tutorialAwaitingTap;
         private int warningGroupGeneration = -1;
         private bool minuteWarningShown;
         private bool thirtySecondWarningShown;
         private string timeWarningMessage = string.Empty;
         private float timeWarningStartedAt = float.NegativeInfinity;
         private GUIStyle timeWarningStyle;
-
-        public bool TutorialAwaitingTap => tutorialAwaitingTap;
 
         private void Awake()
         {
@@ -175,7 +146,6 @@ namespace CraftOrigin.CraftLive
                 startScreenSlideRoutine = null;
             }
 
-            CancelTutorialPlayback();
             timeWarningMessage = string.Empty;
 
             DestroySafely(departingStartPanel);
@@ -285,48 +255,12 @@ namespace CraftOrigin.CraftLive
             if (session == null ||
                 !IsAuthoritativeStartRole(session.Role) ||
                 session.State == null ||
-                session.State.sessionPhase != CraftLiveSessionPhase.StartScreen ||
-                tutorialPlaybackRoutine != null)
+                session.State.sessionPhase != CraftLiveSessionPhase.StartScreen)
             {
                 return;
             }
 
-            if (!HasTutorialVideo())
-            {
-                session.StartGroup();
-                return;
-            }
-
-            tutorialAwaitingTap = true;
-            tutorialStartButton?.SetInteractable(false);
-            if (tutorialStartButton != null)
-            {
-                tutorialStartButton.gameObject.SetActive(false);
-            }
-            tutorialTapSurface?.SetInteractable(true);
-            if (tutorialPlaceholderLabel != null)
-            {
-                tutorialPlaceholderLabel.text = "動画をタップして再生";
-            }
-        }
-
-        public void StartTutorialFromTap()
-        {
-            if (!tutorialAwaitingTap ||
-                tutorialPlaybackRoutine != null ||
-                tutorialVideoPlayer == null)
-            {
-                return;
-            }
-
-            tutorialAwaitingTap = false;
-            tutorialTapSurface?.SetInteractable(false);
-            if (tutorialPlaceholderLabel != null)
-            {
-                tutorialPlaceholderLabel.text = "動画を準備しています…";
-            }
-            tutorialPlaybackRoutine = StartCoroutine(
-                PlayTutorialThenStart());
+            session.StartGroup();
         }
 
         private void ResolveReferences()
@@ -395,9 +329,6 @@ namespace CraftOrigin.CraftLive
                 return;
             }
 
-
-            CancelTutorialPlayback(false);
-
             if (startScreenSlideRoutine != null)
             {
                 StopCoroutine(startScreenSlideRoutine);
@@ -441,152 +372,11 @@ namespace CraftOrigin.CraftLive
             }
 
             startScreenSlideRoutine = null;
-            ReleaseTutorialRenderTexture();
-        }
-
-        private IEnumerator PlayTutorialThenStart()
-        {
-            if (tutorialVideoPlayer == null)
-            {
-                CompleteTutorialAndStart();
-                yield break;
-            }
-
-            tutorialPrepared = false;
-            tutorialFinished = false;
-            tutorialFailed = false;
-            tutorialVideoPlayer.prepareCompleted += HandleTutorialPrepared;
-            tutorialVideoPlayer.started += HandleTutorialStarted;
-            tutorialVideoPlayer.loopPointReached += HandleTutorialFinished;
-            tutorialVideoPlayer.errorReceived += HandleTutorialError;
-            tutorialVideoPlayer.Prepare();
-
-            float prepareElapsed = 0f;
-            while (!tutorialPrepared && !tutorialFailed &&
-                   prepareElapsed < tutorialPrepareTimeoutSeconds)
-            {
-                prepareElapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            if (!tutorialPrepared || tutorialFailed)
-            {
-                CompleteTutorialAndStart();
-                yield break;
-            }
-
-            if (tutorialPlaceholder != null)
-            {
-                tutorialPlaceholder.SetActive(false);
-            }
-
-            tutorialVideoPlayer.Play();
-            double clipLength = tutorialVideoPlayer.length;
-            float playbackTimeout = Mathf.Max(
-                tutorialPrepareTimeoutSeconds,
-                (float)clipLength + 5f);
-            float playbackElapsed = 0f;
-            while (!tutorialFinished && !tutorialFailed &&
-                   playbackElapsed < playbackTimeout)
-            {
-                playbackElapsed += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            CompleteTutorialAndStart();
-        }
-
-        private void HandleTutorialPrepared(VideoPlayer source)
-        {
-            tutorialPrepared = true;
-        }
-
-        private void HandleTutorialStarted(VideoPlayer source)
-        {
-            session?.BeginTimedIntroduction();
-        }
-
-        private void HandleTutorialFinished(VideoPlayer source)
-        {
-            tutorialFinished = true;
-        }
-
-        private void HandleTutorialError(VideoPlayer source, string message)
-        {
-            tutorialFailed = true;
-            Debug.LogWarning(
-                $"Craft-live start tutorial could not play: {message}",
-                this);
-        }
-
-        private void CompleteTutorialAndStart()
-        {
-            UnsubscribeTutorialPlayer();
-            tutorialPlaybackRoutine = null;
-            if (session != null &&
-                IsAuthoritativeStartRole(session.Role) &&
-                session.State != null &&
-                session.State.sessionPhase == CraftLiveSessionPhase.StartScreen)
-            {
-                session.StartGroup();
-            }
         }
 
         public static bool IsAuthoritativeStartRole(CraftLiveRole role)
         {
             return role == CraftLiveRole.WorkbenchPad;
-        }
-
-        private void CancelTutorialPlayback(bool releaseTexture = true)
-        {
-            if (tutorialPlaybackRoutine != null)
-            {
-                StopCoroutine(tutorialPlaybackRoutine);
-                tutorialPlaybackRoutine = null;
-            }
-
-            UnsubscribeTutorialPlayer();
-            if (tutorialVideoPlayer != null)
-            {
-                tutorialVideoPlayer.Stop();
-                tutorialVideoPlayer = null;
-            }
-
-            tutorialStartButton = null;
-            tutorialTapSurface = null;
-            tutorialPlaceholder = null;
-            tutorialPlaceholderLabel = null;
-            tutorialAwaitingTap = false;
-            if (releaseTexture)
-            {
-                ReleaseTutorialRenderTexture();
-            }
-        }
-
-        private void UnsubscribeTutorialPlayer()
-        {
-            if (tutorialVideoPlayer == null)
-            {
-                return;
-            }
-
-            tutorialVideoPlayer.prepareCompleted -= HandleTutorialPrepared;
-            tutorialVideoPlayer.started -= HandleTutorialStarted;
-            tutorialVideoPlayer.loopPointReached -= HandleTutorialFinished;
-            tutorialVideoPlayer.errorReceived -= HandleTutorialError;
-        }
-
-        private void ReleaseTutorialRenderTexture()
-        {
-            if (tutorialRenderTexture != null)
-            {
-                tutorialRenderTexture.Release();
-                DestroySafely(tutorialRenderTexture);
-                tutorialRenderTexture = null;
-            }
-
-            DestroySafely(tutorialVideoMaterial);
-            tutorialVideoMaterial = null;
         }
 
         private void PublishResult(CraftLiveResultState result)
@@ -744,8 +534,6 @@ namespace CraftOrigin.CraftLive
             hammerHeadCut.transform.localRotation =
                 Quaternion.Euler(0f, 0f, 37f);
 
-            BuildTutorialVideoFrame(generatedPanel.transform);
-
             GameObject start = CreateButton(
                 generatedPanel.transform,
                 "Start",
@@ -755,193 +543,6 @@ namespace CraftOrigin.CraftLive
                 new Vector3(3.85f, 0.92f, 0.25f));
             start.GetComponent<CraftLiveWorldButton>()
                 .AddListener(StartGroup);
-            tutorialStartButton = start.GetComponent<CraftLiveWorldButton>();
-        }
-
-        private void BuildTutorialVideoFrame(Transform parent)
-        {
-            CreateDecorativePart(
-                parent,
-                "TutorialVideoFrameShadow",
-                new Vector3(0.07f, 0.46f, -0.72f),
-                new Vector3(5.72f, 3.42f, 0.13f),
-                new Color(0.04f, 0.025f, 0.02f),
-                0f,
-                0.06f,
-                0.15f);
-            CreateDecorativePart(
-                parent,
-                "TutorialVideoFrame",
-                new Vector3(0f, 0.52f, -0.77f),
-                new Vector3(5.62f, 3.32f, 0.12f),
-                CraftLiveForgeUITheme.Brass,
-                0.22f,
-                0.72f,
-                0.55f);
-            GameObject surface = CreateDecorativePart(
-                parent,
-                "TutorialVideoSurface",
-                new Vector3(0f, 0.52f, -0.86f),
-                new Vector3(5.32f, 2.99f, 0.045f),
-                new Color(0.012f, 0.016f, 0.02f),
-                0f,
-                0.05f,
-                0.08f);
-            surface.AddComponent<BoxCollider>();
-            tutorialTapSurface =
-                surface.AddComponent<CraftLiveTutorialVideoTapSurface>();
-            tutorialTapSurface.Configure(this, false);
-
-            tutorialPlaceholder = new GameObject("TutorialVideoPlaceholder");
-            tutorialPlaceholder.transform.SetParent(parent, false);
-            tutorialPlaceholder.transform.localPosition =
-                new Vector3(0f, 0.52f, -0.91f);
-            tutorialPlaceholder.AddComponent<CraftLiveGeneratedRuntimeVisual>();
-            tutorialPlaceholderLabel = CreateText(
-                tutorialPlaceholder.transform,
-                "TutorialVideoLabel",
-                HasTutorialVideo()
-                    ? "操作説明動画"
-                    : "操作説明動画\n（動画を割り当ててください）",
-                Vector3.zero,
-                0.038f,
-                new Color(0.82f, 0.77f, 0.67f));
-
-            if (!HasTutorialVideo())
-            {
-                return;
-            }
-
-            tutorialRenderTexture = new RenderTexture(
-                640,
-                360,
-                0,
-                RenderTextureFormat.ARGB32)
-            {
-                name = "Generated_StartTutorialTexture"
-            };
-            tutorialRenderTexture.Create();
-            Renderer surfaceRenderer = surface.GetComponent<Renderer>();
-            if (surfaceRenderer != null &&
-                surfaceRenderer.sharedMaterial != null)
-            {
-                tutorialVideoMaterial = new Material(
-                    surfaceRenderer.sharedMaterial)
-                {
-                    name = "Generated_StartTutorialVideoMaterial",
-                    hideFlags = HideFlags.HideAndDontSave
-                };
-                surfaceRenderer.sharedMaterial = tutorialVideoMaterial;
-                if (tutorialVideoMaterial.HasProperty("_BaseMap"))
-                {
-                    tutorialVideoMaterial.SetTexture(
-                        "_BaseMap",
-                        tutorialRenderTexture);
-#if UNITY_WEBGL && !UNITY_EDITOR
-                    tutorialVideoMaterial.SetTextureScale(
-                        "_BaseMap",
-                        new Vector2(-1f, -1f));
-                    tutorialVideoMaterial.SetTextureOffset(
-                        "_BaseMap",
-                        new Vector2(1f, 1f));
-#endif
-                }
-                if (tutorialVideoMaterial.HasProperty("_MainTex"))
-                {
-                    tutorialVideoMaterial.SetTexture(
-                        "_MainTex",
-                        tutorialRenderTexture);
-#if UNITY_WEBGL && !UNITY_EDITOR
-                    tutorialVideoMaterial.SetTextureScale(
-                        "_MainTex",
-                        new Vector2(-1f, -1f));
-                    tutorialVideoMaterial.SetTextureOffset(
-                        "_MainTex",
-                        new Vector2(1f, 1f));
-#endif
-                }
-            }
-
-            // Use the supplied parent as a safe fallback for isolated editor
-            // tests and custom scene setups where generatedPanel is absent.
-            GameObject videoPlayerHost = generatedPanel != null
-                ? generatedPanel
-                : parent.gameObject;
-            tutorialVideoPlayer = videoPlayerHost.AddComponent<VideoPlayer>();
-            tutorialVideoPlayer.playOnAwake = false;
-            tutorialVideoPlayer.isLooping = false;
-            tutorialVideoPlayer.waitForFirstFrame = true;
-            tutorialVideoPlayer.skipOnDrop = true;
-            string videoUrl = ResolveTutorialVideoUrl(
-                startTutorialVideoRelativeUrl,
-                Application.dataPath,
-                Application.absoluteURL,
-                Application.isEditor);
-            if (!string.IsNullOrWhiteSpace(videoUrl))
-            {
-                tutorialVideoPlayer.source = VideoSource.Url;
-                tutorialVideoPlayer.url = videoUrl;
-            }
-            else
-            {
-                tutorialVideoPlayer.source = VideoSource.VideoClip;
-                tutorialVideoPlayer.clip = startTutorialVideo;
-            }
-            tutorialVideoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            tutorialVideoPlayer.targetTexture = tutorialRenderTexture;
-            tutorialVideoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;
-            tutorialVideoPlayer.SetDirectAudioVolume(
-                0,
-                Mathf.Clamp01(tutorialVideoVolume));
-        }
-
-        private bool HasTutorialVideo()
-        {
-            return startTutorialVideo != null ||
-                   !string.IsNullOrWhiteSpace(
-                       startTutorialVideoRelativeUrl);
-        }
-
-        public static string ResolveTutorialVideoUrl(
-            string relativeUrl,
-            string dataPath,
-            string absoluteUrl,
-            bool isEditor)
-        {
-            string normalized = (relativeUrl ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(normalized))
-            {
-                return string.Empty;
-            }
-
-            if (System.Uri.TryCreate(
-                    normalized,
-                    System.UriKind.Absolute,
-                    out System.Uri absoluteMediaUri))
-            {
-                return absoluteMediaUri.AbsoluteUri;
-            }
-
-            if (isEditor)
-            {
-                string assetPath = Path.GetFullPath(
-                    Path.Combine(
-                        dataPath,
-                        "CraftLiveData",
-                        "Video",
-                        Path.GetFileName(normalized)));
-                return new System.Uri(assetPath).AbsoluteUri;
-            }
-
-            if (System.Uri.TryCreate(
-                    absoluteUrl,
-                    System.UriKind.Absolute,
-                    out System.Uri pageUri))
-            {
-                return new System.Uri(pageUri, normalized).AbsoluteUri;
-            }
-
-            return normalized;
         }
 
         private void BuildResultPanel(CraftLiveRoomState state)

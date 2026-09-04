@@ -1106,10 +1106,6 @@ MonoBehaviour:
   staffRestartDelaySeconds: 12
   startScreenSlideDuration: 0.85
   startScreenSlideDistance: 12
-  startTutorialVideo: {fileID: 0}
-  startTutorialVideoRelativeUrl: OperationGuide.mp4
-  tutorialVideoVolume: 0.7
-  tutorialPrepareTimeoutSeconds: 10
   resultStatLabelSize: 0.04
   resultTraitTextSize: 0.05
   timeWarningPopupDuration: 3

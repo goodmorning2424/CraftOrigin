@@ -352,6 +352,10 @@ namespace CraftOrigin.CraftLiveEditor.Tests
                 template);
             StringAssert.Contains("isSecureContext", bridge);
             StringAssert.Contains("BarcodeDetector", bridge);
+            StringAssert.DoesNotContain(
+                "QRコードの読み取り時間が終了しました。",
+                bridge);
+            StringAssert.DoesNotContain("window.setTimeout", bridge);
         }
 
         [Test]

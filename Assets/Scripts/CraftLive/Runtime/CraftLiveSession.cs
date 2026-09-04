@@ -14,6 +14,21 @@ namespace CraftOrigin.CraftLive
         public static bool MultiMaterialTransferEnabled => true;
         public const string SingleTransferWarningMessage =
             "素材を一個ずつ転送してください";
+        public const string EmergencyWeaponId = "weapon_bigsword_sword";
+
+        private static readonly string[] EmergencyUpgradeMaterialIds =
+        {
+            "ore_attack",
+            "ore_defence",
+            "ore_evasion"
+        };
+        private static readonly CraftLiveSlotId[] EmergencyUpgradeSlots =
+        {
+            CraftLiveSlotId.Top,
+            CraftLiveSlotId.Right,
+            CraftLiveSlotId.Left,
+            CraftLiveSlotId.Bottom
+        };
 
         [SerializeField] private CraftLiveCatalog catalog;
         [SerializeField] private CraftLiveRules rules;
@@ -247,33 +262,10 @@ namespace CraftOrigin.CraftLive
             });
         }
 
-        public void BeginTimedIntroduction()
-        {
-            if (state == null ||
-                state.sessionPhase != CraftLiveSessionPhase.StartScreen ||
-                state.sessionEndsAtUnixMs > 0)
-            {
-                return;
-            }
-
-            long now = UnixNowMs();
-            long durationMs = Mathf.RoundToInt(
-                (rules != null
-                    ? rules.SessionDurationSeconds
-                    : CraftLiveRules.DefaultSessionDurationSeconds) * 1000f);
-            Mutate(next =>
-            {
-                next.sessionStartedAtUnixMs = now;
-                next.sessionEndsAtUnixMs = now + durationMs;
-                next.message = "操作説明動画を再生中";
-            });
-        }
-
         /// <summary>
         /// Prepares a new group without replacing the room transport. This is
         /// called only by Pad 2 after the setup screen is confirmed. The game
-        /// timer remains stopped until the Pad 2 tutorial video actually
-        /// starts. Projects without a tutorial start it with StartGroup.
+        /// timer remains stopped until the Pad 2 start button calls StartGroup.
         /// </summary>
         public void RestartGroupFromConnectionSetup()
         {
@@ -363,6 +355,16 @@ namespace CraftOrigin.CraftLive
                     completedActiveSynthesis = true;
                 }
 
+                if (next.completedWeapons.Count == 0)
+                {
+                    CraftLiveResultState emergency =
+                        BuildEmergencyWeapon(next);
+                    if (emergency != null)
+                    {
+                        next.completedWeapons.Add(emergency);
+                    }
+                }
+
                 next.sessionPhase =
                     CraftLiveSessionPhase.FinalSelection;
                 next.selectedMaterialId = string.Empty;
@@ -379,6 +381,122 @@ namespace CraftOrigin.CraftLive
             {
                 CraftLiveAudio.PlayForgeComplete();
             }
+        }
+
+        private CraftLiveResultState BuildEmergencyWeapon(
+            CraftLiveRoomState target)
+        {
+            if (target == null || catalog == null ||
+                catalog.FindWeapon(EmergencyWeaponId) == null)
+            {
+                return null;
+            }
+
+            List<CraftLiveMaterialDefinition> attributes =
+                new List<CraftLiveMaterialDefinition>();
+            foreach (CraftLiveMaterialDefinition material in catalog.Materials)
+            {
+                if (material != null &&
+                    material.Category == CraftLiveMaterialCategory.Attribute &&
+                    !string.IsNullOrWhiteSpace(material.AttributeId))
+                {
+                    attributes.Add(material);
+                }
+            }
+            attributes.Sort((left, right) => string.CompareOrdinal(
+                left.MaterialId,
+                right.MaterialId));
+            if (attributes.Count == 0)
+            {
+                return null;
+            }
+
+            foreach (string materialId in EmergencyUpgradeMaterialIds)
+            {
+                CraftLiveMaterialDefinition material =
+                    catalog.FindMaterial(materialId);
+                if (material == null ||
+                    material.Category != CraftLiveMaterialCategory.Upgrade)
+                {
+                    return null;
+                }
+            }
+
+            uint randomState = BuildEmergencyRandomSeed(target);
+            CraftLiveRoomState recipe = CraftLiveRoomState.Create(catalog);
+            recipe.selectedWeaponId = EmergencyWeaponId;
+            recipe.weaponSelectionConfirmed = true;
+            recipe.slots.attribute = attributes[
+                NextEmergencyIndex(ref randomState, attributes.Count)].MaterialId;
+
+            int firstUpgrade = NextEmergencyIndex(
+                ref randomState,
+                EmergencyUpgradeMaterialIds.Length);
+            bool allSame = true;
+            int[] upgradeIndices = new int[EmergencyUpgradeSlots.Length];
+            for (int i = 0; i < upgradeIndices.Length; i++)
+            {
+                upgradeIndices[i] = i == 0
+                    ? firstUpgrade
+                    : NextEmergencyIndex(
+                        ref randomState,
+                        EmergencyUpgradeMaterialIds.Length);
+                allSame &= upgradeIndices[i] == firstUpgrade;
+            }
+            if (allSame)
+            {
+                upgradeIndices[upgradeIndices.Length - 1] =
+                    (firstUpgrade + 1 + NextEmergencyIndex(
+                        ref randomState,
+                        EmergencyUpgradeMaterialIds.Length - 1)) %
+                    EmergencyUpgradeMaterialIds.Length;
+            }
+
+            for (int i = 0; i < EmergencyUpgradeSlots.Length; i++)
+            {
+                recipe.slots.Set(
+                    EmergencyUpgradeSlots[i],
+                    EmergencyUpgradeMaterialIds[upgradeIndices[i]]);
+            }
+
+            long completedAt = target.sessionEndsAtUnixMs > 0
+                ? target.sessionEndsAtUnixMs
+                : target.updatedAtUnixMs;
+            return CraftLiveCalculator.BuildResult(
+                recipe,
+                catalog,
+                rules,
+                completedAt);
+        }
+
+        private uint BuildEmergencyRandomSeed(CraftLiveRoomState target)
+        {
+            const uint offset = 2166136261u;
+            const uint prime = 16777619u;
+            uint hash = offset;
+            string value = $"{roomId}|{target.groupGeneration}|" +
+                           $"{target.sessionEndsAtUnixMs}";
+            for (int i = 0; i < value.Length; i++)
+            {
+                hash ^= value[i];
+                hash *= prime;
+            }
+            return hash == 0u ? offset : hash;
+        }
+
+        private static int NextEmergencyIndex(
+            ref uint state,
+            int count)
+        {
+            if (count <= 1)
+            {
+                return 0;
+            }
+
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            return (int)(state % (uint)count);
         }
 
         public bool CanPlaceSelectedMaterialIn(CraftLiveSlotId slot)

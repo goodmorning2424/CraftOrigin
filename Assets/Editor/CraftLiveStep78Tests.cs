@@ -7,7 +7,6 @@ using NUnit.Framework;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
-using UnityEngine.Video;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
@@ -106,90 +105,6 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void StartTutorial_HasAssignableVideoSlotAndFallbackFrame()
-        {
-            FieldInfo clipField = typeof(CraftLivePad2ResultController)
-                .GetField(
-                    "startTutorialVideo",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(clipField, Is.Not.Null);
-            Assert.That(clipField.FieldType, Is.EqualTo(typeof(VideoClip)));
-
-            GameObject host = new GameObject("StartTutorialTest");
-            created.Add(host);
-            CraftLivePad2ResultController controller =
-                host.AddComponent<CraftLivePad2ResultController>();
-            MethodInfo buildFrame = typeof(CraftLivePad2ResultController)
-                .GetMethod(
-                    "BuildTutorialVideoFrame",
-                    BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.That(buildFrame, Is.Not.Null);
-            buildFrame.Invoke(controller, new object[] { host.transform });
-
-            Assert.That(
-                host.transform.Find("TutorialVideoFrame"),
-                Is.Not.Null);
-            Assert.That(
-                host.transform.Find("TutorialVideoSurface"),
-                Is.Not.Null);
-            CraftLiveTutorialVideoTapSurface tapSurface =
-                host.transform.Find("TutorialVideoSurface")
-                    .GetComponent<CraftLiveTutorialVideoTapSurface>();
-            Assert.That(tapSurface, Is.Not.Null);
-            Assert.That(tapSurface.Interactable, Is.False);
-            Assert.That(
-                host.transform.Find("TutorialVideoSurface")
-                    .GetComponent<Collider>(),
-                Is.Not.Null);
-            Assert.That(
-                host.transform.Find(
-                    "TutorialVideoPlaceholder/TutorialVideoLabel"),
-                Is.Not.Null);
-            VideoPlayer player = host.GetComponent<VideoPlayer>();
-            Assert.That(player, Is.Not.Null);
-            Assert.That(player.source, Is.EqualTo(VideoSource.Url));
-            StringAssert.EndsWith("OperationGuide.mp4", player.url);
-            Assert.That(player.GetDirectAudioVolume(0),
-                Is.EqualTo(0.7f).Within(0.001f));
-        }
-
-        [Test]
-        public void Pad2Scene_UsesDeferredOperationGuideVideo()
-        {
-            WithScene(
-                CraftLiveStep2SceneGenerator.Pad2ScenePath,
-                scene =>
-                {
-                    CraftLivePad2ResultController controller =
-                        FindSingle<CraftLivePad2ResultController>(scene);
-                    SerializedObject serialized =
-                        new SerializedObject(controller);
-                    VideoClip clip = serialized
-                        .FindProperty("startTutorialVideo")
-                        .objectReferenceValue as VideoClip;
-                    Assert.That(clip, Is.Null);
-                    Assert.That(
-                        serialized.FindProperty(
-                                "startTutorialVideoRelativeUrl")
-                            .stringValue,
-                        Is.EqualTo("OperationGuide.mp4"));
-                });
-        }
-
-        [Test]
-        public void TutorialVideoUrl_ResolvesBesideWebGlPage()
-        {
-            Assert.That(
-                CraftLivePad2ResultController.ResolveTutorialVideoUrl(
-                    "OperationGuide.mp4",
-                    "C:/Project/Assets",
-                    "https://example.test/game/index.html?screen=pad2",
-                    false),
-                Is.EqualTo(
-                    "https://example.test/game/OperationGuide.mp4"));
-        }
-
-        [Test]
         public void DefaultRules_UseRealRpgMaximumStat()
         {
             CraftLiveRules rules =
@@ -198,43 +113,10 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(rules.MaximumStat, Is.EqualTo(1000f));
             Assert.That(
                 rules.SessionDurationSeconds,
-                Is.EqualTo(330f));
+                Is.EqualTo(270f));
             Assert.That(
                 CraftLiveStatusTubeView.NormalizeValue(500f, rules.MaximumStat),
                 Is.EqualTo(0.5f));
-        }
-
-        [Test]
-        public void TimedIntroduction_CountsTowardSessionDuration()
-        {
-            TestSetup setup = CreateValidSetup();
-            CraftLiveRoomState state = setup.session.State.Clone();
-            state.sessionPhase = CraftLiveSessionPhase.StartScreen;
-            state.sessionStartedAtUnixMs = 0L;
-            state.sessionEndsAtUnixMs = 0L;
-            setup.session.ApplyRemoteState(state);
-
-            setup.session.BeginTimedIntroduction();
-
-            long startedAt = setup.session.State.sessionStartedAtUnixMs;
-            long endsAt = setup.session.State.sessionEndsAtUnixMs;
-            Assert.That(startedAt, Is.GreaterThan(0L));
-            Assert.That(endsAt - startedAt, Is.EqualTo(330000L));
-            Assert.That(
-                setup.session.State.sessionPhase,
-                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
-
-            setup.session.StartGroup();
-
-            Assert.That(
-                setup.session.State.sessionStartedAtUnixMs,
-                Is.EqualTo(startedAt));
-            Assert.That(
-                setup.session.State.sessionEndsAtUnixMs,
-                Is.EqualTo(endsAt));
-            Assert.That(
-                setup.session.State.sessionPhase,
-                Is.EqualTo(CraftLiveSessionPhase.Playing));
         }
 
         [TestCase("KatateSword.asset", 500f, 300f, 500f)]
@@ -493,6 +375,53 @@ namespace CraftOrigin.CraftLiveTests
             Assert.That(
                 setup.session.State.completedWeapons,
                 Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public void ExpireSession_WithoutCompletedWeapon_AddsDeterministicEmergencyBigSword()
+        {
+            CraftLiveCatalog catalog = AssetDatabase.LoadAssetAtPath<
+                CraftLiveCatalog>(
+                "Assets/CraftLiveData/DefaultCraftLiveCatalog.asset");
+            CraftLiveRules rules = AssetDatabase.LoadAssetAtPath<
+                CraftLiveRules>(
+                "Assets/CraftLiveData/DefaultCraftLiveRules.asset");
+            Assert.That(catalog, Is.Not.Null);
+            Assert.That(rules, Is.Not.Null);
+
+            CraftLiveResultState first = ExpireEmptyEmergencySession(
+                catalog,
+                rules,
+                "rescue-room",
+                42,
+                4102444800000L);
+            CraftLiveResultState second = ExpireEmptyEmergencySession(
+                catalog,
+                rules,
+                "rescue-room",
+                42,
+                4102444800000L);
+
+            Assert.That(first.weaponId,
+                Is.EqualTo(CraftLiveSession.EmergencyWeaponId));
+            Assert.That(first.attributeId, Is.Not.Empty);
+            Assert.That(first.elementEffect.type,
+                Is.Not.EqualTo(CraftLiveElementType.None));
+            Assert.That(first.skillId, Is.Empty);
+            Assert.That(first.skillEffect.type,
+                Is.EqualTo(CraftLiveSkillType.None));
+            Assert.That(first.rank, Is.EqualTo("通常成功"));
+            Assert.That(
+                first.attackMaterialCount +
+                first.defenseMaterialCount +
+                first.evasionMaterialCount,
+                Is.EqualTo(4));
+            Assert.That(first.attackMaterialCount, Is.LessThan(4));
+            Assert.That(first.defenseMaterialCount, Is.LessThan(4));
+            Assert.That(first.evasionMaterialCount, Is.LessThan(4));
+            Assert.That(
+                CraftLiveWeaponCode.Generate(second),
+                Is.EqualTo(CraftLiveWeaponCode.Generate(first)));
         }
 
         [Test]
@@ -1351,6 +1280,36 @@ namespace CraftOrigin.CraftLiveTests
             state.slots.skill = "luck";
             session.ApplyRemoteState(state);
             return new TestSetup(session, rules);
+        }
+
+        private CraftLiveResultState ExpireEmptyEmergencySession(
+            CraftLiveCatalog catalog,
+            CraftLiveRules rules,
+            string roomId,
+            int groupGeneration,
+            long sessionEndsAtUnixMs)
+        {
+            GameObject root = new GameObject("EmergencySession");
+            created.Add(root);
+            CraftLiveSession session = root.AddComponent<CraftLiveSession>();
+            SetField(session, "catalog", catalog);
+            SetField(session, "rules", rules);
+            InvokeAwake(session);
+            session.Configure(roomId, CraftLiveRole.WorkbenchPad);
+
+            CraftLiveRoomState state = CraftLiveRoomState.Create(catalog);
+            state.sessionPhase = CraftLiveSessionPhase.Playing;
+            state.groupGeneration = groupGeneration;
+            state.sessionStartedAtUnixMs = sessionEndsAtUnixMs - 270000L;
+            state.sessionEndsAtUnixMs = sessionEndsAtUnixMs;
+            session.ApplyRemoteState(state);
+            session.ExpireSession();
+
+            Assert.That(session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.FinalSelection));
+            Assert.That(session.State.completedWeapons,
+                Has.Count.EqualTo(1));
+            return session.State.completedWeapons[0];
         }
 
         private CraftLiveMaterialDefinition CreateMaterial(

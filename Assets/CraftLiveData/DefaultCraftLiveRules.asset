@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 00b79f5983fe27d4d97f8d9aa77fd8d3, type: 3}
   m_Name: DefaultCraftLiveRules
   m_EditorClassIdentifier: Assembly-CSharp::CraftOrigin.CraftLive.CraftLiveRules
-  sessionDurationSeconds: 330
+  sessionDurationSeconds: 270
   requireAttributeSlot: 0
   requireSkillSlot: 0
   requireAllFourBaseSlots: 0
