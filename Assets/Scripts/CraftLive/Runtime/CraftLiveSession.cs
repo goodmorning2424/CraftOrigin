@@ -152,9 +152,9 @@ namespace CraftOrigin.CraftLive
                     state.transferBatchSerial);
             }
             state = remoteState;
-            if (ShouldRestartExpiredEmptySession(state))
+            if (ShouldFinalizeExpiredSession(state))
             {
-                RestartExpiredEmptySession();
+                ExpireSession();
                 return;
             }
 
@@ -162,41 +162,13 @@ namespace CraftOrigin.CraftLive
             InvokeMessageChanged();
         }
 
-        private bool ShouldRestartExpiredEmptySession(
+        private bool ShouldFinalizeExpiredSession(
             CraftLiveRoomState candidate)
         {
             return candidate != null &&
+                   candidate.sessionPhase == CraftLiveSessionPhase.Playing &&
                    candidate.sessionEndsAtUnixMs > 0 &&
-                   candidate.sessionEndsAtUnixMs <= UnixNowMs() &&
-                   candidate.completedWeapons.Count == 0 &&
-                   candidate.craft.status != CraftLiveCraftStatus.Complete;
-        }
-
-        private void RestartExpiredEmptySession()
-        {
-            long previousRevision = state.revision;
-            int previousGeneration = state.groupGeneration;
-            int previousTransferQueueSerial =
-                state.transferQueueSerial;
-            int previousTransferBatchSerial =
-                state.transferBatchSerial;
-            CraftLiveRoomState next = CraftLiveRoomState.Create(catalog);
-            next.groupGeneration = IncrementGeneration(
-                previousGeneration);
-            next.transferQueueSerial = Mathf.Max(
-                0,
-                previousTransferQueueSerial);
-            next.transferBatchSerial = Mathf.Max(
-                0,
-                previousTransferBatchSerial);
-            next.sessionStartedAtUnixMs = 0L;
-            next.sessionEndsAtUnixMs = 0L;
-            next.sessionPhase = CraftLiveSessionPhase.StartScreen;
-            next.revision = previousRevision + 1;
-            next.updatedAtUnixMs = UnixNowMs();
-            next.message = "スタートを押してください。";
-            state = next;
-            PublishLocal();
+                   candidate.sessionEndsAtUnixMs <= UnixNowMs();
         }
 
         public bool IsMaterialUnlocked(CraftLiveMaterialDefinition material)

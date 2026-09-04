@@ -466,7 +466,7 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
-        public void ExpiredEmptyRemoteRoom_ReturnsToStartScreen()
+        public void ExpiredFinalSelectionRemoteRoom_DoesNotRestartGroup()
         {
             CraftLiveWeaponDefinition weapon = CreateWeapon("sword");
             CraftLiveMaterialDefinition registered = CreateMaterial(
@@ -491,15 +491,15 @@ namespace CraftOrigin.CraftLiveTests
 
             Assert.That(
                 session.State.sessionPhase,
-                Is.EqualTo(CraftLiveSessionPhase.StartScreen));
-            Assert.That(session.State.sessionEndsAtUnixMs, Is.Zero);
-            Assert.That(session.State.revision, Is.EqualTo(13));
-            Assert.That(session.State.groupGeneration, Is.EqualTo(7));
+                Is.EqualTo(CraftLiveSessionPhase.FinalSelection));
+            Assert.That(session.State.sessionEndsAtUnixMs, Is.EqualTo(2));
+            Assert.That(session.State.revision, Is.EqualTo(12));
+            Assert.That(session.State.groupGeneration, Is.EqualTo(6));
             Assert.That(session.State.transferQueueSerial, Is.EqualTo(23));
             Assert.That(session.State.transferBatchSerial, Is.EqualTo(11));
             Assert.That(
                 session.State.HasMaterialRegistered("registered"),
-                Is.False);
+                Is.True);
             Assert.That(
                 CraftLivePad2WeaponCarousel.CanChangeWeapon(session.State),
                 Is.False);

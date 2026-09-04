@@ -425,6 +425,48 @@ namespace CraftOrigin.CraftLiveTests
         }
 
         [Test]
+        public void ApplyExpiredRemoteState_WithoutCompletedWeapon_AddsEmergencyWeaponWithoutRestartingGroup()
+        {
+            CraftLiveCatalog catalog = AssetDatabase.LoadAssetAtPath<
+                CraftLiveCatalog>(
+                "Assets/CraftLiveData/DefaultCraftLiveCatalog.asset");
+            CraftLiveRules rules = AssetDatabase.LoadAssetAtPath<
+                CraftLiveRules>(
+                "Assets/CraftLiveData/DefaultCraftLiveRules.asset");
+            Assert.That(catalog, Is.Not.Null);
+            Assert.That(rules, Is.Not.Null);
+
+            GameObject root = new GameObject("RemoteEmergencySession");
+            created.Add(root);
+            CraftLiveSession session = root.AddComponent<CraftLiveSession>();
+            SetField(session, "catalog", catalog);
+            SetField(session, "rules", rules);
+            InvokeAwake(session);
+            session.Configure("remote-rescue-room", CraftLiveRole.WorkbenchPad);
+
+            CraftLiveRoomState expired = CraftLiveRoomState.Create(catalog);
+            expired.sessionPhase = CraftLiveSessionPhase.Playing;
+            expired.groupGeneration = 42;
+            expired.revision = 12;
+            expired.sessionStartedAtUnixMs = 1L;
+            expired.sessionEndsAtUnixMs = 2L;
+
+            session.ApplyRemoteState(expired);
+
+            Assert.That(session.State.sessionPhase,
+                Is.EqualTo(CraftLiveSessionPhase.FinalSelection));
+            Assert.That(session.State.groupGeneration, Is.EqualTo(42));
+            Assert.That(session.State.revision, Is.EqualTo(13));
+            Assert.That(session.State.completedWeapons, Has.Count.EqualTo(1));
+            Assert.That(session.State.completedWeapons[0].weaponId,
+                Is.EqualTo(CraftLiveSession.EmergencyWeaponId));
+            Assert.That(session.State.completedWeapons[0].attributeId,
+                Is.Not.Empty);
+            Assert.That(session.State.completedWeapons[0].skillId,
+                Is.Empty);
+        }
+
+        [Test]
         public void ExpireSession_DuringCompletionFlashRevealsExistingResult()
         {
             TestSetup setup = CreateValidSetup();
